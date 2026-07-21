@@ -1,141 +1,170 @@
 """
 charts/pages/regimes.py
 =======================
-Section 03 — Curve Regimes. Scaffold page in Phase 1.
+Section 03 — Curve Regimes (Phase 2: LIVE).
 
-Explains the six-regime classification (bull / bear × steepener / flattener /
-twist), lists the tenor pairs actually buildable from the current data, and
-notes explicitly that 1Y-based pairs are NOT built because the underlying
-1Y series is not in the dataset. Surfaces the existing slope/regime panel as
-a preview so the material is still one click away.
+Classifies curve moves into directional regimes across nominal, real, and
+inflation spread pairs. Uses 10D window by default.
 """
-
 from __future__ import annotations
-
-import pandas as pd
+import pandas as pd, numpy as np
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import streamlit as st
-
 from config.pages import get_page
-from config.theme import section_color, CURVE_REGIME_COLORS, CURVE_REGIME_LABELS
-from config.tickers import TICKERS, TENOR_PAIRS, REGIME_COUNTRIES
-
+from config.theme import section_color, BG, GRID, TEXT_DIM, DARK_LAYOUT
+from config.tickers import TENOR_PAIRS
 from charts.common import (
-    render_page_header, render_top_tabs,
-    render_explanation_box, render_missing_data_warning, render_section_footer,
+    render_page_header, render_top_tabs, render_kpi_strip,
+    render_explanation_box, render_current_reading_box,
+    render_model_note, render_section_footer,
 )
-from charts.rates import classify_regime, big_regime_panel
-from data.loader import get_series
-
+from models.curve_regimes import (
+    classify_pair_history, build_regime_matrix, dominant_regime,
+    days_in_current_regime, REGIME_COLORS, REGIME_LABELS,
+)
 from ._context import PageContext
+
+
+def _regime_ribbon(hist: pd.DataFrame, title: str, height: int = 200):
+    """Spread line + regime colour ribbon."""
+    h = hist.dropna(subset=["regime"])
+    if h.empty:
+        return None
+    fig = go.Figure()
+    # Spread line
+    fig.add_trace(go.Scatter(x=h.index, y=h["spread"] * 100, mode="lines",
+        line=dict(color="#fff", width=1.2), name="Spread (bp)", showlegend=False))
+    # Regime ribbon at bottom
+    for regime in REGIME_LABELS:
+        mask = h["regime"] == regime
+        if not mask.any():
+            continue
+        s = h.loc[mask]
+        fig.add_trace(go.Scatter(x=s.index, y=[0]*len(s), mode="markers",
+            marker=dict(color=REGIME_COLORS.get(regime, "#525252"), size=4, symbol="square"),
+            name=regime, showlegend=False))
+    fig.update_layout(template="plotly_dark", paper_bgcolor=BG, plot_bgcolor=BG,
+        font=dict(family="Inter, system-ui, sans-serif", size=10, color=TEXT_DIM),
+        height=height, margin=dict(l=50, r=20, t=30, b=20),
+        title=dict(text=title, font=dict(size=12, color="#aaa"), x=0),
+        yaxis=dict(title="bp", gridcolor=GRID), xaxis=dict(showgrid=False))
+    return fig
 
 
 def render(ctx: PageContext) -> None:
     page = get_page("regimes")
-
     render_top_tabs(page["id"])
-    latest = ctx.df.index.max().strftime("%b %d, %Y").upper()
-    render_page_header(page, latest_date=latest)
+    from data.loader import latest_valid_date as _lvd
+    from models.rate_decomposition import US_NOMINAL, US_BREAKEVEN
+    _req = list(US_NOMINAL.values()) + list(US_BREAKEVEN.values())
+    _ld = _lvd(ctx.df, _req) or ctx.df.index.max()
+    latest = _ld.strftime("%b %d, %Y").upper()
+    render_page_header(page, latest_date=latest, viewing="Data source: DATA.xlsx / Sheet1")
 
     render_explanation_box(
-        "The classification",
-        "Every curve day is one of six regimes, defined by the sign of the "
-        "long-tenor move and the sign of the slope change. "
-        "<b>Bull</b> means the long end rallied (yields fell); <b>bear</b> "
-        "the long end sold off. <b>Steepener</b> means the curve got steeper; "
-        "<b>flattener</b> means it flattened. <b>Twist</b> flags where both "
-        "ends moved in opposite directions. The full research-pack build will "
-        "output a regime × tenor-pair × country matrix; this scaffold uses "
-        "whatever pairs the current dataset supports.",
+        "Curve regime classification",
+        "Classifies each day's curve move into one of 7 regimes based on "
+        "the direction of front and back yields and the spread change over "
+        "a rolling window. Applied to <b>nominal, real, and inflation</b> "
+        "curves across 6 tenor pairs.",
     )
 
-    # Regime chip legend (matches the existing colour system, unchanged).
-    chips = " &nbsp;&nbsp; ".join(
-        f"<span style='display:inline-block;width:11px;height:11px;"
-        f"background:{CURVE_REGIME_COLORS[k]};vertical-align:middle;"
-        f"margin-right:5px;'></span>"
-        f"<span style='color:#bbb;font-size:10px;letter-spacing:0.05em;"
-        f"text-transform:uppercase;'>{CURVE_REGIME_LABELS[k]}</span>"
-        for k in ["bull_steepener", "bear_steepener", "steepener_twist",
-                  "bull_flattener", "bear_flattener", "flattener_twist"]
+    # Regime legend
+    legend_bits = " &nbsp; ".join(
+        f"<span style='display:inline-block;width:10px;height:10px;"
+        f"background:{REGIME_COLORS[r]};vertical-align:middle;"
+        f"margin-right:3px;border-radius:2px;'></span>"
+        f"<span style='color:#aaa;font-size:10px;'>{r}</span>"
+        for r in REGIME_LABELS
     )
-    st.markdown(f"<div style='padding:0.6rem 0 0.4rem;'>{chips}</div>",
+    st.markdown(f"<div style='margin:0.4rem 0 0.8rem;line-height:2;'>{legend_bits}</div>",
                 unsafe_allow_html=True)
 
-    # -------- Tenor pair availability across countries --------
-    st.markdown(
-        "<div style='margin:0.6rem 0 0.4rem;font-size:11px;color:#888;"
-        "letter-spacing:0.1em;text-transform:uppercase;'>"
-        "Available tenor pairs by country</div>",
-        unsafe_allow_html=True,
-    )
-    rows = []
-    for country in REGIME_COUNTRIES:
-        row: dict = {"Country": country}
-        for pair_name, (a, b) in TENOR_PAIRS.items():
-            ka, kb = f"{country}_{a}", f"{country}_{b}"
-            ok = (ka in TICKERS and kb in TICKERS
-                  and len(get_series(ctx.df, ka).dropna())
-                  and len(get_series(ctx.df, kb).dropna()))
-            row[pair_name] = "✓" if ok else "—"
-        rows.append(row)
-    st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+    # A. KPI strip — 2s10s regimes
+    kpi_cards = []
+    for ctype in ["Nominal", "Real", "Inflation"]:
+        h = classify_pair_history(ctx.df, ctype.lower(), ("2Y", "10Y"), 10)
+        if h.empty or h["regime"].dropna().empty:
+            kpi_cards.append({"label": f"{ctype} 2s10s", "value": "—"})
+            continue
+        regime = h["regime"].dropna().iloc[-1]
+        days = days_in_current_regime(h["regime"])
+        spread_now = h["spread"].dropna().iloc[-1] * 100 if h["spread"].dropna().shape[0] else np.nan
+        kpi_cards.append({
+            "label": f"{ctype} 2s10s",
+            "value": regime,
+            "sub": f"{days} days · {spread_now:+.0f} bp" if pd.notna(spread_now) else f"{days} days",
+            "accent": REGIME_COLORS.get(regime, "#525252"),
+        })
+    # Add 2s10s level
+    h_nom = classify_pair_history(ctx.df, "nominal", ("2Y", "10Y"), 10)
+    if not h_nom.empty and h_nom["spread"].dropna().shape[0]:
+        lvl = h_nom["spread"].dropna().iloc[-1] * 100
+        kpi_cards.append({"label": "2s10s Level", "value": f"{lvl:+.0f} bp"})
+    render_kpi_strip(kpi_cards)
 
-    render_missing_data_warning(
-        required=[
-            "Nominal yields for at least two tenors per country",
-            "1Y nominal yields (for full PDF-reference 10-pair matrix)",
-        ],
-        available=[
-            "2Y / 5Y / 10Y / 30Y across US, DE, JP, UK, CA, AU",
-            "Six spread pairs — 2s5s, 2s10s, 2s30s, 5s10s, 5s30s, 10s30s",
-        ],
-        missing=[
-            "1Y nominal yields for every country",
-            "1s2s, 1s5s, 1s10s, 1s30s, 1s5s pairs",
-        ],
-        message=(
-            "The Capital Flows-style reference uses <b>ten</b> spread pairs "
-            "including 1Y-based ones. This dashboard will build the "
-            "<b>six 2Y-plus pairs</b> unless 1Y series are added to "
-            "DATA.xlsx. No fake 1Y series will be synthesised."
-        ),
-    )
+    # B. 2s10s Regime History (6M lookback)
+    st.markdown("<div style='margin:0.8rem 0 0.3rem;font-size:11px;color:#888;"
+                "letter-spacing:0.1em;text-transform:uppercase;'>"
+                "2s10s regime history (6 months)</div>", unsafe_allow_html=True)
 
-    # -------- Preview: existing regime panel --------
-    st.markdown(
-        "<div style='margin:1.3rem 0 0.4rem;font-size:11px;color:#888;"
-        "letter-spacing:0.1em;text-transform:uppercase;'>"
-        "Preview · single-pair regime panel (carried over)</div>",
-        unsafe_allow_html=True,
-    )
-    st.caption(
-        "The existing single-pair regime classifier remains available while "
-        "the full multi-pair regime matrix is being built.")
+    for ctype in ["Nominal", "Real", "Inflation"]:
+        h = classify_pair_history(ctx.df, ctype.lower(), ("2Y", "10Y"), 10)
+        if h.empty:
+            continue
+        h_tail = h.iloc[-126:]  # ~6 months
+        fig = _regime_ribbon(h_tail, f"{ctype} 2s10s")
+        if fig:
+            st.plotly_chart(fig, use_container_width=True,
+                            key=f"reg_{ctype.lower()}", config={"displayModeBar": False})
 
-    cols = st.columns([1, 1, 1, 3])
-    with cols[0]:
-        country = st.selectbox("COUNTRY", options=list(REGIME_COUNTRIES),
-                               index=0, key="regimes_country")
-    with cols[1]:
-        pair = st.selectbox("TENOR PAIR", options=list(TENOR_PAIRS.keys()),
-                            index=0, key="regimes_pair")
-    with cols[2]:
-        lb_choice = st.selectbox("LOOKBACK",
-                                 options=["5d", "10d", "20d", "60d", "120d"],
-                                 index=2, key="regimes_lookback")
-    lookback = int(lb_choice.rstrip("d"))
-    short_t, long_t = TENOR_PAIRS[pair]
-    short = get_series(ctx.dff, f"{country}_{short_t}")
-    long_ = get_series(ctx.dff, f"{country}_{long_t}")
-    if len(short) == 0 or len(long_) == 0:
-        st.warning(f"No data for {country} {short_t}/{long_t}. "
-                   "Try a different pair or country.")
-    else:
-        slope, regime = classify_regime(short, long_, lookback)
-        st.plotly_chart(
-            big_regime_panel(slope, regime,
-                             f"{country} {pair} (regime vs {lookback}d ago)"),
-            use_container_width=True, key="regimes_slope",
-            config={"displayModeBar": False})
+    # C. Regime Matrix
+    st.markdown("<div style='margin:1rem 0 0.3rem;font-size:11px;color:#888;"
+                "letter-spacing:0.1em;text-transform:uppercase;'>"
+                "Regime matrix (latest)</div>", unsafe_allow_html=True)
+
+    matrix = build_regime_matrix(ctx.df, window=10)
+    if not matrix.empty:
+        def _color_cell(val):
+            c = REGIME_COLORS.get(val, "#525252")
+            return f"background-color: {c}22; color: {c}; font-weight: 700;"
+        styled = matrix.style.map(_color_cell)
+        st.dataframe(styled, use_container_width=True, height=160)
+
+    # D. Regime Landscape
+    st.markdown("<div style='margin:1rem 0 0.3rem;font-size:11px;color:#888;"
+                "letter-spacing:0.1em;text-transform:uppercase;'>"
+                "Regime landscape</div>", unsafe_allow_html=True)
+    if not matrix.empty:
+        landscape_rows = []
+        for ctype in matrix.index:
+            d = dominant_regime(matrix.loc[ctype])
+            landscape_rows.append({
+                "Curve": ctype, "Dominant": d["regime"],
+                "Count": d["count"], "Total": d["total"],
+                "Divergent": d["divergent"],
+            })
+        st.dataframe(pd.DataFrame(landscape_rows), hide_index=True, use_container_width=True)
+
+    # E. Current Reading
+    readings = []
+    for ctype in ["Nominal", "Real", "Inflation"]:
+        h = classify_pair_history(ctx.df, ctype.lower(), ("2Y", "10Y"), 10)
+        if not h.empty and h["regime"].dropna().shape[0]:
+            r = h["regime"].dropna().iloc[-1]
+            readings.append(f"{ctype} 2s10s: <b>{r}</b>")
+    if not matrix.empty:
+        d = dominant_regime(matrix.loc["Nominal"])
+        readings.append(f"Nominal dominant: <b>{d['regime']}</b> ({d['count']}/{d['total']} pairs)")
+        readings.append(f"Divergent pairs: <b>{d['divergent']}</b>")
+    if readings:
+        render_current_reading_box("Current reading", "<br>".join(readings))
+
+    # F. Methodology
+    render_model_note("Methodology",
+        "Uses a <b>10-day regime window</b> and available 2Y / 5Y / 10Y / 30Y "
+        "tenors (6 pairs). 1Y-based pairs are skipped until 1Y data is added. "
+        "Neutral threshold: |spread change| < 1.5 bp.")
 
     render_section_footer(page)

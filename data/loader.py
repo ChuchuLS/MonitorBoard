@@ -65,7 +65,8 @@ def _normalize(df: pd.DataFrame) -> pd.DataFrame:
     """Standardise a raw frame: Date index, sorted, upper-cased + stripped cols.
 
     Column names are upper-cased and stripped so ticker look-ups are robust to
-    mixed casing / stray whitespace across Bloomberg pulls.
+    mixed casing / stray whitespace across Bloomberg pulls. All-empty rows
+    (future placeholder rows from Bloomberg BDH) are dropped.
     """
     df = df.rename(columns={df.columns[0]: "Date"})
     df["Date"] = pd.to_datetime(df["Date"])
@@ -73,12 +74,33 @@ def _normalize(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = [str(c).upper().strip() if not isinstance(c, str) else c.upper().strip()
                   for c in df.columns]
     df = df.loc[:, ~df.columns.duplicated()]  # keep first of any duplicate columns
+    df = df.dropna(how="all")                 # drop future all-empty rows
     return df
 
 
+def latest_valid_date(df: pd.DataFrame,
+                      required_cols: list[str] | None = None) -> pd.Timestamp | None:
+    """Return the latest date where at least one (required) column is non-null.
+
+    If ``required_cols`` is provided, only those columns are checked.
+    Returns None if there is no valid observation at all.
+    """
+    if df.empty:
+        return None
+    if required_cols:
+        cols = [c for c in required_cols if c in df.columns]
+        if not cols:
+            return None
+        mask = df[cols].notna().any(axis=1)
+    else:
+        mask = df.notna().any(axis=1)
+    valid = df.index[mask]
+    return valid.max() if len(valid) else None
+
+
 def read_excel_data(path: Path = EXCEL_PATH) -> pd.DataFrame:
-    """Read + normalise the Bloomberg workbook (first sheet)."""
-    raw = pd.read_excel(path, header=0)
+    """Read + normalise the Bloomberg workbook (Sheet1 — the daily market data)."""
+    raw = pd.read_excel(path, header=0, sheet_name="Sheet1")
     return _normalize(raw)
 
 

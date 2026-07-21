@@ -8,11 +8,10 @@ market is driving the move. Around that anchor sit seven research chapters in
 Contents-page reading order — Policy & Short Rates, Rate Decomposition, Curve
 Regimes, Global Rates, Cross-Asset Regimes, FX, and Data Quality & Methodology.
 
-> The dashboard is being evolved from a tool-shaped page-per-view app into a
-> research-pack shell. **Phase 1 (this release)** delivers the shell —
-> registry-driven navigation, PDF-style page headers, KPI strips, section
-> colours, missing-data warnings, and scaffolds for the pages that require
-> more data. **Phase 2** will fill in the scaffolds.
+> **Phase 1** delivered the research-pack shell — registry-driven navigation,
+> PDF-style page headers, KPI strips, section colours, and honest status
+> classification. **Phase 2** implemented Rate Decomposition, Curve Regimes,
+> and Global Rates with working models and live pages.
 
 ---
 
@@ -73,10 +72,10 @@ page mirrors the front matter of an institutional chart pack.
 |----:|:--------------------------------|:---------------------|:------------|:--------------|
 | 00  | Liquidity Overview              | **Live**             | DATA.xlsx | Composite Liquidity Index (v0.3) with bucket & component contributions, benchmark validation, methodology audit, one-click Excel export. |
 | 01  | Policy & Short Rates            | Partial              | DATA.xlsx | SOFR / EFFR / IORB spots, funding pressure, money-market plumbing. No FOMC path (requires meeting-dated futures). |
-| 02  | Rate Decomposition              | Scaffold             | DATA.xlsx | Framework for nominal = real + inflation decomposition. Data-availability check + inflation curve previews. |
+| 02  | Rate Decomposition              | **Live**             | DATA.xlsx / Sheet1 | US curve complex, selectable-tenor rolling rate attribution, and 2s10s curve decomposition using breakeven identity. |
 | 02b | Rates Complex PCA               | Experimental         | DATA.xlsx / Sheet1 FICC columns | Within-rates PCA on 10Y / 2s10s / BE / real / MOVE. NOT the PDF-style decomposition. |
-| 03  | Curve Regimes                   | Scaffold             | DATA.xlsx | Six-regime classifier framework + tenor-pair coverage. |
-| 04  | Global Rates                    | Scaffold             | DATA.xlsx | Country-coverage matrix for G10 curves. |
+| 03  | Curve Regimes                   | **Live**             | DATA.xlsx / Sheet1 | 7-regime classification across nominal / real / inflation curves and six tenor pairs. |
+| 04  | Global Rates                    | **Live**             | DATA.xlsx / Sheet1 | Normalized global 10Y overlay, global curve snapshots, 2s10s slope ranking (US/DE/JP/UK/CA/AU). |
 | 05  | Cross-Asset Regime Timeline     | **Live**             | DATA.xlsx / Sheet1 cross-asset columns | 8-regime directional classification using vol-scaled signals (20D change ÷ 21D vol). |
 | 05b | Market Linkage & Correlations   | Experimental         | DATA.xlsx / Sheet1 cross-asset columns | PCA-based 4-regime relative classification. Different model from 05. |
 | 06  | FX Complex PCA                  | Experimental         | DATA.xlsx / Sheet1 FX/FICC columns | DXY / EM FX / USDJPY basis PCA. NOT the rate-differential FX model. |
@@ -103,10 +102,10 @@ page mirrors the front matter of an institutional chart pack.
 ### Partially implemented
 - **Policy & Short Rates** — spot rates live; FOMC path intentionally not built.
 
-### Scaffold — build next
-- **Rate Decomposition** (02) — the true nominal = real + inflation engine.
-- **Curve Regimes** (03) — multi-pair regime matrix.
-- **Global Rates** (04) — cross-country overlays.
+### Previously scaffold — now implemented
+- **Rate Decomposition** (02) — now live with US curve complex + attribution.
+- **Curve Regimes** (03) — now live with 6-pair regime matrix.
+- **Global Rates** (04) — now live with 6-country overlay + slope ranking.
 
 ### Data files
 | File | Contents | Source of truth |

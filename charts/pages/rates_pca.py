@@ -95,8 +95,9 @@ def render(ctx: PageContext) -> None:
     render_model_note(
         "This is NOT the rate decomposition",
         "The PDF-style rate decomposition (nominal = real + inflation, identity "
-        "form) is Section 02 (scaffold). This page is a <b>PCA regime model</b> "
-        "— it measures co-movement structure, not an additive decomposition.",
+        "form) is Section 02. This page is a separate <b>experimental PCA regime "
+        "model</b> — it measures co-movement structure, not additive "
+        "nominal = real + inflation attribution.",
     )
 
     from models.rates_complex.analytics import ASSETS, ASSET_LABELS

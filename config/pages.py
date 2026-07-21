@@ -55,12 +55,12 @@ PAGES: list[dict] = [
         "title": "Rate Decomposition",
         "section": "02",
         "color_key": "decomposition",
-        "status": "scaffold",
+        "status": "live",
         "data_source": "sheet1_market",
         "description": "Decompose nominal yield moves into real-rate and inflation "
                        "components (identity form via TIPS breakevens or swap form "
-                       "via ZCIS with residual). Scaffold — the true decomposition "
-                       "engine is not yet built; inflation-curve previews are available.",
+                       "via ZCIS with residual). US curve complex + rolling rate attribution + "
+                       "2s10s curve decomposition. Uses breakeven identity..",
         "builds_on": "policy",
         "next": "regimes",
     },
@@ -70,10 +70,10 @@ PAGES: list[dict] = [
         "title": "Curve Regimes",
         "section": "03",
         "color_key": "regimes",
-        "status": "scaffold",
+        "status": "live",
         "data_source": "sheet1_market",
-        "description": "Classify curve moves by direction × shape (bull/bear × "
-                       "steepener/flattener/twist) across available tenor pairs.",
+        "description": "7-regime classification (bull/bear × steepener/flattener/twist/neutral) across "
+                       "nominal, real, and inflation curves on 6 tenor pairs.",
         "builds_on": "decomposition",
         "next": "global_rates",
     },
@@ -83,11 +83,11 @@ PAGES: list[dict] = [
         "title": "Global Rates",
         "section": "04",
         "color_key": "global_rates",
-        "status": "scaffold",
+        "status": "live",
         "data_source": "sheet1_market",
-        "description": "Cross-country nominal / real / breakeven overlays and "
-                       "2s10s slope ranking, built on whatever countries have "
-                       "complete curve data.",
+        "description": "Global 10Y normalized overlay, yield curve snapshots, and "
+                       "2s10s slope ranking across US, DE, JP, UK, CA, AU. "
+                       "",
         "builds_on": "regimes",
         "next": "cross_asset",
     },

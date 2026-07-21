@@ -8,9 +8,9 @@ column name as it appears in DATA.xlsx / latest.parquet. Everything downstream
 references the key, never the raw Bloomberg string, so a vendor renaming a
 ticker only needs a one-line change here.
 
-MOVE / VIX are intentionally included even though they are *not* in the current
-data file. They demonstrate the dashboard's missing-ticker handling: the Data
-Quality panel flags them as absent and the index engine simply skips them.
+MOVE and VIX are included when present in DATA.xlsx. The index engine and
+Data Quality page still handle missing optional volatility fields gracefully
+if future workbooks omit them.
 """
 
 from __future__ import annotations
@@ -136,8 +136,8 @@ TICKERS: dict[str, str] = {
     # --- Market liquidity / volatility ------------------------------------
     "UST_LIQ":  "GVLQUSD INDEX",   # Bloomberg US govt liquidity (higher = worse)
     "SWAP_10Y": "USSFCT10 CURNCY", # 10Y USD swap spread
-    "MOVE":     "MOVE INDEX",      # NOT in current data — handled gracefully
-    "VIX":      "VIX INDEX",       # NOT in current data — handled gracefully
+    "MOVE":     "MOVE INDEX",      # ICE BofA MOVE — now in DATA.xlsx
+    "VIX":      "VIX INDEX",       # CBOE VIX — now in DATA.xlsx
     # --- Mortgage ----------------------------------------------------------
     "MTG_30Y": "APORF30Y INDEX",
 }

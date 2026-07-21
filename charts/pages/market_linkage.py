@@ -75,8 +75,15 @@ def render(ctx: PageContext) -> None:
         render_section_footer(page)
         return
 
-    data_latest = prices.index.max().strftime("%b %d, %Y").upper()
-    render_page_header(page, latest_date=data_latest,
+    # Clean prices to valid observations
+    prices = prices[["SPX", "USGG10YR", "DXY"]].dropna()
+    if len(prices) < 70:
+        render_page_header(page, latest_date="—")
+        st.warning("Insufficient data.")
+        render_section_footer(page); return
+
+    model_latest = prices.index.max().strftime("%b %d, %Y").upper()
+    render_page_header(page, latest_date=model_latest,
                        viewing="Data source: DATA.xlsx / Sheet1 cross-asset columns")
 
     render_explanation_box(

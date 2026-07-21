@@ -55,17 +55,43 @@ def render(ctx: PageContext) -> None:
     page = get_page("data_quality")
 
     render_top_tabs(page["id"])
-    latest_date = ctx.df.index.max().date()
-    render_page_header(page, latest_date=str(latest_date))
+    from data.loader import latest_valid_date as _lvd
+    valid_latest = (_lvd(ctx.df) or ctx.df.index.max()).date()
+    latest_date = valid_latest
+    render_page_header(page, latest_date=str(valid_latest))
+
+    # Raw workbook audit (reads the raw Excel to detect trailing empty rows)
+    def _raw_sheet1_audit(path):
+        try:
+            raw = pd.read_excel(path, sheet_name="Sheet1")
+            raw = raw.rename(columns={raw.columns[0]: "Date"})
+            raw["Date"] = pd.to_datetime(raw["Date"], errors="coerce")
+            raw = raw.dropna(subset=["Date"]).sort_values("Date").set_index("Date")
+            non_empty = raw.notna().any(axis=1)
+            lne = raw.index[non_empty].max() if non_empty.any() else None
+            rim = raw.index.max() if len(raw) else None
+            return {
+                "raw_first": str(raw.index.min().date()) if len(raw) else "—",
+                "raw_last_index": str(rim.date()) if rim else "—",
+                "latest_non_empty": str(lne.date()) if lne else "—",
+                "trailing_empty": int((raw.index > lne).sum()) if lne else 0,
+                "raw_rows": len(raw), "raw_cols": raw.shape[1],
+            }
+        except Exception:
+            return {"raw_first": "—", "raw_last_index": "—", "latest_non_empty": "—",
+                    "trailing_empty": 0, "raw_rows": 0, "raw_cols": 0}
+
+    fpath = Path("data/DATA.xlsx")
+    exists = fpath.exists()
+    raw_audit = _raw_sheet1_audit(fpath) if exists else {}
 
     render_explanation_box(
         "Trust chain",
         "The dashboard reads one source-of-truth workbook, <b>DATA.xlsx</b>. "
-        "Sheet1 supplies daily market data and model inputs (148 columns). "
-        "Additional sheets (Macro_GDP, Macro_CPI, etc.) supply the global "
-        "scoring model. This page audits workbook freshness, required Sheet1 "
-        "columns, required scoring sheets, ticker coverage, parquet cache, "
-        "and the Composite Liquidity Index methodology.",
+        "Sheet1 supplies daily market data and model inputs. "
+        "Additional sheets supply the global scoring model. "
+        "The loader drops all-empty trailing rows so models use only real "
+        "market observations.",
     )
 
     # ==================================================================
@@ -78,30 +104,23 @@ def render(ctx: PageContext) -> None:
         unsafe_allow_html=True,
     )
 
-    fpath = Path("data/DATA.xlsx")
-    exists = fpath.exists()
     fhash = _file_hash(fpath) if exists else "—"
 
-    # Read scoring sheet metadata via load_pulsar
     from data.external_loaders import load_pulsar
     scoring_data = load_pulsar() if exists else None
     scoring_first, scoring_last, scoring_rows, scoring_cols = "—", "—", 0, 0
     if scoring_data:
         all_d = [d.index.max() for d in scoring_data.values() if len(d)]
         all_s = [d.index.min() for d in scoring_data.values() if len(d)]
-        if all_d:
-            scoring_last = str(max(all_d).date())
-        if all_s:
-            scoring_first = str(min(all_s).date())
+        if all_d: scoring_last = str(max(all_d).date())
+        if all_s: scoring_first = str(min(all_s).date())
         scoring_rows = sum(len(d) for d in scoring_data.values())
         scoring_cols = sum(d.shape[1] for d in scoring_data.values())
 
-    # Check required Sheet1 columns
     all_req_cols = sorted(set(REQUIRED_CROSSASSET_COLS + REQUIRED_FICC_COLS))
     present_cols = set(str(c).strip() for c in ctx.df.columns)
     missing_cols = [c for c in all_req_cols if c not in present_cols]
 
-    # Check required scoring sheets
     try:
         import openpyxl
         wb = openpyxl.load_workbook(fpath, read_only=True)
@@ -118,14 +137,13 @@ def render(ctx: PageContext) -> None:
             "Sheet": "Sheet1",
             "Exists": "✓" if exists else "✗",
             "Hash": fhash,
-            "First date": str(ctx.df.index.min().date()),
-            "Latest date": str(ctx.df.index.max().date()),
-            "Rows": len(ctx.df),
+            "Raw index max": raw_audit.get("raw_last_index", "—"),
+            "Latest non-empty": raw_audit.get("latest_non_empty", "—"),
+            "Trailing empty": raw_audit.get("trailing_empty", 0),
+            "Loaded rows": len(ctx.df),
             "Cols": ctx.df.shape[1],
-            "Required": f"{len(all_req_cols)} cross-asset/FICC columns",
+            "Required": f"{len(all_req_cols)} cross-asset/FICC cols",
             "Missing": ", ".join(missing_cols) if missing_cols else "✓ all present",
-            "Role": DATA_SOURCES.get("sheet1_market", {}).get("role", ""),
-            "Pages": ", ".join(DATA_SOURCES.get("sheet1_market", {}).get("pages", [])),
         },
         {
             "Source": "scoring_sheets",
@@ -163,6 +181,68 @@ def render(ctx: PageContext) -> None:
                             f"Scoring sheets latest: {sc_date}")
         except Exception:
             pass
+
+    # ==================================================================
+    # 2b. PHASE 2 MODEL READINESS
+    # ==================================================================
+    st.markdown(
+        "<div style='margin:0.8rem 0 0.4rem;font-size:11px;color:#888;"
+        "letter-spacing:0.1em;text-transform:uppercase;'>"
+        "Phase 2 model readiness</div>",
+        unsafe_allow_html=True,
+    )
+    REQUIRED_RATE_DECOMP = [
+        "USGG2YR INDEX", "USGG5YR INDEX", "USGG10YR INDEX", "USGG30YR INDEX",
+        "USGGBE02 INDEX", "USGGBE05 INDEX", "USGGBE10 INDEX", "USGGBE30 INDEX",
+    ]
+    decomp_missing = [c for c in REQUIRED_RATE_DECOMP if c not in present_cols]
+    decomp_status = "Ready" if not decomp_missing else "Missing data"
+
+    # Global Rates — dynamic from tickers
+    from config.tickers import TICKERS, REGIME_COUNTRIES
+    from models.global_rates import STANDARD_TENORS, COUNTRY_LABELS
+    gr_countries_ok, gr_countries_partial, gr_missing_detail = [], [], []
+    for country in REGIME_COUNTRIES:
+        missing_t = []
+        for t in STANDARD_TENORS:
+            key = f"{country}_{t}"
+            tick = TICKERS.get(key)
+            if not tick or tick not in present_cols:
+                missing_t.append(t)
+        if not missing_t:
+            gr_countries_ok.append(country)
+        elif len(missing_t) < len(STANDARD_TENORS):
+            gr_countries_partial.append(country)
+            gr_missing_detail.append(f"{country}: missing {', '.join(missing_t)}")
+        else:
+            gr_missing_detail.append(f"{country}: no data")
+    if gr_countries_ok:
+        gr_status = "Ready" if not gr_countries_partial and not gr_missing_detail else "Partial"
+    else:
+        gr_status = "Missing data"
+
+    readiness = pd.DataFrame([
+        {"Model": "Rate Decomposition", "Status": decomp_status,
+         "Required": f"{len(REQUIRED_RATE_DECOMP)} cols",
+         "Missing": ", ".join(decomp_missing) if decomp_missing else "—",
+         "Notes": "Uses breakeven identity"},
+        {"Model": "Curve Regimes", "Status": decomp_status,
+         "Required": "Same as Rate Decomposition",
+         "Missing": ", ".join(decomp_missing) if decomp_missing else "—",
+         "Notes": "6 tenor pairs × 3 curve types"},
+        {"Model": "Global Rates", "Status": gr_status,
+         "Required": f"{len(REGIME_COUNTRIES)} countries × 4 tenors",
+         "Missing": "; ".join(gr_missing_detail) if gr_missing_detail else "—",
+         "Notes": f"{len(gr_countries_ok)} full + {len(gr_countries_partial)} partial"},
+    ])
+
+    def _status_color(val):
+        if val == "Ready": return "color: #5fb04f; font-weight: 700;"
+        if val == "Partial": return "color: #d99830; font-weight: 700;"
+        return "color: #d04848; font-weight: 700;"
+
+    st.dataframe(readiness.style.map(_status_color, subset=["Status"]),
+                 hide_index=True, use_container_width=True)
 
     # ==================================================================
     # 3. DATA.xlsx TICKER COVERAGE

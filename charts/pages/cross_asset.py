@@ -48,19 +48,20 @@ REGIMES_8 = {
 def classify_8regime(prices: pd.DataFrame, mode: str = "vol_scaled",
                      lookback: int = 20, vol_window: int = 21) -> pd.DataFrame:
     """Classify each day into one of 8 directional regimes.
+    Cleans prices to valid observations first so 20D = 20 trading days."""
+    # Work only on rows where all three assets have data
+    clean = prices[["SPX", "USGG10YR", "DXY"]].dropna()
+    if len(clean) < lookback + vol_window + 1:
+        return pd.DataFrame()
 
-    mode = "vol_scaled" (default, PDF-reference): 20D change divided by 21D
-           trailing realized volatility.
-    mode = "raw_sign" : simple sign of the N-day change (no vol scaling).
-    """
-    spx_ret = np.log(prices["SPX"]).diff()
-    ust_diff = prices["USGG10YR"].diff()
-    dxy_ret = np.log(prices["DXY"]).diff()
+    spx_ret = np.log(clean["SPX"]).diff()
+    ust_diff = clean["USGG10YR"].diff()
+    dxy_ret = np.log(clean["DXY"]).diff()
 
     if mode == "vol_scaled":
-        spx_20d = np.log(prices["SPX"]).diff(lookback)
-        ust_20d = prices["USGG10YR"].diff(lookback)
-        dxy_20d = np.log(prices["DXY"]).diff(lookback)
+        spx_20d = np.log(clean["SPX"]).diff(lookback)
+        ust_20d = clean["USGG10YR"].diff(lookback)
+        dxy_20d = np.log(clean["DXY"]).diff(lookback)
 
         spx_vol = spx_ret.rolling(vol_window).std()
         ust_vol = ust_diff.rolling(vol_window).std()
@@ -70,9 +71,9 @@ def classify_8regime(prices: pd.DataFrame, mode: str = "vol_scaled",
         ust_sig = ust_20d / ust_vol.replace(0, np.nan)
         dxy_sig = dxy_20d / dxy_vol.replace(0, np.nan)
     else:
-        spx_sig = np.log(prices["SPX"]).diff(lookback)
-        ust_sig = prices["USGG10YR"].diff(lookback)
-        dxy_sig = np.log(prices["DXY"]).diff(lookback)
+        spx_sig = np.log(clean["SPX"]).diff(lookback)
+        ust_sig = clean["USGG10YR"].diff(lookback)
+        dxy_sig = np.log(clean["DXY"]).diff(lookback)
 
     def _regime(row):
         s = "UP" if row["spx"] >= 0 else "DOWN"
@@ -172,9 +173,23 @@ def render(ctx: PageContext) -> None:
         render_section_footer(page)
         return
 
-    data_latest = prices.index.max().strftime("%b %d, %Y").upper()
-    render_page_header(page, latest_date=data_latest,
-                       viewing=f"Data source: DATA.xlsx / Sheet1 cross-asset columns · {len(prices):,} rows")
+    # Build model first, then use the model's latest date for the header
+    c1, c2 = st.columns([1, 3])
+    with c1:
+        mode = st.radio("Signal mode", ["Vol-scaled (PDF ref)", "Raw sign (simplified)"],
+                        index=0, key="ca8_mode", horizontal=False)
+    mode_key = "vol_scaled" if "Vol-scaled" in mode else "raw_sign"
+
+    result = classify_8regime(prices, mode=mode_key)
+    if result.empty:
+        render_page_header(page, latest_date="—")
+        st.warning("Insufficient data for regime classification.")
+        render_section_footer(page)
+        return
+
+    model_latest = result.index.max().strftime("%b %d, %Y").upper()
+    render_page_header(page, latest_date=model_latest,
+                       viewing=f"Data source: DATA.xlsx / Sheet1 cross-asset columns")
 
     render_explanation_box(
         "8-regime vol-scaled directional classification",
@@ -185,18 +200,6 @@ def render(ctx: PageContext) -> None:
         "N-day change) is available as a simplified toggle but is NOT the "
         "PDF-reference methodology.",
     )
-
-    c1, c2 = st.columns([1, 3])
-    with c1:
-        mode = st.radio("Signal mode", ["Vol-scaled (PDF ref)", "Raw sign (simplified)"],
-                        index=0, key="ca8_mode", horizontal=False)
-    mode_key = "vol_scaled" if "Vol-scaled" in mode else "raw_sign"
-
-    result = classify_8regime(prices, mode=mode_key)
-    if result.empty:
-        st.warning("Insufficient data.")
-        render_section_footer(page)
-        return
 
     current = result["regime"].iloc[-1]
     cur_info = REGIMES_8[current]
