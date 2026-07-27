@@ -51,7 +51,7 @@ TICKERS: dict[str, str] = {
     "EFFR": "FEDL01 INDEX",
     "GCF":  "UREPGATO INDEX",
     "TGCR": "TGCRRATE INDEX",
-    "RRP":  "FDTRFTRL INDEX",
+    "FED_TARGET_LOWER": "FDTRFTRL INDEX",   # Fed funds target rate lower bound (NOT RRP usage)
     "BGCR": "USBGRATE INDEX",
     "TPR":  "UREPTATO INDEX",
     # --- XCCY basis swaps (3M) --------------------------------------------
@@ -101,7 +101,6 @@ TICKERS: dict[str, str] = {
     "ZCIS_30Y": "USSWIT30 CURNCY",
     "INFL_5Y5Y": "FWISUS55 INDEX",
     # --- Money-market additions / overnight composite ---------------------
-    "TOMO_TCSO": "TOMOTCSO INDEX",
     "USRG_1T":   "USRG1T CURNCY",
     # --- Central bank / reserve liquidity ---------------------------------
     "FED_RESERVES": "FARBRBFB INDEX",   # reserve balances ($mn)
@@ -140,10 +139,69 @@ TICKERS: dict[str, str] = {
     "VIX":      "VIX INDEX",       # CBOE VIX — now in DATA.xlsx
     # --- Mortgage ----------------------------------------------------------
     "MTG_30Y": "APORF30Y INDEX",
+    # --- FX spot (from merged data) ----------------------------------------
+    "EURUSD":  "EURUSD BGN CURNCY",
+    "USDJPY":  "USDJPY BGN CURNCY",
+    "GBPUSD":  "GBPUSD BGN CURNCY",
+    "AUDUSD":  "AUDUSD BGN CURNCY",
+    # --- Correlation targets (registered for CLI rolling corrs) ------------
+    "HSI":     "HSI INDEX",           # Hang Seng — NOT YET IN DATA.xlsx
+    "BTC":     "XBTUSD BGN CURNCY",   # Bitcoin — NOT YET IN DATA.xlsx
+    # --- Switzerland nominal curve ------------------------------------------
+    "CH_2Y":  "GSWISS02 INDEX",
+    "CH_5Y":  "GSWISS05 INDEX",
+    "CH_10Y": "GSWISS10 INDEX",
+    "CH_30Y": "GSWISS30 INDEX",
+}
+
+
+# RRP candidates — NOT confirmed, do not use in production models
+RRP_CANDIDATES = {
+    "TOMOTCSO INDEX": {
+        "status": "needs_confirmation",
+        "possible_use": "possible ON RRP offering-rate related series",
+        "allowed_in_production": False,
+    },
+    "RRPQTOON INDEX": {
+        "status": "needs_confirmation",
+        "possible_use": "candidate RRP-related series",
+        "allowed_in_production": False,
+    },
+    "RRPQONAR INDEX": {
+        "status": "needs_confirmation",
+        "possible_use": "candidate RRP-related series",
+        "allowed_in_production": False,
+    },
+}
+
+# S&P 500 sector indices (available, not yet in models)
+SPX_SECTOR_TICKERS = {
+    "S5INFT": "S5INFT INDEX",   "S5FINL": "S5FINL INDEX",
+    "S5TELS": "S5TELS INDEX",   "S5COND": "S5COND INDEX",
+    "S5HLTH": "S5HLTH INDEX",   "S5INDU": "S5INDU INDEX",
+    "S5CONS": "S5CONS INDEX",   "S5ENRS": "S5ENRS INDEX",
+    "S5UTIL": "S5UTIL INDEX",   "S5RLST": "S5RLST INDEX",
+    "S5MATR": "S5MATR INDEX",
+}
+
+# Sector ETF proxies — NOT true SPX sector indices, label as proxy only
+SPX_SECTOR_ETF_PROXIES = {
+    "XLC": "XLC US EQUITY",   "XLY": "XLY US EQUITY",
+    "XLP": "XLP US EQUITY",   "XLE": "XLE US EQUITY",
+    "XLV": "XLV US EQUITY",   "XLI": "XLI US EQUITY",
+    "XLB": "XLB US EQUITY",   "XLRE": "XLRE US EQUITY",
+    "XLU": "XLU US EQUITY",
+}
+
+# Policy futures — data available, models NOT yet implemented
+POLICY_FUTURES_TICKERS = {
+    "FF1": "FF1 COMB COMDTY",   "FF2": "FF2 COMB COMDTY",   "FF3": "FF3 COMB COMDTY",
+    "SFR1": "SFR1 COMB COMDTY", "SFR2": "SFR2 COMB COMDTY", "SFR3": "SFR3 COMB COMDTY",
+    "SER1": "SER1 COMB COMDTY", "SER2": "SER2 COMB COMDTY", "SER3": "SER3 COMB COMDTY",
 }
 
 # Countries with full 2/5/10/30 nominal coverage for regime classification
-REGIME_COUNTRIES = ("US", "DE", "JP", "UK", "CA", "AU")
+REGIME_COUNTRIES = ("US", "DE", "JP", "UK", "CA", "AU", "CH")
 
 # Tenor configuration for real-rate / inflation curve plots
 REAL_RATE_TENORS = {

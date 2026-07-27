@@ -79,8 +79,9 @@ def render(ctx: PageContext) -> None:
         "relative to the Fed's floor. Rising <b>SOFR − IORB</b> or a positive "
         "<b>EFFR − IORB</b> both signal money-market funding pressure "
         "(reserves getting scarce, dealer balance sheets stretched, or "
-        "quarter-end effects). RRP take-up and reserve balances give the "
-        "backdrop.",
+        "quarter-end effects). Reserve balances and Fed repo / SRF-style "
+        "usage give the balance-sheet backdrop when available. "
+        "Unconfirmed RRP-related candidate series are excluded until confirmed.",
     )
 
     # Honest scope statement — no fake FOMC path or SOFR futures strip.
@@ -117,7 +118,7 @@ def render(ctx: PageContext) -> None:
         ),
     )
 
-    # Existing money-market rendering (SOFR/EFFR/IORB spreads, RRP, etc.)
+    # Existing money-market rendering uses confirmed SOFR/EFFR/IORB/repo-rate series only. RRP candidates are excluded until confirmed.
     st.markdown("<div style='height:0.8rem;'></div>", unsafe_allow_html=True)
     render_money_market(ctx.dff)
 

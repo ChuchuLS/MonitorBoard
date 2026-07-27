@@ -66,7 +66,9 @@ def _normalize(df: pd.DataFrame) -> pd.DataFrame:
 
     Column names are upper-cased and stripped so ticker look-ups are robust to
     mixed casing / stray whitespace across Bloomberg pulls. All-empty rows
-    (future placeholder rows from Bloomberg BDH) are dropped.
+    (future placeholder rows from Bloomberg BDH) are dropped. Mixed-type
+    columns (e.g. Bloomberg putting a datetime in a numeric cell) are coerced
+    to numeric.
     """
     df = df.rename(columns={df.columns[0]: "Date"})
     df["Date"] = pd.to_datetime(df["Date"])
@@ -75,6 +77,11 @@ def _normalize(df: pd.DataFrame) -> pd.DataFrame:
                   for c in df.columns]
     df = df.loc[:, ~df.columns.duplicated()]  # keep first of any duplicate columns
     df = df.dropna(how="all")                 # drop future all-empty rows
+    # Coerce all data columns to numeric — Bloomberg sometimes puts stray
+    # datetime objects in numeric cells, which breaks parquet serialization.
+    for col in df.columns:
+        if df[col].dtype == object:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
 
 
@@ -231,8 +238,14 @@ if _HAS_ST:
     def load_data() -> pd.DataFrame:
         return _load_data_cached(source_signature())
 else:  # pragma: no cover
-    def load_data() -> pd.DataFrame:
+    from functools import lru_cache as _lru_cache
+
+    @_lru_cache(maxsize=4)
+    def _load_data_cached_headless(_source_hash: str) -> pd.DataFrame:
         return _load_core()
+
+    def load_data() -> pd.DataFrame:
+        return _load_data_cached_headless(source_signature())
 
 
 # ---------------------------------------------------------------------------

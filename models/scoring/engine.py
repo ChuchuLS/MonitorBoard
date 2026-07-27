@@ -9,7 +9,6 @@ factors, producing a cross-sectional z-score ranking.
 """
 
 from pathlib import Path
-from openpyxl import load_workbook
 import numpy as np
 import pandas as pd
 
@@ -106,64 +105,62 @@ RATES_TO_TOT_TICKER = {
 # ============================================================
 # LOADER
 # ============================================================
-def read_sheet(xlsx_path: str, sheet_name: str, header_row: int = 4) -> pd.DataFrame:
+def _read_sheet_pandas(xlsx_path: str, sheet_name: str, header_row: int = 4) -> pd.DataFrame:
+    """Read a BDH-style scoring sheet using pandas (much faster than openpyxl).
+    header_row is 0-indexed for pandas (row 4 in Excel = header=3 in pandas).
     """
-    Read a sheet with row 4 as code headers, dates in col A from row 6.
-    Handles BDH-style 'Date' interleaved columns by skipping them.
-    Returns DataFrame indexed by date with code columns.
-    """
-    wb = load_workbook(xlsx_path, data_only=True)
-    ws = wb[sheet_name]
+    try:
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="Could not infer format")
+            df = pd.read_excel(xlsx_path, sheet_name=sheet_name, header=header_row - 1)
+    except Exception:
+        return pd.DataFrame()
 
-    # Read row 4 codes; drop any column literally labeled "Date"
-    raw_codes = []
-    for c in range(2, ws.max_column + 1):
-        v = ws.cell(row=header_row, column=c).value
-        raw_codes.append((c, str(v).strip() if v is not None else None))
+    if df.empty or df.shape[1] < 2:
+        return pd.DataFrame()
 
-    # Keep only columns whose code is not None and not "Date"
-    valid_cols = [(c, code) for c, code in raw_codes if code and code != "Date"]
-    codes = [code for _, code in valid_cols]
-    col_idx = [c for c, _ in valid_cols]
+    # First column is dates
+    date_col = df.columns[0]
+    import warnings as _w
+    with _w.catch_warnings():
+        _w.filterwarnings("ignore", message="Could not infer format")
+        df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+    df = df.dropna(subset=[date_col])
 
-    rows = []
-    for r in range(6, ws.max_row + 1):
-        d = ws.cell(row=r, column=1).value
-        if d is None or (isinstance(d, str) and (d.strip() == "" or "#N/A" in d)):
-            continue
-        try:
-            ts = pd.Timestamp(d)
-        except Exception:
-            continue
-        vals = []
-        for c in col_idx:
-            v = ws.cell(row=r, column=c).value
-            if v is None or v == "" or (isinstance(v, str) and "#N/A" in v):
-                vals.append(np.nan)
-            else:
-                try:
-                    vals.append(float(v))
-                except (TypeError, ValueError):
-                    vals.append(np.nan)
-        rows.append([ts] + vals)
+    # Drop any column literally named "Date" (BDH interleaved date columns)
+    data_cols = [c for c in df.columns[1:] if str(c).strip() != "Date" and not str(c).startswith("Unnamed")]
+    df = df[[date_col] + data_cols]
 
-    df = pd.DataFrame(rows, columns=["date"] + codes).set_index("date").sort_index()
-    df.index = pd.to_datetime(df.index)
+    # Rename columns to stripped strings
+    df.columns = ["date"] + [str(c).strip() for c in data_cols]
+    df = df.set_index("date").sort_index()
     df = df[~df.index.duplicated(keep="last")]
+
+    # Convert to numeric
+    for c in df.columns:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+
     return df
 
 
+def read_sheet(xlsx_path: str, sheet_name: str, header_row: int = 4) -> pd.DataFrame:
+    """Backward-compatible wrapper."""
+    return _read_sheet_pandas(xlsx_path, sheet_name, header_row)
+
+
 def load_all(xlsx_path: str) -> dict:
-    return {
-        "gdp":    read_sheet(xlsx_path, "Macro_GDP"),
-        "cpi":    read_sheet(xlsx_path, "Macro_CPI"),
-        "fiscal": read_sheet(xlsx_path, "Macro_Fiscal"),
-        "y10y":   read_sheet(xlsx_path, "Rates_10Y"),
-        "tot":    read_sheet(xlsx_path, "Equity_ToT"),
-        "fci":    read_sheet(xlsx_path, "Equity_FCI"),
-        "eps":    read_sheet(xlsx_path, "Equity_EPS"),
-        "px":     read_sheet(xlsx_path, "Equity_Prices"),
+    """Load all 8 scoring sheets."""
+    sheets = {
+        "gdp": "Macro_GDP", "cpi": "Macro_CPI",
+        "fiscal": "Macro_Fiscal", "y10y": "Rates_10Y",
+        "tot": "Equity_ToT", "fci": "Equity_FCI",
+        "eps": "Equity_EPS", "px": "Equity_Prices",
     }
+    result = {}
+    for key, name in sheets.items():
+        result[key] = _read_sheet_pandas(xlsx_path, name)
+    return result
 
 
 # ============================================================

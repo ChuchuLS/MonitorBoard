@@ -39,6 +39,8 @@ def render(ctx: PageContext) -> None:
 
     countries = available_country_curves(ctx.df)
     if not countries:
+        from charts.common import render_data_source_note
+        render_data_source_note("DATA.xlsx / Sheet1", latest)
         st.warning("No country curve data found."); render_section_footer(page); return
 
     changes = country_1m_changes(ctx.df)
@@ -176,4 +178,6 @@ def render(ctx: PageContext) -> None:
             })
         st.dataframe(pd.DataFrame(avail_rows), hide_index=True, use_container_width=True)
 
+    from charts.common import render_data_source_note
+    render_data_source_note("DATA.xlsx / Sheet1", latest)
     render_section_footer(page)

@@ -60,7 +60,7 @@ PAGES: list[dict] = [
         "description": "Decompose nominal yield moves into real-rate and inflation "
                        "components (identity form via TIPS breakevens or swap form "
                        "via ZCIS with residual). US curve complex + rolling rate attribution + "
-                       "2s10s curve decomposition. Uses breakeven identity..",
+                       "2s10s curve decomposition. Uses breakeven identity.",
         "builds_on": "policy",
         "next": "regimes",
     },
@@ -164,6 +164,20 @@ PAGES: list[dict] = [
                        "Appendix — standalone model, not part of the 00–07 "
                        "PDF-style flow. Uses DATA.xlsx / scoring sheets.",
         "builds_on": "data_quality",
+        "next": "model_roadmap",
+    },
+    {
+        "id": "model_roadmap",
+        "label": "Roadmap",
+        "title": "Model Roadmap & Content Gap",
+        "section": "08",
+        "color_key": "data_quality",
+        "status": "live",
+        "data_source": "sheet1_market",
+        "description": "Content gap analysis vs the reference PDF. Shows what "
+                       "is implemented, what is missing, what data is needed, "
+                       "and what should be built next.",
+        "builds_on": "scoring",
         "next": None,
     },
 ]

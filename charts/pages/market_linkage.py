@@ -64,6 +64,8 @@ def render(ctx: PageContext) -> None:
     color = section_color(page["color_key"])
 
     render_top_tabs(page["id"])
+    from charts.common import render_experimental_badge
+    render_experimental_badge()
 
     prices = load_crossasset()
     if prices is None or "SPX" not in prices.columns:

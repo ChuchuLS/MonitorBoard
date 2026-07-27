@@ -355,3 +355,62 @@ def render_section_footer(page: dict) -> None:
         """,
         unsafe_allow_html=True,
     )
+
+
+# ===========================================================================
+# Phase 3 — Consistent reading / status / source helpers
+# ===========================================================================
+
+def render_current_reading_list(title: str, items: list[tuple[str, str]]) -> None:
+    """Render a reading box with a list of key/value pairs."""
+    if not items:
+        return
+    body = "<br>".join(
+        f"<span style='color:#888;'>{_esc(k)}:</span> <b>{v}</b>"
+        for k, v in items
+    )
+    _rp_box(title, body, "rp-box-reading")
+
+
+def render_model_status_chip(status: str, detail: str = "") -> str:
+    """Return HTML for an inline status chip (Ready / Partial / Missing / Experimental)."""
+    colors = {
+        "Ready": "#5fb04f", "Live": "#5fb04f",
+        "Partial": "#d99830",
+        "Missing data": "#d04848", "Missing": "#d04848",
+        "Experimental": "#b184ff",
+    }
+    c = colors.get(status, "#888")
+    det = f" — {_esc(detail)}" if detail else ""
+    return (
+        f"<span style='display:inline-block;padding:2px 8px;border:1px solid {c}55;"
+        f"color:{c};border-radius:3px;font-size:10px;letter-spacing:0.06em;"
+        f"font-weight:700;text-transform:uppercase;'>{_esc(status)}</span>"
+        f"<span style='font-size:11px;color:#888;margin-left:6px;'>{det}</span>"
+    )
+
+
+def render_data_source_note(source: str, latest_date: str | None = None,
+                            caveat: str | None = None) -> None:
+    """Render a small data-source footnote at the bottom of a section."""
+    parts = [f"Data source: <b>{_esc(source)}</b>"]
+    if latest_date:
+        parts.append(f"Latest: <b>{_esc(latest_date)}</b>")
+    if caveat:
+        parts.append(f"<span style='color:#d99830;'>{_esc(caveat)}</span>")
+    st.markdown(
+        f"<div style='font-size:10px;color:#666;margin:0.4rem 0;'>"
+        f"{'  ·  '.join(parts)}</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_experimental_badge() -> None:
+    """Render a visible but tasteful Experimental badge."""
+    st.markdown(
+        "<div style='display:inline-block;padding:3px 10px;border:1px solid #b184ff55;"
+        "color:#b184ff;border-radius:3px;font-size:10px;letter-spacing:0.08em;"
+        "font-weight:700;text-transform:uppercase;margin-bottom:0.6rem;'>"
+        "Experimental model — not part of core PDF-style methodology</div>",
+        unsafe_allow_html=True,
+    )

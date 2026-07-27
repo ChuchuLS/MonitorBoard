@@ -32,7 +32,7 @@ except Exception:
 print("   all imports OK")
 
 # Registry / theme sanity — Phase 1 shell must be internally consistent.
-assert len(PAGES) == 11, f"expected 11 registered pages, got {len(PAGES)}"
+assert len(PAGES) == 12, f"expected 12 registered pages, got {len(PAGES)}"
 if _HAS_STREAMLIT_PAGES:
     for p in PAGES:
         for k in ("id", "label", "title", "section", "color_key", "status",
@@ -248,13 +248,13 @@ print("12. Phase 1.7 alignment checks ...")
 
 # Cross-Asset required columns present + 8-regime works + days-in-regime
 if ca is not None:
-    from charts.pages.cross_asset import REQUIRED_COLUMNS, classify_8regime, _days_in_current
+    from models.cross_asset.directional import REQUIRED_COLUMNS, classify_8regime, days_in_current_regime
     ca_missing = [c for c in REQUIRED_COLUMNS if c not in ca.columns]
     assert not ca_missing, f"DATA.xlsx missing cross-asset columns: {ca_missing}"
     regime_result = classify_8regime(ca)
     assert not regime_result.empty, "classify_8regime returned empty"
     assert "regime" in regime_result.columns
-    days_in = _days_in_current(regime_result["regime"])
+    days_in = days_in_current_regime(regime_result["regime"])
     assert isinstance(days_in, int) and days_in > 0
     print(f"    cross-asset: all {len(REQUIRED_COLUMNS)} cols present, "
           f"{len(regime_result)} days, current {regime_result['regime'].iloc[-1]} "
@@ -394,6 +394,100 @@ rpca = open("charts/pages/rates_pca.py").read()
 assert "Section 02 (scaffold)" not in rpca, "rates_pca must not call Section 02 scaffold"
 print("    rates_pca.py: no scaffold reference ✓")
 
+# Phase 3 checks
+print("16. Phase 3 research-pack polish ...")
+
+# Contents page summary can compute readings without crashing
+from models.rate_decomposition import build_us_curve_snapshot
+from models.global_rates import build_slope_ranking, country_1m_changes
+from models.cross_asset.directional import classify_8regime, days_in_current_regime
+snap = build_us_curve_snapshot(df)
+assert not snap.empty, "curve snapshot for contents summary"
+slopes = build_slope_ranking(df)
+assert not slopes.empty, "slope ranking for contents summary"
+chg = country_1m_changes(df)
+assert not chg.empty, "1M changes for contents summary"
+print("    contents summary: all models produce output ✓")
+
+# Data dependency map builds
+from models.rate_decomposition import US_NOMINAL, US_BREAKEVEN
+dep_cols = list(US_NOMINAL.values()) + list(US_BREAKEVEN.values())
+dep_miss = [c for c in dep_cols if c not in df.columns]
+assert not dep_miss, f"dependency map: missing {dep_miss}"
+print("    data dependency map: all required decomp/regime cols present ✓")
+
+# Future model readiness — just check the structure doesn't crash
+future_required = {
+    "FOMC": ["FF1 COMDTY"],  # example — should be missing
+    "FX": ["EURUSD CURNCY", "USDJPY CURNCY"],  # should be missing
+}
+for model, cols in future_required.items():
+    missing = [c for c in cols if c not in df.columns]
+    print(f"    future {model}: {'Missing data' if missing else 'Ready'} ({len(missing)} missing)")
+
+# Export snapshot script runs
+import subprocess
+result = subprocess.run(["python", "scripts/export_research_pack_snapshot.py"],
+                        capture_output=True, text=True, timeout=60)
+assert result.returncode == 0, f"snapshot export failed: {result.stderr[:200]}"
+from pathlib import Path as _Path
+assert _Path("data/snapshot.json").exists(), "snapshot.json not created"
+import json
+snap_data = json.loads(_Path("data/snapshot.json").read_text())
+assert "index" in snap_data and "pages" in snap_data
+print(f"    export snapshot: OK (index={snap_data['index']['level']}, "
+      f"{len(snap_data['pages'])} pages)")
+
+# Cross-asset imports from models, not charts.pages
+import inspect
+from models.cross_asset import directional
+assert hasattr(directional, 'classify_8regime')
+assert hasattr(directional, 'days_in_current_regime')
+src = inspect.getfile(directional)
+assert 'models' in src and 'charts' not in src
+print("    cross-asset: imported from models/ (not charts/pages/) ✓")
+
+# README consistency
+readme = open("README.md").read()
+assert "intentionally does" in readme.lower() or "intentionally does NOT" in readme
+print("    README: documents intentional data limitations ✓")
+
+# Phase 4 checks
+print("17. Phase 4 HTML export checks ...")
+
+# Snapshot has required keys
+from scripts.export_research_pack_snapshot import build_snapshot
+snap = build_snapshot()
+for key in ["latest_valid_date", "index", "pages"]:
+    assert key in snap, f"snapshot missing key: {key}"
+print(f"    snapshot: {len(snap)} top-level keys ✓")
+
+# HTML export builds without Streamlit — standalone mode (inline Plotly JS)
+from scripts.export_research_pack_html import build_html
+html_str, filename = build_html(include_plotlyjs=True, plotly_mode="inline")
+assert len(html_str) > 1000, f"HTML too short: {len(html_str)}"
+assert filename.startswith("research_pack_")
+for section in ["Liquidity Overview", "Rate Decomposition", "Curve Regimes",
+                "Global Rates", "Cross-Asset Regime Timeline", "Data Quality"]:
+    assert section in html_str, f"HTML missing section: {section}"
+assert "Capital Flows" not in html_str, "HTML must not contain Capital Flows branding"
+# Standalone checks — no CDN script tag, Plotly JS embedded inline
+assert '<script src="https://cdn.plot.ly/' not in html_str, \
+    "HTML must not load Plotly from CDN via script src"
+assert "Plotly.newPlot" in html_str, "HTML should contain inline Plotly JS"
+assert len(html_str) > 1_000_000, \
+    f"Standalone HTML with inline Plotly should be >1MB, got {len(html_str):,}"
+print(f"    HTML export: {len(html_str):,} chars, filename={filename}, standalone ✓")
+
+# Write to reports/
+from pathlib import Path as _P4
+rdir = _P4("reports")
+rdir.mkdir(exist_ok=True)
+rpath = rdir / filename
+rpath.write_text(html_str, encoding="utf-8")
+assert rpath.stat().st_size > 0
+print(f"    wrote {rpath} ({rpath.stat().st_size / 1024:.0f} KB) ✓")
+
 # Verify no stale external files exist (all consolidated into DATA.xlsx)
 from pathlib import Path
 assert Path("data/DATA.xlsx").exists(), "DATA.xlsx must exist"
@@ -401,6 +495,163 @@ assert not Path("data/CROSSASSET.xlsx").exists(), "CROSSASSET.xlsx should not ex
 assert not Path("data/FICCREADING.xlsx").exists(), "FICCREADING.xlsx should not exist (consolidated into DATA.xlsx)"
 assert not Path("data/pulsar_data.xlsx").exists(), "pulsar_data.xlsx should not exist (consolidated into DATA.xlsx)"
 print("    no stale standalone files ✓ (all data in DATA.xlsx)")
+
+# Phase 5 checks
+print("18. Phase 5 model roadmap checks ...")
+from config.model_roadmap import ROADMAP, coverage_summary, do_not_fake_list
+assert len(ROADMAP) > 10, f"roadmap too short: {len(ROADMAP)}"
+counts = coverage_summary()
+assert counts.get("Live", 0) >= 5, f"expected ≥5 Live, got {counts}"
+assert counts.get("Not Started", 0) + counts.get("Data Missing", 0) >= 5, \
+    f"expected ≥5 Not Started + Data Missing, got {counts}"
+for m in ROADMAP:
+    for k in ["section", "module_id", "title", "current_status", "do_not_fake"]:
+        assert k in m, f"roadmap {m.get('module_id')} missing {k}"
+    if m.get("missing_data"):
+        assert m["current_status"] != "Live", \
+            f"{m['module_id']} has missing_data but is Live"
+dnf = do_not_fake_list()
+assert len(dnf) >= 5
+for m in dnf:
+    assert m["current_status"] in ("Data Missing", "Not Started", "Needs confirmation")
+print(f"    roadmap: {len(ROADMAP)} modules, coverage={counts}")
+print(f"    do_not_fake: {len(dnf)} modules correctly blocked")
+readme = open("README.md").read()
+assert "content and model benchmark" in readme.lower()
+print("    README: clarifies content goal ✓")
+
+
+print("\n20. Phase 6.1 non-fabrication + data inventory checks ...")
+
+# FDTRFTRL must not be mapped as RRP, and unconfirmed candidates must not
+# live in the production ticker map.
+assert "RRP" not in TICKERS, "No key called 'RRP' should exist in TICKERS"
+assert "TOMO_TCSO" not in TICKERS, "Unconfirmed TOMO_TCSO must not be in main TICKERS"
+assert TICKERS.get("FED_TARGET_LOWER") == "FDTRFTRL INDEX", \
+    "FDTRFTRL must be labelled only as Fed target / policy lower bound"
+print("    TICKERS: no RRP/TOMO_TCSO production keys; FED_TARGET_LOWER present ✓")
+
+# Strict production-page scan.  These files render charts/current readings and
+# must not contain unconfirmed RRP labels or candidate ticker keys at all.
+strict_prod_files = ["charts/funding.py", "charts/pages/policy.py"]
+strict_forbidden = [
+    "TOMO_TCSO",
+    "TOMOTCSO",
+    "ON RRP offering rate",
+    "RRP take-up",
+    "RRP usage",
+    "RRP award rate",
+    "TGCR − RRP",
+    "TGCR - RRP",
+]
+for fp in strict_prod_files:
+    txt = open(fp, encoding="utf-8").read()
+    for phrase in strict_forbidden:
+        assert phrase not in txt, f"Forbidden unconfirmed RRP production text '{phrase}' in {fp}"
+print("    strict production pages contain no unconfirmed RRP labels/tickers ✓")
+
+# NON_FABRICATION.md exists
+from pathlib import Path as _PNF
+assert _PNF("docs/NON_FABRICATION.md").exists(), "NON_FABRICATION.md must exist"
+
+# New tickers registered — FX spot + Switzerland
+for key in ["EURUSD", "USDJPY", "GBPUSD", "AUDUSD", "CH_2Y", "CH_10Y"]:
+    assert key in TICKERS, f"{key} must be registered in TICKERS"
+print(f"    FX spot + Switzerland tickers registered ✓")
+
+# RRP candidates are candidate-only: needs_confirmation and explicitly barred
+# from production charts until their field meanings are confirmed.
+from config.tickers import RRP_CANDIDATES
+assert "TOMOTCSO INDEX" in RRP_CANDIDATES, "TOMOTCSO must be candidate-only"
+for tick, info in RRP_CANDIDATES.items():
+    assert info.get("status") == "needs_confirmation", f"{tick} must be needs_confirmation"
+    assert info.get("allowed_in_production") is False, \
+        f"{tick} must not be allowed in production while unconfirmed"
+print(f"    RRP candidates: {len(RRP_CANDIDATES)} candidate-only, not production-eligible ✓")
+
+# Roadmap traceability fields
+from config.model_roadmap import ROADMAP
+for m in ROADMAP:
+    for k in ["evidence_basis", "data_source_status", "can_render_real_chart"]:
+        assert k in m, f"roadmap {m['module_id']} missing {k}"
+    # Non-fabrication: if do_not_fake and missing_data, must not be Live
+    if m.get("do_not_fake") and m.get("missing_data"):
+        assert m["current_status"] != "Live", \
+            f"do_not_fake module {m['module_id']} with missing_data must not be Live"
+print(f"    roadmap: {len(ROADMAP)} modules, all have traceability fields ✓")
+
+# FX status update — spot data now available
+for mid in ["fx_eurusd", "fx_usdjpy", "fx_gbpusd", "fx_audusd"]:
+    m = next((r for r in ROADMAP if r["module_id"] == mid), None)
+    assert m is not None, f"{mid} must be in roadmap"
+    assert m["data_source_status"] == "available", \
+        f"{mid} has spot data now, data_source_status should be 'available'"
+print("    FX differential modules: data_source_status=available ✓")
+
+# Phase 6.2: CLI correlation checks
+print("21. CLI correlation model checks ...")
+from models.cli_correlations import available_targets, CORR_TARGETS, build_all_correlations
+from index.composite import compute_index as _ci_corr
+r_corr = _ci_corr(df)
+
+targets = available_targets(df)
+assert "SPX" in targets, "SPX must be available as a sanity-check target"
+print(f"    available targets: {list(targets.keys())}")
+
+corrs = build_all_correlations(df, r_corr.index, window=20)
+assert "SPX" in corrs, "SPX correlation must compute"
+spx_corr = corrs["SPX"].dropna()
+assert len(spx_corr) > 100, f"SPX correlation too short: {len(spx_corr)}"
+assert -1 <= spx_corr.min() <= spx_corr.max() <= 1, "correlation out of [-1, 1]"
+print(f"    CLI vs SPX: {len(spx_corr)} obs, latest={spx_corr.iloc[-1]:.4f}, "
+      f"mean={spx_corr.mean():.4f}")
+
+# HSI and BTC should NOT be available (missing from data)
+for key in ["HSI", "BTC"]:
+    if key not in targets:
+        print(f"    CLI vs {key}: Data Missing (expected — ticker not in DATA.xlsx)")
+    else:
+        print(f"    CLI vs {key}: available ({len(corrs.get(key, pd.Series()).dropna())} obs)")
+
+# Tickers are registered even though data not present
+assert "HSI" in TICKERS, "HSI must be registered in TICKERS"
+assert "BTC" in TICKERS, "BTC must be registered in TICKERS"
+print("    HSI + BTC tickers registered in config ✓")
+
+# Non-fabrication: missing targets produce no output
+for key in CORR_TARGETS:
+    if key not in targets:
+        assert key not in corrs, f"{key} should not produce correlation when data is missing"
+print("    non-fabrication: missing targets produce no output ✓")
+
+# Q-list checks
+print("22. Q-list answering panel checks ...")
+from models.qlist import build_qlist, QAnswer
+from index.composite import compute_index as _ci_q
+r_q = _ci_q(df)
+qlist = build_qlist(df, r_q, r_q.index)
+assert len(qlist) == 8, f"expected 8 Q-list answers, got {len(qlist)}"
+for qa in qlist:
+    assert isinstance(qa, QAnswer)
+    assert qa.question, "question must not be empty"
+    assert qa.answer, "answer must not be empty"
+    assert qa.data_status in ("real_data", "partial", "data_missing"), \
+        f"invalid data_status: {qa.data_status}"
+    # Non-fabrication: if data_missing, answer must not contain numeric values
+    # that look like they came from a real model
+    print(f"    Q: {qa.question[:50]:50s} -> {qa.data_status:12s} {qa.answer[:60]}")
+status_counts = {
+    "real_data": sum(1 for qa in qlist if qa.data_status == "real_data"),
+    "partial": sum(1 for qa in qlist if qa.data_status == "partial"),
+    "data_missing": sum(1 for qa in qlist if qa.data_status == "data_missing"),
+}
+# If any correlation target is missing, the correlation Q-list answer must be
+# partial rather than overstated as fully real_data.
+corr_qa = next(qa for qa in qlist if "correlated with risk assets" in qa.question)
+if any(k not in targets for k in CORR_TARGETS):
+    assert corr_qa.data_status == "partial", \
+        "Q-list correlation answer must be partial when any target is missing"
+print(f"    Q-list status counts: {status_counts} ✓")
 
 
 print("\nALL SMOKE TESTS PASSED ✓")

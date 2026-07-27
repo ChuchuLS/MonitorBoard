@@ -46,10 +46,14 @@ def render(ctx: PageContext) -> None:
             required=["USGG2YR/5YR/10YR/30YR INDEX", "USGGBE02/05/10/30 INDEX"],
             missing=["Required nominal or breakeven columns not found"],
         )
+        from charts.common import render_data_source_note
+        render_data_source_note("DATA.xlsx / Sheet1", latest)
         render_section_footer(page); return
 
     snap = build_us_curve_snapshot(ctx.df)
     if snap.empty:
+        from charts.common import render_data_source_note
+        render_data_source_note("DATA.xlsx / Sheet1", latest)
         st.warning("Insufficient data for curve snapshot."); render_section_footer(page); return
 
     # A. KPI strip
@@ -168,4 +172,6 @@ def render(ctx: PageContext) -> None:
         "The residual is exactly zero. If inflation swaps are used in a future "
         "version, a residual must be shown.")
 
+    from charts.common import render_data_source_note
+    render_data_source_note("DATA.xlsx / Sheet1", latest)
     render_section_footer(page)

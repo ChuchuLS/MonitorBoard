@@ -15,6 +15,7 @@ No separate external files are used.
 from __future__ import annotations
 
 from pathlib import Path
+from functools import lru_cache
 
 import pandas as pd
 
@@ -26,11 +27,14 @@ except Exception:
     _HAS_ST = False
 
 
-def _cache_data(**kwargs):
-    """Use st.cache_data when Streamlit is available, otherwise no-op."""
+def _cache_data(**_kwargs):
+    """Use st.cache_data when Streamlit is available, lru_cache otherwise."""
     if _HAS_ST:
-        return st.cache_data(**kwargs)
-    return lambda f: f
+        return st.cache_data(**_kwargs)
+
+    def decorator(func):
+        return lru_cache(maxsize=4)(func)
+    return decorator
 
 from data.loader import load_data, get_series
 

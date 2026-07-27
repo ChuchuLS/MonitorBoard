@@ -28,10 +28,10 @@ def _spread_defs(dff: pd.DataFrame) -> list[tuple]:
          "funding demand and dealer balance sheet capacity.",
          get_series(dff, "GCF") - get_series(dff, "TPR"),
          "INFLEXIBLE BALANCE SHEETS ↑", "FLEXIBLE BALANCE SHEETS ↓"),
-        ("TGCR − RRP", "PRIVATE REPO<br>DEMAND",
-         "The spread between private repo &amp; Fed RRP rates, which measures "
+        ("TGCR − Target Lower", "PRIVATE REPO<br>DEMAND",
+         "The spread between private repo &amp; Fed target lower bound, which measures "
          "demand for cash vs. collateral.",
-         get_series(dff, "TGCR") - get_series(dff, "RRP"),
+         get_series(dff, "TGCR") - get_series(dff, "FED_TARGET_LOWER"),
          "EXCESS COLLATERAL ↑", "EXCESS CASH ↓"),
         ("SOFR − IORB", "BANK REPOS",
          "A positive spread indicates banks are lending reserves in repo on a "
@@ -115,19 +115,18 @@ def render_money_market(dff: pd.DataFrame) -> None:
                       color:#ccc;text-transform:uppercase;">Overnight rates layered</div>
           <div style="font-size:10px;color:#888;letter-spacing:0.08em;
                       text-transform:uppercase;margin-top:2px;">
-            Six US dollar overnight rates plotted together · %</div>
+            Confirmed US dollar overnight rates plotted together · %</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
     ovr_fig = go.Figure()
     ovr_series = [
-        ("Fed funds target (lower)", "RRP", "#d062ff"),
+        ("Fed funds target (lower)", "FED_TARGET_LOWER", "#d062ff"),
         ("IORB", "IORB", "#9bd62a"),
         ("SOFR", "SOFR", "#ffd200"),
         ("TGCR", "TGCR", "#ff8a3d"),
         ("USD repo GC ON", "USRG_1T", "#5dd6e0"),
-        ("RRP award rate", "TOMO_TCSO", "#ffffff"),
     ]
     for label, key, color in ovr_series:
         s = get_series(dff, key)

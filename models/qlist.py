@@ -1,0 +1,255 @@
+"""
+models/qlist.py
+===============
+Q-list answering engine. Generates structured answers to the 8 standard
+questions using real model outputs. No fabrication — every answer traces
+to a specific model function and data column.
+
+If required data is missing, the answer is "Data Missing" with an explanation.
+"""
+from __future__ import annotations
+
+import pandas as pd
+import numpy as np
+from dataclasses import dataclass
+
+
+@dataclass
+class QAnswer:
+    """One Q-list answer."""
+    question: str
+    answer: str
+    evidence: str           # which model/function produced this
+    data_status: str        # "real_data" | "partial" | "data_missing"
+    details: list[str]      # supporting detail lines
+
+
+def build_qlist(df: pd.DataFrame, index_result, cli_index: pd.Series) -> list[QAnswer]:
+    """Build answers to all 8 questions. Returns a list of QAnswer objects."""
+    answers = []
+
+    # ── Q1: Is liquidity tightening or loosening? ──
+    try:
+        changes = index_result.changes() if callable(getattr(index_result, "changes", None)) else {}
+        regime = index_result.latest_regime
+        level = index_result.latest
+        w1 = changes.get("1w", float("nan"))
+        m1 = changes.get("1m", float("nan"))
+        m3 = changes.get("3m", float("nan"))
+
+        if pd.notna(m1):
+            if m1 > 2:
+                direction = "Loosening"
+            elif m1 < -2:
+                direction = "Tightening"
+            else:
+                direction = "Stable"
+        else:
+            direction = "Insufficient data"
+
+        answers.append(QAnswer(
+            question="Is liquidity tightening or loosening?",
+            answer=f"{direction} — CLI at {level:.1f} ({regime}), "
+                   f"1M change {m1:+.1f} pts" if pd.notna(m1) else f"{direction}",
+            evidence="index.composite.compute_index → changes()",
+            data_status="real_data",
+            details=[
+                f"CLI level: {level:.1f} ({regime})",
+                f"1W: {w1:+.1f}" if pd.notna(w1) else "1W: —",
+                f"1M: {m1:+.1f}" if pd.notna(m1) else "1M: —",
+                f"3M: {m3:+.1f}" if pd.notna(m3) else "3M: —",
+            ],
+        ))
+    except Exception:
+        answers.append(QAnswer("Is liquidity tightening or loosening?",
+                               "Model error", "—", "data_missing", []))
+
+    # ── Q2: Which bucket is driving the move? ──
+    try:
+        drivers = index_result.drivers("1m")
+        bc = index_result.level_contributions()
+        bc_details = [f"{k}: {v:+.2f}" for k, v in bc.items() if pd.notna(v)]
+
+        answers.append(QAnswer(
+            question="Which bucket is driving the move?",
+            answer=f"Easing: {drivers[0] or '—'} · Tightening: {drivers[1] or '—'}",
+            evidence="index.composite.IndexResult.drivers('1m'), level_contributions()",
+            data_status="real_data",
+            details=bc_details,
+        ))
+    except Exception:
+        answers.append(QAnswer("Which bucket is driving the move?",
+                               "Model error", "—", "data_missing", []))
+
+    # ── Q3: Is funding stress elevated? ──
+    try:
+        from models.policy_short_rates import build_funding_pressure_score
+        p = build_funding_pressure_score(df)
+        if pd.notna(p["score"]):
+            answers.append(QAnswer(
+                question="Is funding stress elevated?",
+                answer=f"{p['status']} — pressure score {p['score']:+.2f} "
+                       f"({p['n_spreads']} spreads)",
+                evidence="models.policy_short_rates.build_funding_pressure_score()",
+                data_status="real_data",
+                details=[
+                    f"Average 1Y z-score of SOFR/EFFR/TGCR/BGCR/GCF/TPR vs IORB",
+                    f"Thresholds: <−1 Easy · ±1 Normal · +1–2 Tight · >+2 Very tight",
+                ],
+            ))
+        else:
+            answers.append(QAnswer("Is funding stress elevated?",
+                                   "No data", "—", "data_missing", []))
+    except Exception:
+        answers.append(QAnswer("Is funding stress elevated?",
+                               "Model not available", "—", "data_missing", []))
+
+    # ── Q4: What is driving the curve? ──
+    try:
+        from models.rate_decomposition import build_us_curve_snapshot
+        snap = build_us_curve_snapshot(df)
+        if not snap.empty:
+            r10 = snap[snap["tenor"] == "10Y"]
+            if not r10.empty:
+                row = r10.iloc[0]
+                answers.append(QAnswer(
+                    question="What is driving the curve — real rates or inflation?",
+                    answer=f"10Y 1M driver: {row['driver_1m']} "
+                           f"({row['driver_share_1m']:.0%} share). "
+                           f"Nominal {row['nominal_1m_change_bp']:+.0f} bp = "
+                           f"Real {row['real_1m_change_bp']:+.0f} bp + "
+                           f"Inflation {row['inflation_1m_change_bp']:+.0f} bp",
+                    evidence="models.rate_decomposition.build_us_curve_snapshot()",
+                    data_status="real_data",
+                    details=[f"{r['tenor']}: nom {r['nominal_1m_change_bp']:+.0f} "
+                             f"= real {r['real_1m_change_bp']:+.0f} + "
+                             f"infl {r['inflation_1m_change_bp']:+.0f} ({r['driver_1m']})"
+                             for _, r in snap.iterrows()],
+                ))
+            else:
+                answers.append(QAnswer("What is driving the curve?",
+                                       "10Y data insufficient", "—", "partial", []))
+        else:
+            answers.append(QAnswer("What is driving the curve?",
+                                   "Decomposition data missing", "—", "data_missing", []))
+    except Exception:
+        answers.append(QAnswer("What is driving the curve?",
+                               "Model error", "—", "data_missing", []))
+
+    # ── Q5: What is the curve regime? ──
+    try:
+        from models.curve_regimes import classify_pair_history, days_in_current_regime
+        h = classify_pair_history(df, "nominal", ("2Y", "10Y"), 10)
+        if not h.empty and h["regime"].dropna().shape[0]:
+            reg = h["regime"].dropna().iloc[-1]
+            days = days_in_current_regime(h["regime"])
+            spread = h["spread"].dropna().iloc[-1] * 100 if h["spread"].dropna().shape[0] else float("nan")
+            answers.append(QAnswer(
+                question="What is the curve regime (2s10s)?",
+                answer=f"{reg} ({days}d), 2s10s at {spread:+.0f} bp" if pd.notna(spread)
+                       else f"{reg} ({days}d)" if pd.notna(reg) else "—",
+                evidence="models.curve_regimes.classify_pair_history()",
+                data_status="real_data",
+                details=[f"10D regime window, nominal 2s10s pair"],
+            ))
+        else:
+            answers.append(QAnswer("What is the curve regime?",
+                                   "Insufficient data", "—", "data_missing", []))
+    except Exception:
+        answers.append(QAnswer("What is the curve regime?",
+                               "Model error", "—", "data_missing", []))
+
+    # ── Q6: What is the cross-asset regime? ──
+    try:
+        from data.external_loaders import load_crossasset
+        from models.cross_asset.directional import classify_8regime, REGIMES_8, days_in_current_regime as ca_d
+        ca = load_crossasset()
+        if ca is not None:
+            ca_r = classify_8regime(ca)
+            if not ca_r.empty:
+                cur = ca_r["regime"].iloc[-1]
+                days = ca_d(ca_r["regime"])
+                last = ca_r.iloc[-1]
+                answers.append(QAnswer(
+                    question="What is the cross-asset regime?",
+                    answer=f"{REGIMES_8[cur]['label']} ({days}d)",
+                    evidence="models.cross_asset.directional.classify_8regime()",
+                    data_status="real_data",
+                    details=[
+                        f"SPX signal: {last['spx_signal']:+.2f}",
+                        f"Rates signal: {last['rates_signal']:+.2f}",
+                        f"DXY signal: {last['dxy_signal']:+.2f}",
+                    ],
+                ))
+            else:
+                answers.append(QAnswer("What is the cross-asset regime?",
+                                       "Insufficient data", "—", "data_missing", []))
+        else:
+            answers.append(QAnswer("What is the cross-asset regime?",
+                                   "CROSSASSET data missing", "—", "data_missing", []))
+    except Exception:
+        answers.append(QAnswer("What is the cross-asset regime?",
+                               "Model error", "—", "data_missing", []))
+
+    # ── Q7: Where is the steepest global curve? ──
+    try:
+        from models.global_rates import build_slope_ranking, country_1m_changes
+        slopes = build_slope_ranking(df)
+        chg = country_1m_changes(df)
+        if not slopes.empty:
+            top = slopes.iloc[0]
+            bot = slopes.iloc[-1]
+            answers.append(QAnswer(
+                question="Where is the steepest / flattest global curve?",
+                answer=f"Steepest: {top['label']} ({top['slope_bp']:+.0f} bp) · "
+                       f"Flattest: {bot['label']} ({bot['slope_bp']:+.0f} bp)",
+                evidence="models.global_rates.build_slope_ranking()",
+                data_status="real_data",
+                details=[f"{r['label']}: {r['slope_bp']:+.0f} bp"
+                         f"{' (INVERTED)' if r['inverted'] else ''}"
+                         for _, r in slopes.iterrows()],
+            ))
+        else:
+            answers.append(QAnswer("Where is the steepest global curve?",
+                                   "No slope data", "—", "data_missing", []))
+    except Exception:
+        answers.append(QAnswer("Where is the steepest global curve?",
+                               "Model error", "—", "data_missing", []))
+
+    # ── Q8: Is liquidity correlated with risk assets? ──
+    try:
+        from models.cli_correlations import build_all_correlations, CORR_TARGETS
+        corrs = build_all_correlations(df, cli_index, window=20)
+        if corrs:
+            lines = []
+            for k, s in corrs.items():
+                v = s.dropna().iloc[-1] if s.dropna().shape[0] else float("nan")
+                label = CORR_TARGETS[k]["label"]
+                if pd.notna(v):
+                    strength = "strong" if abs(v) > 0.5 else "moderate" if abs(v) > 0.25 else "weak"
+                    sign = "positive" if v > 0 else "negative"
+                    lines.append(f"CLI vs {label}: {v:+.3f} ({strength} {sign})")
+            missing_keys = [k for k in CORR_TARGETS if k not in corrs]
+            if missing_keys:
+                lines.append(f"Not available: {', '.join(CORR_TARGETS[k]['label'] for k in missing_keys)}")
+            if not corrs:
+                status = "data_missing"
+            elif missing_keys:
+                status = "partial"
+            else:
+                status = "real_data"
+            answers.append(QAnswer(
+                question="Is liquidity correlated with risk assets?",
+                answer="; ".join(lines[:2]) if lines else "No data",
+                evidence="models.cli_correlations.build_all_correlations()",
+                data_status=status,
+                details=lines,
+            ))
+        else:
+            answers.append(QAnswer("Is liquidity correlated with risk assets?",
+                                   "No correlation targets available", "—", "data_missing", []))
+    except Exception:
+        answers.append(QAnswer("Is liquidity correlated with risk assets?",
+                               "Model error", "—", "data_missing", []))
+
+    return answers

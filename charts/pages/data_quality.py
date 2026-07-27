@@ -245,6 +245,89 @@ def render(ctx: PageContext) -> None:
                  hide_index=True, use_container_width=True)
 
     # ==================================================================
+    # 2c. MODEL DATA DEPENDENCY MAP
+    # ==================================================================
+    st.markdown(
+        "<div style='margin:1rem 0 0.4rem;font-size:11px;color:#888;"
+        "letter-spacing:0.1em;text-transform:uppercase;'>"
+        "Model data dependency map</div>",
+        unsafe_allow_html=True,
+    )
+    from data.loader import latest_valid_date as _lvd2
+    from models.rate_decomposition import US_NOMINAL, US_BREAKEVEN
+    dep_req_decomp = list(US_NOMINAL.values()) + list(US_BREAKEVEN.values())
+    dep_req_ca = ["SPX INDEX", "USGG10YR INDEX", "DXY CURNCY"]
+    dep_req_ficc = ["USGG10YR INDEX", "USYC2Y10 INDEX", "USGGBE10 INDEX",
+                    "USGGT10Y INDEX", "MOVE INDEX", "FXJPEMCS INDEX", "JYBSS12M CURNCY"]
+
+    def _dep_status(req_cols):
+        miss = [c for c in req_cols if c not in present_cols]
+        lvd = _lvd2(ctx.df, req_cols)
+        return ("Ready" if not miss else "Missing data",
+                ", ".join(miss) if miss else "—",
+                str(lvd.date()) if lvd else "—")
+
+    dep_rows = []
+    for label, model, req, exp in [
+        ("00 Liquidity", "Composite Liquidity Index", None, False),
+        ("01 Policy", "Money-market plumbing", None, False),
+        ("02 Rate Decomp", "Breakeven identity", dep_req_decomp, False),
+        ("03 Curve Regimes", "7-regime classifier", dep_req_decomp, False),
+        ("04 Global Rates", "Cross-country curves", None, False),
+        ("05 Cross-Asset", "8-regime directional", dep_req_ca, False),
+        ("05b Linkage", "PCA 4-regime", dep_req_ca, True),
+        ("02b Rates PCA", "Within-rates PCA", dep_req_ficc, True),
+        ("06 FX PCA", "FX complex PCA", dep_req_ficc, True),
+        ("A1 Scoring", "Macro + market scoring", None, False),
+    ]:
+        if req:
+            dep_st, miss, lvd = _dep_status(req)
+        else:
+            dep_st, miss, lvd = "Ready", "—", str(valid_latest)
+        dep_rows.append({
+            "Page": label, "Model": model, "Status": dep_st,
+            "Missing": miss, "Latest model date": lvd,
+            "Type": "Experimental" if exp else "Core",
+        })
+    st.dataframe(pd.DataFrame(dep_rows).style.map(_status_color, subset=["Status"]),
+                 hide_index=True, use_container_width=True)
+
+    # ==================================================================
+    # 2d. FUTURE PDF-STYLE MODEL READINESS
+    # ==================================================================
+    st.markdown(
+        "<div style='margin:1rem 0 0.4rem;font-size:11px;color:#888;"
+        "letter-spacing:0.1em;text-transform:uppercase;'>"
+        "Future PDF-style model readiness</div>",
+        unsafe_allow_html=True,
+    )
+    future_models = [
+        {"Model": "FOMC implied policy path",
+         "Required": "Fed funds futures / meeting-dated OIS, FOMC calendar, EFFR",
+         "Status": "Missing data",
+         "Notes": "No meeting-dated futures in DATA.xlsx"},
+        {"Model": "SOFR futures strip",
+         "Required": "SOFR futures contract prices by expiry",
+         "Status": "Missing data",
+         "Notes": "No contract-level SOFR futures"},
+        {"Model": "FX rate-differential attribution",
+         "Required": "G10 FX spot (EURUSD, USDJPY, GBPUSD, AUDUSD) + matching 2Y/10Y differentials",
+         "Status": "Missing data",
+         "Notes": "No FX spot pairs in DATA.xlsx"},
+        {"Model": "SPX sector attribution",
+         "Required": "SPX sector indices + sector weights",
+         "Status": "Missing data",
+         "Notes": "No sector data"},
+        {"Model": "Earnings vs valuation",
+         "Required": "SPX forward EPS + trailing EPS or PE ratio",
+         "Status": "Missing data",
+         "Notes": "No earnings data in Sheet1"},
+    ]
+    st.dataframe(pd.DataFrame(future_models).style.map(_status_color, subset=["Status"]),
+                 hide_index=True, use_container_width=True)
+    st.caption("These models will not be built until the required data is added to DATA.xlsx.")
+
+    # ==================================================================
     # 3. DATA.xlsx TICKER COVERAGE
     # ==================================================================
     st.markdown(

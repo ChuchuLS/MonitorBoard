@@ -167,4 +167,6 @@ def render(ctx: PageContext) -> None:
         "tenors (6 pairs). 1Y-based pairs are skipped until 1Y data is added. "
         "Neutral threshold: |spread change| < 1.5 bp.")
 
+    from charts.common import render_data_source_note
+    render_data_source_note("DATA.xlsx / Sheet1", latest)
     render_section_footer(page)

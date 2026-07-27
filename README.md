@@ -1,17 +1,20 @@
 # Rates & Liquidity Research Pack
 
 A daily macro / liquidity research pack built as a dark-theme Streamlit app.
-The anchor model is a **Composite Liquidity Index** built from raw market
-indicators that tells you, at a glance, whether financial-market liquidity is
-loose or tight, whether it is improving or deteriorating, and which part of the
-market is driving the move. Around that anchor sit seven research chapters in
-Contents-page reading order — Policy & Short Rates, Rate Decomposition, Curve
-Regimes, Global Rates, Cross-Asset Regimes, FX, and Data Quality & Methodology.
+The reference PDF is used as a **content and model benchmark** — the goal is
+to build equivalent analytical depth inside the dashboard, not to generate PDF
+files. The anchor model is a **Composite Liquidity Index** built from raw market
+indicators. Around that anchor sit research chapters covering rates, curves,
+global yields, cross-asset regimes, and macro scoring.
 
-> **Phase 1** delivered the research-pack shell — registry-driven navigation,
-> PDF-style page headers, KPI strips, section colours, and honest status
-> classification. **Phase 2** implemented Rate Decomposition, Curve Regimes,
-> and Global Rates with working models and live pages.
+> **Phase 1** delivered the research-pack shell.
+> **Phase 2** implemented Rate Decomposition, Curve Regimes, and Global Rates.
+> **Phase 3** added the daily summary, data dependency map, and export tools.
+> **Phase 5** added the content gap analysis (Section 08 · Model Roadmap).
+>
+> HTML export is a side utility, not the main roadmap. The main roadmap is
+> building PDF-like research content — section by section, model by model —
+> inside the Streamlit app.
 
 ---
 
@@ -81,6 +84,7 @@ page mirrors the front matter of an institutional chart pack.
 | 06  | FX Complex PCA                  | Experimental         | DATA.xlsx / Sheet1 FX/FICC columns | DXY / EM FX / USDJPY basis PCA. NOT the rate-differential FX model. |
 | 07  | Data Quality & Methodology      | **Live**             | DATA.xlsx (all sections) | Source-of-truth trust chain, ticker coverage, scoring-sheet audit, methodology. |
 | A1  | Global Scoring (Appendix)       | **Live**             | DATA.xlsx / scoring sheets | Cross-sectional macro + market scoring: 10 rates, 17 equities. Standalone appendix. |
+| 08  | Model Roadmap & Content Gap     | **Live**             | DATA.xlsx (all sections) | Content gap analysis vs reference PDF — what is implemented, missing, and next. |
 
 ### Implemented now
 - Composite Liquidity Index (**v0.3, unchanged**): five buckets, coverage gate,
@@ -113,10 +117,62 @@ page mirrors the front matter of an institutional chart pack.
 | `data/DATA.xlsx` | Single workbook: Sheet1 = daily market data (148 cols); scoring sheets = Macro_GDP, Macro_CPI, Macro_Fiscal, Rates_10Y, Equity_ToT, Equity_FCI, Equity_EPS, Equity_Prices | Yes — the only file you manually update |
 | `data/latest.parquet` | Derived cache of Sheet1 | No — auto-rebuilt, not committed |
 
+### Research pack structure
+
+**Core live pages** — fully implemented on real data, tested:
+- 00 Liquidity Overview (Composite Liquidity Index v0.3)
+- 01 Policy & Short Rates (spot rates + funding plumbing)
+- 02 Rate Decomposition (breakeven identity: nominal = real + inflation)
+- 03 Curve Regimes (7-regime classification, 6 tenor pairs)
+- 04 Global Rates (6-country overlay + slope ranking)
+- 05 Cross-Asset Regime Timeline (8-regime vol-scaled directional)
+- 07 Data Quality & Methodology (workbook audit + dependency map)
+
+**Experimental pages** — working models from market-reading integration,
+labelled as experimental, not part of the PDF-style core:
+- 02b Rates Complex PCA (within-rates PCA regime)
+- 05b Market Linkage & Correlations (PCA 4-regime, 63D/20D)
+- 06 FX Complex PCA (DXY / EM FX / basis PCA)
+
+**Appendix:**
+- A1 Global Scoring (cross-sectional macro + market ranking)
+
+**Future PDF-style models requiring more data** — the app intentionally does
+NOT fake these. They will be built when the required Bloomberg fields are
+added to DATA.xlsx:
+- FOMC implied policy path (needs meeting-dated futures)
+- SOFR futures strip (needs contract-level SOFR futures)
+- FX rate-differential attribution (needs G10 FX spot pairs)
+- SPX sector attribution (needs sector indices + weights)
+- Earnings vs valuation (needs forward/trailing EPS)
+
 ---
+
+## Static research-pack export
+
+Two command-line scripts generate offline exports from DATA.xlsx:
+
+```bash
+python scripts/export_research_pack_snapshot.py   # → data/snapshot.json
+python scripts/export_research_pack_html.py       # → reports/research_pack_<YYYYMMDD>.html
+```
+
+The HTML report is a standalone offline file — all CSS and Plotly JS are embedded
+inline, so it can be opened locally without internet access. Use your browser's
+Print → Save as PDF for a PDF version.
+
+Both exports use the same implemented models as the Streamlit app. They do not
+create fake missing-data models. Future automated PDF generation is a planned
+enhancement.
+
+The Streamlit app also offers lazy download buttons on the **Contents** page
+
 ---
 
 ## The Composite Liquidity Index — methodology (v0.3)
+(inside the "Export research pack" expander).
+
+---
 
 **Reading it:** higher = looser, **50 = neutral**, ≥60 Loose, <45 Tight, <35 Stress.
 The live methodology version, parameters, data hash, and coverage are shown in the

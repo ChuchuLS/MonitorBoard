@@ -87,4 +87,113 @@ def render(ctx: PageContext) -> None:
         export_name=ctx.export_name,
     )
 
+    # ── CLI Rolling Correlations (only if target data exists) ──
+    try:
+        from models.cli_correlations import available_targets, build_all_correlations, CORR_TARGETS
+        targets = available_targets(ctx.df)
+        if targets:
+            import plotly.graph_objects as go
+            from config.theme import BG, GRID, TEXT_DIM
+
+            st.markdown(
+                "<div style='margin:1.2rem 0 0.3rem;font-size:11px;color:#888;"
+                "letter-spacing:0.1em;text-transform:uppercase;'>"
+                "CLI rolling correlations (20-day)</div>",
+                unsafe_allow_html=True,
+            )
+
+            corrs = build_all_correlations(ctx.df, r.index, window=20)
+            if corrs:
+                COLORS = {"SPX": "#3b82f6", "HSI": "#ef4444", "BTC": "#f97316"}
+                fig = go.Figure()
+                for key, series in corrs.items():
+                    label = CORR_TARGETS[key]["label"]
+                    fig.add_trace(go.Scatter(
+                        x=series.index, y=series, mode="lines",
+                        line=dict(color=COLORS.get(key, "#888"), width=1.4),
+                        name=f"CLI vs {label}",
+                    ))
+                fig.add_hline(y=0, line=dict(color="#333", width=0.5, dash="dot"))
+                fig.update_layout(
+                    template="plotly_dark", paper_bgcolor=BG, plot_bgcolor=BG,
+                    font=dict(family="Inter, system-ui, sans-serif", size=10, color=TEXT_DIM),
+                    height=300, showlegend=True,
+                    legend=dict(orientation="h", y=1.02, x=0, font=dict(size=10, color="#aaa")),
+                    margin=dict(l=50, r=20, t=30, b=25),
+                    yaxis=dict(title="Correlation", gridcolor=GRID, range=[-1, 1]),
+                    xaxis=dict(showgrid=False),
+                )
+                st.plotly_chart(fig, use_container_width=True, key="cli_corrs",
+                                config={"displayModeBar": False})
+
+                # Show which targets are live vs missing
+                live_keys = list(corrs.keys())
+                all_keys = list(CORR_TARGETS.keys())
+                missing_keys = [k for k in all_keys if k not in live_keys]
+                cap_parts = [
+                    "20-day rolling correlation between CLI level changes and "
+                    "asset log returns. Positive = asset tends to rise when "
+                    "liquidity loosens.",
+                ]
+                if missing_keys:
+                    missing_labels = [CORR_TARGETS[k]["label"] for k in missing_keys]
+                    cap_parts.append(
+                        f"Not shown (data missing): {', '.join(missing_labels)}. "
+                        "Add tickers to DATA.xlsx to enable.")
+                st.caption(" ".join(cap_parts))
+        else:
+            # Data missing — show honest status
+            from charts.common import render_missing_data_warning
+            render_missing_data_warning(
+                required=["HSI INDEX (Hang Seng)", "XBTUSD BGN Curncy (Bitcoin)"],
+                missing=["HSI INDEX", "XBTUSD / BTC price"],
+                message=(
+                    "<b>CLI rolling correlations</b> are not shown because "
+                    "neither HSI nor Bitcoin price data is in DATA.xlsx. "
+                    "Add these tickers to the Bloomberg BDH pull to enable "
+                    "the correlation charts."
+                ),
+            )
+    except Exception:
+        pass
+
+    # ── Q-list Answering Panel ──
+    try:
+        from models.qlist import build_qlist
+
+        st.markdown(
+            "<div style='margin:1.4rem 0 0.3rem;font-size:11px;color:#888;"
+            "letter-spacing:0.1em;text-transform:uppercase;'>"
+            "Dashboard Q&amp;A</div>",
+            unsafe_allow_html=True,
+        )
+
+        qlist = build_qlist(ctx.df, r, r.index)
+
+        STATUS_COLORS_Q = {
+            "real_data": "#5fb04f", "partial": "#d99830", "data_missing": "#d04848",
+        }
+
+        for qa in qlist:
+            sc = STATUS_COLORS_Q.get(qa.data_status, "#666")
+            with st.expander(f"❓ {qa.question}", expanded=False):
+                st.markdown(
+                    f"<div style='font-size:13px;color:#fff;font-weight:700;"
+                    f"margin-bottom:6px;'>{qa.answer}</div>"
+                    f"<div style='font-size:10px;color:#888;margin-bottom:4px;'>"
+                    f"Evidence: <code>{qa.evidence}</code></div>"
+                    f"<div style='display:inline-block;padding:2px 8px;"
+                    f"border:1px solid {sc}55;color:{sc};border-radius:3px;"
+                    f"font-size:9px;font-weight:700;text-transform:uppercase;'>"
+                    f"{qa.data_status.replace('_', ' ')}</div>",
+                    unsafe_allow_html=True,
+                )
+                if qa.details:
+                    for d in qa.details:
+                        st.markdown(f"<div style='font-size:11px;color:#aaa;"
+                                    f"margin-left:12px;'>• {d}</div>",
+                                    unsafe_allow_html=True)
+    except Exception:
+        pass
+
     render_section_footer(page)

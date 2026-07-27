@@ -15,6 +15,7 @@ from . import market_linkage as _market_linkage
 from . import fx as _fx
 from . import data_quality as _data_quality
 from . import scoring as _scoring
+from . import model_roadmap as _model_roadmap
 
 
 RENDERERS = {
@@ -30,6 +31,7 @@ RENDERERS = {
     "fx":             _fx.render,
     "data_quality":   _data_quality.render,
     "scoring":        _scoring.render,
+    "model_roadmap":  _model_roadmap.render,
 }
 
 

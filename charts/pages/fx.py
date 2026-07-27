@@ -66,6 +66,8 @@ def render(ctx: PageContext) -> None:
     page = get_page("fx")
 
     render_top_tabs(page["id"])
+    from charts.common import render_experimental_badge
+    render_experimental_badge()
 
     ficc = load_ficc()
     if ficc is not None:

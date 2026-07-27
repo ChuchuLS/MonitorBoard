@@ -5,7 +5,7 @@ Section 02b — Rates Complex PCA (experimental).
 
 Within-rates PCA on UST 10Y / 2s10s / 10Y breakeven / 10Y real yield / MOVE.
 EXPLICITLY labelled as experimental — this is NOT the PDF-style nominal = real
-+ inflation decomposition (which will be Section 02 when fully built).
++ inflation decomposition. Section 02 is now live with the breakeven identity model.
 Uses DATA.xlsx / Sheet1 FICC columns.
 """
 
@@ -69,6 +69,8 @@ def render(ctx: PageContext) -> None:
     page = get_page("rates_pca")
 
     render_top_tabs(page["id"])
+    from charts.common import render_experimental_badge
+    render_experimental_badge()
 
     ficc = load_ficc()
     if ficc is None:
