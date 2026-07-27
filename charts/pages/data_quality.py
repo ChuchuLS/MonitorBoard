@@ -303,29 +303,33 @@ def render(ctx: PageContext) -> None:
     )
     future_models = [
         {"Model": "FOMC implied policy path",
-         "Required": "Fed funds futures / meeting-dated OIS, FOMC calendar, EFFR",
-         "Status": "Missing data",
-         "Notes": "No meeting-dated futures in DATA.xlsx"},
+         "Required": "Meeting-dated futures, FOMC calendar, contract conventions",
+         "Status": "Not implemented",
+         "Notes": "Generic FF/SFR/SER futures prices available in Sheet1. "
+                  "Expiry metadata, conventions, and calendar not yet documented."},
         {"Model": "SOFR futures strip",
-         "Required": "SOFR futures contract prices by expiry",
-         "Status": "Missing data",
-         "Notes": "No contract-level SOFR futures"},
+         "Required": "SOFR futures by expiry, contract month mapping, price-to-rate convention",
+         "Status": "Not implemented",
+         "Notes": "SFR1/SFR2/SFR3 generic prices available. Contract metadata missing."},
         {"Model": "FX rate-differential attribution",
-         "Required": "G10 FX spot (EURUSD, USDJPY, GBPUSD, AUDUSD) + matching 2Y/10Y differentials",
-         "Status": "Missing data",
-         "Notes": "No FX spot pairs in DATA.xlsx"},
+         "Required": "FX spot + matching yield differentials + model implementation",
+         "Status": "Not implemented",
+         "Notes": "EURUSD/USDJPY/GBPUSD/AUDUSD spot data available. "
+                  "Rate-differential models not yet implemented."},
         {"Model": "SPX sector attribution",
-         "Required": "SPX sector indices + sector weights",
-         "Status": "Missing data",
-         "Notes": "No sector data"},
+         "Required": "Sector indices + weights + model implementation",
+         "Status": "Not implemented",
+         "Notes": "11 S&P 500 sector indices and SPX_Sector_Weights sheet available. "
+                  "Sector models not yet implemented."},
         {"Model": "Earnings vs valuation",
-         "Required": "SPX forward EPS + trailing EPS or PE ratio",
+         "Required": "SPX forward EPS + trailing EPS or PE",
          "Status": "Missing data",
-         "Notes": "No earnings data in Sheet1"},
+         "Notes": "EPS/PE field presence and meanings not confirmed in workbook."},
     ]
     st.dataframe(pd.DataFrame(future_models).style.map(_status_color, subset=["Status"]),
                  hide_index=True, use_container_width=True)
-    st.caption("These models will not be built until the required data is added to DATA.xlsx.")
+    st.caption("'Not implemented' = data available but model not built. "
+               "'Missing data' = required fields not confirmed in DATA.xlsx.")
 
     # ==================================================================
     # 3. DATA.xlsx TICKER COVERAGE

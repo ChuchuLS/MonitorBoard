@@ -27,28 +27,41 @@ from ._context import PageContext
 
 
 def _regime_ribbon(hist: pd.DataFrame, title: str, height: int = 200):
-    """Spread line + regime colour ribbon."""
+    """Spread line + full-height regime colour ribbon."""
     h = hist.dropna(subset=["regime"])
     if h.empty:
         return None
+
+    spread_bp = h["spread"] * 100
+    y_min = float(spread_bp.min()) - 10
+    y_max = float(spread_bp.max()) + 10
+
     fig = go.Figure()
-    # Spread line
-    fig.add_trace(go.Scatter(x=h.index, y=h["spread"] * 100, mode="lines",
-        line=dict(color="#fff", width=1.2), name="Spread (bp)", showlegend=False))
-    # Regime ribbon at bottom
+
+    # Regime background — full-height colored bars
     for regime in REGIME_LABELS:
         mask = h["regime"] == regime
         if not mask.any():
             continue
         s = h.loc[mask]
-        fig.add_trace(go.Scatter(x=s.index, y=[0]*len(s), mode="markers",
-            marker=dict(color=REGIME_COLORS.get(regime, "#525252"), size=4, symbol="square"),
-            name=regime, showlegend=False))
+        fig.add_trace(go.Bar(
+            x=s.index, y=[y_max - y_min] * len(s), base=[y_min] * len(s),
+            marker=dict(color=REGIME_COLORS.get(regime, "#525252"), opacity=0.25,
+                        line_width=0),
+            name=regime, showlegend=False, hoverinfo="skip",
+        ))
+
+    # Spread line on top
+    fig.add_trace(go.Scatter(x=h.index, y=spread_bp, mode="lines",
+        line=dict(color="#fff", width=1.5), name="Spread (bp)", showlegend=False))
+
     fig.update_layout(template="plotly_dark", paper_bgcolor=BG, plot_bgcolor=BG,
         font=dict(family="Inter, system-ui, sans-serif", size=10, color=TEXT_DIM),
-        height=height, margin=dict(l=50, r=20, t=30, b=20),
+        height=height, margin=dict(l=50, r=20, t=30, b=20), barmode="overlay",
+        bargap=0, bargroupgap=0,
         title=dict(text=title, font=dict(size=12, color="#aaa"), x=0),
-        yaxis=dict(title="bp", gridcolor=GRID), xaxis=dict(showgrid=False))
+        yaxis=dict(title="bp", gridcolor=GRID, range=[y_min, y_max]),
+        xaxis=dict(showgrid=False))
     return fig
 
 

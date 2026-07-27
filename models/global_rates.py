@@ -18,6 +18,7 @@ TENOR_NUMERIC = {"2Y": 2, "5Y": 5, "10Y": 10, "30Y": 30}
 COUNTRY_LABELS = {
     "US": "United States", "DE": "Germany", "JP": "Japan",
     "UK": "United Kingdom", "CA": "Canada", "AU": "Australia",
+    "CH": "Switzerland",
 }
 
 
@@ -48,13 +49,16 @@ def _yield(df: pd.DataFrame, country: str, tenor: str) -> pd.Series:
 
 
 def build_10y_overlay(df: pd.DataFrame, lookback_days: int = 252) -> pd.DataFrame:
-    """Normalized 10Y yield overlay: each country scaled to own lookback min/max."""
+    """Normalized 10Y yield overlay: each country scaled to own lookback min/max.
+    Forward-fills weekend/holiday gaps so lines are continuous."""
     countries = available_country_curves(df)
     out = pd.DataFrame(index=df.index)
     for c, tenors in countries.items():
         if "10Y" not in tenors:
             continue
-        s = _yield(df, c, "10Y").dropna()
+        s = _yield(df, c, "10Y")
+        # Forward-fill weekend/holiday gaps, then drop leading NaNs
+        s = s.ffill().dropna()
         if len(s) < lookback_days // 2:
             continue
         tail = s.iloc[-lookback_days:] if len(s) >= lookback_days else s
@@ -64,6 +68,8 @@ def build_10y_overlay(df: pd.DataFrame, lookback_days: int = 252) -> pd.DataFram
             out[c] = (s - lo) / rng
         else:
             out[c] = 0.5
+    # Forward-fill any remaining gaps in the output too
+    out = out.ffill()
     return out.iloc[-lookback_days:] if len(out) >= lookback_days else out
 
 

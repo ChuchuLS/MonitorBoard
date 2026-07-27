@@ -87,6 +87,19 @@ def render(ctx: PageContext) -> None:
         export_name=ctx.export_name,
     )
 
+    # ── XCCY Basis Swaps ──
+    try:
+        from charts.funding import render_xccy
+        st.markdown(
+            "<div style='margin:1.2rem 0 0.3rem;font-size:11px;color:#888;"
+            "letter-spacing:0.1em;text-transform:uppercase;'>"
+            "Cross-currency basis swaps</div>",
+            unsafe_allow_html=True,
+        )
+        render_xccy(ctx.dff)
+    except Exception:
+        pass
+
     # ── CLI Rolling Correlations (only if target data exists) ──
     try:
         from models.cli_correlations import available_targets, build_all_correlations, CORR_TARGETS

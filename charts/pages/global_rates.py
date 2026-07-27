@@ -26,6 +26,7 @@ from ._context import PageContext
 COUNTRY_COLORS = {
     "US": "#ffffff", "DE": "#06b6d4", "JP": "#ef4444",
     "UK": "#22c55e", "CA": "#f97316", "AU": "#a855f7",
+    "CH": "#eab308",
 }
 
 
@@ -80,12 +81,14 @@ def render(ctx: PageContext) -> None:
 
     overlay = build_10y_overlay(ctx.df)
     if not overlay.dropna(how="all").empty:
+        # Forward-fill small gaps (weekends, holidays) so lines aren't broken
+        overlay_plot = overlay.ffill().dropna(how="all")
         fig_ov = go.Figure()
-        for c in overlay.columns:
+        for c in overlay_plot.columns:
             fig_ov.add_trace(go.Scatter(
-                x=overlay.index, y=overlay[c], mode="lines",
+                x=overlay_plot.index, y=overlay_plot[c], mode="lines",
                 line=dict(color=COUNTRY_COLORS.get(c, "#888"), width=1.4),
-                name=COUNTRY_LABELS.get(c, c)))
+                name=COUNTRY_LABELS.get(c, c), connectgaps=True))
         fig_ov.update_layout(template="plotly_dark", paper_bgcolor=BG, plot_bgcolor=BG,
             font=dict(family="Inter, system-ui, sans-serif", size=10, color=TEXT_DIM),
             height=360, showlegend=True,

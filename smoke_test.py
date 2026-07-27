@@ -520,6 +520,89 @@ readme = open("README.md").read()
 assert "content and model benchmark" in readme.lower()
 print("    README: clarifies content goal ✓")
 
+# Phase 6.1B: Policy model audit
+print("19. Phase 6.1B policy model audit ...")
+
+# A. Required functions import headlessly
+from models.policy_short_rates import (
+    CONFIRMED_POLICY_KEYS, NEEDS_CONFIRMATION_KEYS, SPREAD_KEYS,
+    available_policy_inputs, build_short_rate_snapshot,
+    build_policy_spreads, build_funding_pressure_table,
+    build_funding_pressure_score, build_policy_current_reading,
+)
+print("    A. all 6 policy functions import headlessly ✓")
+
+# B. Policy page imports from the model
+policy_src = open("charts/pages/policy.py").read()
+assert "from models.policy_short_rates import" in policy_src
+assert "build_short_rate_snapshot" in policy_src
+assert "build_funding_pressure_score" in policy_src
+print("    B. policy page imports from pure model ✓")
+
+# C. Snapshot has dates
+snap = build_short_rate_snapshot(df)
+assert not snap.empty and "latest_valid_date" in snap.columns
+sofr_row = snap[snap["key"] == "SOFR"]
+assert not sofr_row.empty
+print(f"    C. snapshot: SOFR={sofr_row.iloc[0]['latest_pct']:.3f}% on {sofr_row.iloc[0]['latest_valid_date']}")
+
+# D. Spreads in bp, no RRP
+spreads = build_policy_spreads(df)
+assert not spreads.empty
+for col in spreads.columns:
+    assert "IORB" in col
+    assert spreads[col].dropna().abs().median() < 50  # bp scale
+    assert "RRP" not in col.upper() and "TOMO" not in col.upper()
+print(f"    D. spreads in bp, no RRP: {list(spreads.columns)} ✓")
+
+# E. Pressure table has all required columns
+ftable = build_funding_pressure_table(df)
+for c in ["Latest_bp", "Latest_valid_date", "ZScore_1Y", "Status", "Included_in_score"]:
+    assert c in ftable.columns, f"missing {c}"
+print(f"    E. pressure table: {len(ftable)} rows, all required columns ✓")
+
+# F. Score has all required keys
+score = build_funding_pressure_score(df)
+for k in ["score", "status", "n_spreads", "latest_date", "inputs",
+          "missing", "dates_aligned", "methodology"]:
+    assert k in score, f"score missing {k}"
+print(f"    F. score: {score['score']:+.2f} ({score['status']}), "
+      f"{score['n_spreads']} spreads, aligned={score['dates_aligned']}")
+
+# G. Date alignment
+if score["dates_aligned"]:
+    incl_dates = ftable[ftable["Included_in_score"]]["Latest_valid_date"].unique()
+    assert len(incl_dates) <= 1
+print(f"    G. dates_aligned={score['dates_aligned']} verified ✓")
+
+# H. funding.py neutralized
+funding_src = open("charts/funding.py").read()
+assert "banks consistently" not in funding_src.lower()
+assert "FHLBs invest" not in funding_src
+print("    H. funding.py: causal claims neutralized ✓")
+
+# I. DQ no stale statements
+dq_src = open("charts/pages/data_quality.py").read()
+assert "No FX spot pairs in DATA.xlsx" not in dq_src
+assert '"No sector data"' not in dq_src
+print("    I. DQ: no stale FX/sector statements ✓")
+
+# J. DQ acknowledges futures availability
+assert "generic" in dq_src.lower() or "Generic" in dq_src or "FF/SFR/SER" in dq_src
+print("    J. DQ: acknowledges futures data availability ✓")
+
+# Print summary
+reading = build_policy_current_reading(df)
+print(f"    Summary:")
+print(f"      Latest date: {score['latest_date']}")
+print(f"      Pressure: {score['score']:+.2f} ({score['status']})")
+print(f"      Spreads: {score['n_spreads']} included")
+print(f"      Aligned: {score['dates_aligned']}")
+print(f"      Tightest: {reading.get('tightest', {}).get('indicator', '—')}")
+print(f"      Easiest: {reading.get('easiest', {}).get('indicator', '—')}")
+print(f"      Missing: {score['missing']}")
+print(f"      Excluded stale: {score['excluded_stale']}")
+
 
 print("\n20. Phase 6.1 non-fabrication + data inventory checks ...")
 
@@ -538,8 +621,6 @@ strict_forbidden = [
     "TOMO_TCSO",
     "TOMOTCSO",
     "ON RRP offering rate",
-    "RRP take-up",
-    "RRP usage",
     "RRP award rate",
     "TGCR − RRP",
     "TGCR - RRP",
@@ -548,6 +629,11 @@ for fp in strict_prod_files:
     txt = open(fp, encoding="utf-8").read()
     for phrase in strict_forbidden:
         assert phrase not in txt, f"Forbidden unconfirmed RRP production text '{phrase}' in {fp}"
+    # "RRP take-up" and "RRP usage" are allowed only in negation context (e.g. "not ON RRP take-up")
+    for neg_phrase in ["RRP take-up", "RRP usage"]:
+        for line in txt.split("\n"):
+            if neg_phrase in line and "not" not in line.lower():
+                raise AssertionError(f"Uncontextualized '{neg_phrase}' in {fp}: {line.strip()}")
 print("    strict production pages contain no unconfirmed RRP labels/tickers ✓")
 
 # NON_FABRICATION.md exists

@@ -73,6 +73,7 @@ def _normalize(df: pd.DataFrame) -> pd.DataFrame:
     df = df.rename(columns={df.columns[0]: "Date"})
     df["Date"] = pd.to_datetime(df["Date"])
     df = df.sort_values("Date").set_index("Date")
+    df = df.loc[df.index.notna()]  # remove NaT index entries
     df.columns = [str(c).upper().strip() if not isinstance(c, str) else c.upper().strip()
                   for c in df.columns]
     df = df.loc[:, ~df.columns.duplicated()]  # keep first of any duplicate columns

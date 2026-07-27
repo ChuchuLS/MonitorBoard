@@ -147,10 +147,6 @@ def render(ctx: PageContext) -> None:
                 disp["AvgRun"] = disp["AvgRun"].round(1)
                 st.dataframe(disp, hide_index=True, use_container_width=True)
 
-    # XCCY basis preview
-    st.markdown("<div style='margin:1.3rem 0 0.4rem;font-size:11px;color:#888;"
-                "letter-spacing:0.1em;text-transform:uppercase;'>"
-                "XCCY basis (from main dataset)</div>", unsafe_allow_html=True)
-    render_xccy(ctx.dff)
+    # XCCY basis now shown on the Liquidity page (Section 00)
 
     render_section_footer(page)

@@ -78,7 +78,7 @@ page mirrors the front matter of an institutional chart pack.
 | 02  | Rate Decomposition              | **Live**             | DATA.xlsx / Sheet1 | US curve complex, selectable-tenor rolling rate attribution, and 2s10s curve decomposition using breakeven identity. |
 | 02b | Rates Complex PCA               | Experimental         | DATA.xlsx / Sheet1 FICC columns | Within-rates PCA on 10Y / 2s10s / BE / real / MOVE. NOT the PDF-style decomposition. |
 | 03  | Curve Regimes                   | **Live**             | DATA.xlsx / Sheet1 | 7-regime classification across nominal / real / inflation curves and six tenor pairs. |
-| 04  | Global Rates                    | **Live**             | DATA.xlsx / Sheet1 | Normalized global 10Y overlay, global curve snapshots, 2s10s slope ranking (US/DE/JP/UK/CA/AU). |
+| 04  | Global Rates                    | **Live**             | DATA.xlsx / Sheet1 | Normalized global 10Y overlay, global curve snapshots, 2s10s slope ranking (US/DE/JP/UK/CA/AU/CH). |
 | 05  | Cross-Asset Regime Timeline     | **Live**             | DATA.xlsx / Sheet1 cross-asset columns | 8-regime directional classification using vol-scaled signals (20D change ÷ 21D vol). |
 | 05b | Market Linkage & Correlations   | Experimental         | DATA.xlsx / Sheet1 cross-asset columns | PCA-based 4-regime relative classification. Different model from 05. |
 | 06  | FX Complex PCA                  | Experimental         | DATA.xlsx / Sheet1 FX/FICC columns | DXY / EM FX / USDJPY basis PCA. NOT the rate-differential FX model. |
@@ -114,7 +114,7 @@ page mirrors the front matter of an institutional chart pack.
 ### Data files
 | File | Contents | Source of truth |
 |:-----|:---------|:---------------|
-| `data/DATA.xlsx` | Single workbook: Sheet1 = daily market data (148 cols); scoring sheets = Macro_GDP, Macro_CPI, Macro_Fiscal, Rates_10Y, Equity_ToT, Equity_FCI, Equity_EPS, Equity_Prices | Yes — the only file you manually update |
+| `data/DATA.xlsx` | Single workbook: Sheet1 = daily market data (188 cols); scoring sheets = Macro_GDP, Macro_CPI, Macro_Fiscal, Rates_10Y, Equity_ToT, Equity_FCI, Equity_EPS, Equity_Prices | Yes — the only file you manually update |
 | `data/latest.parquet` | Derived cache of Sheet1 | No — auto-rebuilt, not committed |
 
 ### Research pack structure
@@ -144,7 +144,7 @@ added to DATA.xlsx:
 - SOFR futures strip (needs contract-level SOFR futures)
 - FX rate-differential attribution (needs G10 FX spot pairs)
 - SPX sector attribution (needs sector indices + weights)
-- Earnings vs valuation (needs forward/trailing EPS)
+- Earnings vs valuation (EPS fields not confirmed)
 
 ---
 

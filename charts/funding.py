@@ -21,32 +21,29 @@ from data.loader import get_series
 
 
 def _spread_defs(dff: pd.DataFrame) -> list[tuple]:
-    """Definitions for the five money-market spread panels."""
+    """Definitions for the five money-market spread panels.
+    Descriptions are diagnostic — no causal claims without documented sources."""
     return [
-        ("GCF − TPR", "DEALER BALANCE<br>SHEET CAPACITY",
-         "The spread between interdealer and triparty repo rates, a proxy for "
-         "funding demand and dealer balance sheet capacity.",
+        ("GCF − TPR", "INTERDEALER vs<br>TRIPARTY",
+         "Diagnostic spread between interdealer (GCF) and triparty repo rates.",
          get_series(dff, "GCF") - get_series(dff, "TPR"),
-         "INFLEXIBLE BALANCE SHEETS ↑", "FLEXIBLE BALANCE SHEETS ↓"),
-        ("TGCR − Target Lower", "PRIVATE REPO<br>DEMAND",
-         "The spread between private repo &amp; Fed target lower bound, which measures "
-         "demand for cash vs. collateral.",
+         "WIDER ↑", "NARROWER ↓"),
+        ("TGCR − Target Lower", "PRIVATE REPO<br>vs FED FLOOR",
+         "Diagnostic spread between triparty GC repo and the Fed target lower bound.",
          get_series(dff, "TGCR") - get_series(dff, "FED_TARGET_LOWER"),
-         "EXCESS COLLATERAL ↑", "EXCESS CASH ↓"),
-        ("SOFR − IORB", "BANK REPOS",
-         "A positive spread indicates banks are lending reserves in repo on a "
-         "consistent basis, reducing liquidity elsewhere.",
+         "ABOVE TARGET FLOOR ↑", "AT OR BELOW FLOOR ↓"),
+        ("SOFR − IORB", "SOFR vs IORB",
+         "Diagnostic spread between SOFR and the IORB floor.",
          get_series(dff, "SOFR") - get_series(dff, "IORB"),
-         "ABOVE ZERO, BANKS DEPLOY RESERVES<br>CONSISTENTLY INTO REPO MARKETS ↑", None),
-        ("EFFR − IORB", "RESERVE<br>DEMAND",
-         "A positive spread suggests scarce reserves on a historical basis.",
+         "ABOVE IORB ↑", "AT OR BELOW IORB ↓"),
+        ("EFFR − IORB", "EFFR vs IORB",
+         "Diagnostic spread between EFFR and the IORB floor.",
          get_series(dff, "EFFR") - get_series(dff, "IORB"),
-         "SCARCITY ↑", "ABUNDANCE ↓"),
-        ("SOFR − EFFR", "FHLB REPO<br>DEMAND",
-         "The spread suggests where Federal Home Loan Banks might invest more "
-         "of their liquidity portfolios.",
+         "ABOVE IORB ↑", "AT OR BELOW IORB ↓"),
+        ("SOFR − EFFR", "SOFR vs EFFR",
+         "Diagnostic spread between secured (SOFR) and unsecured (EFFR) overnight rates.",
          get_series(dff, "SOFR") - get_series(dff, "EFFR"),
-         "FHLBs DEPLOY MORE<br>CASH INTO REPOS ↑", None),
+         "SOFR ABOVE EFFR ↑", "SOFR BELOW EFFR ↓"),
     ]
 
 
