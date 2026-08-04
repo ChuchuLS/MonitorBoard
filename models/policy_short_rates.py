@@ -26,33 +26,37 @@ CONFIRMED_POLICY_KEYS = [
     "IORB",              # IRRBIOER INDEX — Interest on Reserve Balances
     "TGCR",              # TGCRRATE INDEX — Tri-Party General Collateral Rate
     "BGCR",              # USBGRATE INDEX — Broad General Collateral Rate
+    "GCF",               # UREPGATO INDEX — GCF Repo Average Rate (OFR, daily, %)
+    "TPR",               # UREPTATO INDEX — Tri-Party Repo Average Rate (OFR, daily, %)
     "FED_TARGET_LOWER",  # FDTRFTRL INDEX — Fed Funds Target Rate Lower Bound
+    "FED_RESERVES",      # FARBRBFB INDEX — Reserve Balances (H.4.1, USD mn, weekly)
+    "CENTRAL_BANK_LIQUIDITY_SWAPS",  # FARWCBLS INDEX — CB Liquidity Swaps (NOT repo/SRF)
 ]
 
-# These keys exist in TICKERS but their exact Bloomberg field descriptions
-# are NOT documented in the project. They are excluded from the production
-# pressure score until confirmed.
-NEEDS_CONFIRMATION_KEYS = [
-    "GCF",               # UREPGATO INDEX — possibly GCF Repo rate
-    "TPR",               # UREPTATO INDEX — possibly Tri-Party Repo rate
-    "FED_RESERVES",      # FARBRBFB INDEX — possibly Fed reserve balances ($M?)
-    "FED_REPO",          # FARWCBLS INDEX — possibly Fed repo / SRF usage
-]
+# No longer any needs-confirmation keys — all four are now confirmed via Bloomberg DES
+NEEDS_CONFIRMATION_KEYS: list[str] = []
 
-# Keys eligible for spread computation (vs IORB)
-SPREAD_KEYS = ["SOFR", "EFFR", "TGCR", "BGCR"]
+# Keys eligible for spread computation (vs IORB) — all confirmed daily rates
+SPREAD_KEYS = ["SOFR", "EFFR", "TGCR", "BGCR", "GCF", "TPR"]
 
 # Stale threshold: exclude a spread from the score if its latest valid
 # observation is more than this many business days behind the freshest spread.
 STALE_THRESHOLD_BDAYS = 5
 
 # Pressure thresholds (DIAGNOSTIC, not official Fed classifications)
-PRESSURE_THRESHOLDS = {
-    "Easy": (-999, -1.0),
-    "Normal": (-1.0, 1.0),
-    "Tight": (1.0, 2.0),
-    "Very tight": (2.0, 999),
-}
+# Boundaries: z<-1 Easy, -1<=z<=+1 Normal, +1<z<=+2 Tight, z>+2 Very tight
+def classify_pressure_z(z: float) -> str:
+    """Classify a z-score into a pressure status label.
+    Uses closed boundaries at -1 and +1 (inclusive Normal)."""
+    if pd.isna(z):
+        return "Constant series"
+    if z < -1:
+        return "Easy"
+    if z <= 1:
+        return "Normal"
+    if z <= 2:
+        return "Tight"
+    return "Very tight"
 
 
 def _get_series(df: pd.DataFrame, key: str) -> pd.Series:
@@ -178,14 +182,7 @@ def build_funding_pressure_table(df: pd.DataFrame, asof=None,
             z = np.nan  # constant series — do NOT silently assign z=0
 
         # Determine status
-        if pd.isna(z):
-            status = "Constant series"
-        else:
-            status = "Normal"
-            for label, (lo, hi) in PRESSURE_THRESHOLDS.items():
-                if lo <= z < hi:
-                    status = label
-                    break
+        status = classify_pressure_z(z)
 
         # Inclusion logic
         stale = age > STALE_THRESHOLD_BDAYS
@@ -253,11 +250,7 @@ def build_funding_pressure_score(df: pd.DataFrame, asof=None,
         }
 
     avg_z = float(np.mean(z_vals))
-    status = "Normal"
-    for label, (lo, hi) in PRESSURE_THRESHOLDS.items():
-        if lo <= avg_z < hi:
-            status = label
-            break
+    status = classify_pressure_z(avg_z)
 
     dates = included["Latest_valid_date"].unique()
     dates_aligned = len(dates) == 1

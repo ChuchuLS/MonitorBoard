@@ -59,8 +59,8 @@ BUCKETS: dict[str, dict] = {
 #     ("mtg_spread", KEY_MTG, KEY_UST) -> (mortgage - UST) in same units
 COMPONENTS: list[tuple] = [
     # A. Central bank / reserve liquidity --------------------------------
-    ("cb_reserves",  "Fed reserve balances",      "central_bank", +1, ("ticker", "FED_RESERVES")),
-    ("cb_repo",      "Fed repo / SRF usage",       "central_bank", -1, ("ticker", "FED_REPO")),
+    ("cb_reserves",  "Reserve balances with Fed Reserve Banks",  "central_bank", +1, ("ticker", "FED_RESERVES")),
+    ("cb_liquidity_swaps", "Central bank liquidity swaps",         "central_bank", -1, ("ticker", "CENTRAL_BANK_LIQUIDITY_SWAPS")),
     # B. Money-market funding pressure (spreads vs IORB) -----------------
     ("mm_sofr_iorb", "SOFR - IORB",                "money_market", -1, ("spread", "SOFR", "IORB")),
     ("mm_effr_iorb", "EFFR - IORB",                "money_market", -1, ("spread", "EFFR", "IORB")),
@@ -91,7 +91,7 @@ COMPONENTS: list[tuple] = [
 
 # ---------------------------------------------------------------------------
 # Update-frequency metadata (requirement #6).
-# Several macro series (Fed reserve balances, Fed repo/SRF usage) are published
+# Several macro series (Fed reserve balances, Central bank liquidity swaps) are published
 # weekly but arrive forward-filled onto a daily grid in the Bloomberg/Excel pull.
 # We record the native frequency so the loader can cap how long a value may
 # persist before it is treated as stale (NaN) rather than a live daily signal.
@@ -99,7 +99,7 @@ COMPONENTS: list[tuple] = [
 DEFAULT_FREQUENCY = "daily"
 FREQUENCY: dict[str, str] = {
     "cb_reserves": "weekly",   # Fed H.4.1 reserve balances (Wednesday)
-    "cb_repo":     "weekly",   # Fed repo / SRF usage (Wednesday)
+    "cb_liquidity_swaps":     "weekly",   # Central bank liquidity swaps (Wednesday, H.4.1)
     # everything else is daily
 }
 
@@ -116,17 +116,17 @@ def max_ffill_of(comp_id: str) -> int:
 
 
 # Observation mode controls how a daily-dense column is reduced to its genuine
-# observations before z-scoring (requirement #4). Fed reserves/repo are reported
+# observations before z-scoring (requirement #4). Reserve balances and CB liquidity swaps (H.4.1) are reported
 # weekly on Wednesdays even though the Bloomberg pull repeats the value daily, so
 # we treat Wednesday as the true observation. Default for everything else is
 # "daily" (every row is a real print).
 OBSERVATION_MODE: dict[str, str] = {
     "cb_reserves": "weekday",
-    "cb_repo":     "weekday",
+    "cb_liquidity_swaps":     "weekday",
 }
 OBSERVATION_WEEKDAY: dict[str, int] = {  # Monday=0 ... Sunday=6
     "cb_reserves": 2,   # Wednesday
-    "cb_repo":     2,   # Wednesday
+    "cb_liquidity_swaps":     2,   # Wednesday
 }
 
 

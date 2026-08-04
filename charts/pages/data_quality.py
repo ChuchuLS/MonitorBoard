@@ -71,19 +71,37 @@ def render(ctx: PageContext) -> None:
             lne = raw.index[non_empty].max() if non_empty.any() else None
             rim = raw.index.max() if len(raw) else None
             return {
+                "audit_status": "OK",
+                "audit_error_type": None,
+                "audit_error_message": None,
                 "raw_first": str(raw.index.min().date()) if len(raw) else "—",
                 "raw_last_index": str(rim.date()) if rim else "—",
                 "latest_non_empty": str(lne.date()) if lne else "—",
                 "trailing_empty": int((raw.index > lne).sum()) if lne else 0,
                 "raw_rows": len(raw), "raw_cols": raw.shape[1],
             }
-        except Exception:
-            return {"raw_first": "—", "raw_last_index": "—", "latest_non_empty": "—",
-                    "trailing_empty": 0, "raw_rows": 0, "raw_cols": 0}
+        except Exception as exc:
+            return {
+                "audit_status": "Failed",
+                "audit_error_type": type(exc).__name__,
+                "audit_error_message": str(exc)[:200],
+                "raw_first": "Failed / unavailable",
+                "raw_last_index": "Failed / unavailable",
+                "latest_non_empty": "Failed / unavailable",
+                "trailing_empty": None,
+                "raw_rows": None,
+                "raw_cols": None,
+            }
 
     fpath = Path("data/DATA.xlsx")
     exists = fpath.exists()
     raw_audit = _raw_sheet1_audit(fpath) if exists else {}
+    if raw_audit.get("audit_status") == "Failed":
+        st.warning(
+            f"Raw Sheet1 audit is unavailable because the audit failed. "
+            f"({raw_audit.get('audit_error_type')}: "
+            f"{raw_audit.get('audit_error_message', '')[:120]})"
+        )
 
     render_explanation_box(
         "Trust chain",
@@ -130,6 +148,8 @@ def render(ctx: PageContext) -> None:
     except Exception:
         missing_sheets = ["(could not read sheets)"]
 
+    _rs_failed = raw_audit.get("audit_status") == "Failed"
+    _rs_trailing = "Failed / unavailable" if _rs_failed else raw_audit.get("trailing_empty", 0)
     audit_rows = [
         {
             "Source": "sheet1_market",
@@ -139,7 +159,7 @@ def render(ctx: PageContext) -> None:
             "Hash": fhash,
             "Raw index max": raw_audit.get("raw_last_index", "—"),
             "Latest non-empty": raw_audit.get("latest_non_empty", "—"),
-            "Trailing empty": raw_audit.get("trailing_empty", 0),
+            "Trailing empty": _rs_trailing,
             "Loaded rows": len(ctx.df),
             "Cols": ctx.df.shape[1],
             "Required": f"{len(all_req_cols)} cross-asset/FICC cols",
@@ -267,20 +287,65 @@ def render(ctx: PageContext) -> None:
                 ", ".join(miss) if miss else "—",
                 str(lvd.date()) if lvd else "—")
 
+    dep_req_policy = ["SOFRRATE INDEX", "FEDL01 INDEX", "IRRBIOER INDEX"]
+
+    # Dynamic dependency results for the two models whose common model dates
+    # cannot be inferred from simple column presence alone.
+    special_dependencies = {}
+    try:
+        from models.sector_rotation import build_sector_snapshot
+        from data.external_loaders import load_spx_sector_weights
+        sector_dep = build_sector_snapshot(ctx.df, load_spx_sector_weights())
+        special_dependencies["Sector rotation & breadth"] = (
+            sector_dep.get("status", "Missing data"),
+            ", ".join(sector_dep.get("missing", [])) or "—",
+            str(sector_dep.get("relative_model_date") or "—"),
+        )
+    except Exception as exc:
+        special_dependencies["Sector rotation & breadth"] = (
+            "Missing data", f"Audit failed: {type(exc).__name__}", "—"
+        )
+
+    try:
+        from models.fx_rate_differential import available_fx_pairs
+        fx_dep = available_fx_pairs(ctx.df)
+        fx_statuses = [v.get("status", "Missing data") for v in fx_dep.values()]
+        fx_status = (
+            "Ready" if fx_statuses and all(v == "Ready" for v in fx_statuses)
+            else "Partial" if any(v in {"Ready", "Partial"} for v in fx_statuses)
+            else "Missing data"
+        )
+        fx_missing = sorted({m for v in fx_dep.values() for m in v.get("missing", [])})
+        fx_dates = [v.get("common_latest_date") for v in fx_dep.values()
+                    if v.get("common_latest_date") is not None]
+        special_dependencies["FX rate-differential monitor"] = (
+            fx_status,
+            ", ".join(fx_missing) or "—",
+            str(max(fx_dates)) if fx_dates else "—",
+        )
+    except Exception as exc:
+        special_dependencies["FX rate-differential monitor"] = (
+            "Missing data", f"Audit failed: {type(exc).__name__}", "—"
+        )
+
     dep_rows = []
     for label, model, req, exp in [
         ("00 Liquidity", "Composite Liquidity Index", None, False),
-        ("01 Policy", "Money-market plumbing", None, False),
+        ("01 Policy", "Funding pressure model", dep_req_policy, False),
         ("02 Rate Decomp", "Breakeven identity", dep_req_decomp, False),
+        ("02b Rates PCA", "Within-rates PCA", dep_req_ficc, True),
         ("03 Curve Regimes", "7-regime classifier", dep_req_decomp, False),
         ("04 Global Rates", "Cross-country curves", None, False),
         ("05 Cross-Asset", "8-regime directional", dep_req_ca, False),
         ("05b Linkage", "PCA 4-regime", dep_req_ca, True),
-        ("02b Rates PCA", "Within-rates PCA", dep_req_ficc, True),
-        ("06 FX PCA", "FX complex PCA", dep_req_ficc, True),
+        ("06 Sectors", "Sector rotation & breadth", None, False),
+        ("07 FX Rates", "FX rate-differential monitor", None, False),
+        ("07b FX PCA", "FX complex PCA", dep_req_ficc, True),
         ("A1 Scoring", "Macro + market scoring", None, False),
     ]:
-        if req:
+        if model in special_dependencies:
+            dep_st, miss, lvd = special_dependencies[model]
+        elif req:
             dep_st, miss, lvd = _dep_status(req)
         else:
             dep_st, miss, lvd = "Ready", "—", str(valid_latest)
@@ -292,13 +357,228 @@ def render(ctx: PageContext) -> None:
     st.dataframe(pd.DataFrame(dep_rows).style.map(_status_color, subset=["Status"]),
                  hide_index=True, use_container_width=True)
 
+    # ── CLI component verification ──
+    st.markdown(
+        "<div style='margin:0.8rem 0 0.4rem;font-size:11px;color:#888;"
+        "letter-spacing:0.1em;text-transform:uppercase;'>"
+        "Composite Liquidity Index component verification</div>",
+        unsafe_allow_html=True,
+    )
+    cli_verify = pd.DataFrame([
+        {"Component": "cb_reserves", "Ticker": "FARBRBFB INDEX",
+         "Confirmed identity": "Reserve Balances with Federal Reserve Banks",
+         "Unit": "USD millions", "Frequency": "weekly",
+         "Ticker status": "Confirmed", "Model-role status": "Confirmed"},
+        {"Component": "cb_liquidity_swaps", "Ticker": "FARWCBLS INDEX",
+         "Confirmed identity": "Central Bank Liquidity Swaps",
+         "Unit": "USD millions", "Frequency": "weekly",
+         "Ticker status": "Confirmed",
+         "Model-role status": "Methodology review required"},
+    ])
+    st.dataframe(cli_verify, hide_index=True, use_container_width=True)
+    st.markdown(
+        "<div style='font-size:11px;color:#ccc;border-left:2px solid #5fb04f;"
+        "padding:8px 12px;background:#0a1a0a;border-radius:4px;'>"
+        "Both ticker identities are now <b>confirmed</b> via Bloomberg DES.<br>"
+        "Earlier project versions incorrectly described FARWCBLS as "
+        "'Fed repo / SRF usage'. The ticker has been relabelled without "
+        "changing historical numerical values.<br>"
+        "The ticker identity is confirmed, but the inclusion, direction, and "
+        "weight of cb_liquidity_swaps inside the CLI require a separate "
+        "methodology review."
+        "</div>", unsafe_allow_html=True,
+    )
+
+    # ── Scoring date integrity ──
+    try:
+        from data.external_loaders import load_pulsar
+        from models.scoring.engine import determine_scoring_asof
+        scoring_data = load_pulsar()
+        if scoring_data:
+            sinfo = determine_scoring_asof(scoring_data)
+            if sinfo["future_rows"]:
+                st.markdown(
+                    "<div style='margin:0.8rem 0 0.4rem;font-size:11px;color:#d99830;"
+                    "letter-spacing:0.1em;text-transform:uppercase;'>"
+                    "⚠ Future-dated scoring rows</div>",
+                    unsafe_allow_html=True,
+                )
+                fdf = pd.DataFrame(sinfo["future_rows"])
+                st.dataframe(fdf, hide_index=True, use_container_width=True)
+                st.caption(f"Production scoring as-of date: {sinfo['asof_date']} "
+                           f"(rows after {sinfo['current_date']} need classification)")
+    except Exception as exc:
+        st.warning(
+            f"Future-dated scoring audit is unavailable because the audit failed. "
+            f"({type(exc).__name__}: {str(exc)[:120]})"
+        )
+
+    # ── Future-dated Sheet1 rows ──
+    try:
+        from data.date_integrity import split_market_data_by_asof
+        from data.loader import load_data as _ld_full
+        full_df = _ld_full(include_future=True)
+        split = split_market_data_by_asof(full_df)
+        if split["future_row_count"] > 0:
+            st.markdown(
+                "<div style='margin:0.8rem 0 0.4rem;font-size:11px;color:#d99830;"
+                "letter-spacing:0.1em;text-transform:uppercase;'>"
+                "⚠ Future-dated Sheet1 rows</div>",
+                unsafe_allow_html=True,
+            )
+            future_info = [{"Date": d, "Populated fields": n}
+                           for d, n in split["future_non_null_by_date"].items()]
+            st.dataframe(pd.DataFrame(future_info), hide_index=True,
+                         use_container_width=True)
+            st.caption(
+                f"Current production date: {split['current_date']} · "
+                f"Production latest eligible: {split['production_asof']} · "
+                f"Future rows: {split['future_row_count']} (excluded from production)")
+    except Exception as exc:
+        st.warning(
+            f"Future-dated Sheet1 audit is unavailable because the audit failed. "
+            f"({type(exc).__name__}: {str(exc)[:120]})"
+        )
+
     # ==================================================================
-    # 2d. FUTURE PDF-STYLE MODEL READINESS
+    # 2d. SOURCE CALENDAR INTEGRITY
+    # ==================================================================
+    try:
+        from data.calendar_integrity import (
+            audit_ticker_group_calendar,
+            audit_sector_calendar,
+            audit_parent_sector_return_range,
+        )
+
+        st.markdown(
+            "<div style='margin:1rem 0 0.4rem;font-size:11px;color:#888;"
+            "letter-spacing:0.1em;text-transform:uppercase;'>"
+            "Source calendar integrity</div>",
+            unsafe_allow_html=True,
+        )
+        groups = [
+            audit_sector_calendar(ctx.df),
+            audit_ticker_group_calendar(
+                ctx.df,
+                ["EURUSD BGN CURNCY", "USDJPY BGN CURNCY", "GBPUSD BGN CURNCY", "AUDUSD BGN CURNCY"],
+                "FX spot",
+            ),
+            audit_ticker_group_calendar(
+                ctx.df,
+                ["FF1 COMB COMDTY", "SFR1 COMB COMDTY", "SER1 COMB COMDTY"],
+                "Policy futures",
+            ),
+            audit_ticker_group_calendar(
+                ctx.df,
+                ["GSWISS02 INDEX", "GSWISS05 INDEX", "GSWISS10 INDEX", "GSWISS30 INDEX"],
+                "Switzerland yields",
+            ),
+            audit_ticker_group_calendar(ctx.df, ["SPX INDEX"], "SPX benchmark"),
+            audit_ticker_group_calendar(
+                ctx.df, ["USGG2YR INDEX", "USGG10YR INDEX"], "US Treasury yields"
+            ),
+        ]
+        cal_rows = []
+        for audit in groups:
+            counts = audit["weekday_counts"]
+            observed = ", ".join(
+                f"{name[:3]}={count}" for name, count in counts.items() if count
+            ) or "—"
+            cal_rows.append({
+                "Group": audit["group"],
+                "First date": str(audit["first_date"] or "—"),
+                "Latest date": str(audit["latest_date"] or "—"),
+                "Observations": audit["observation_count"],
+                "Observed weekdays": observed,
+                "Weekend observations": audit["weekend_observation_count"],
+                "Missing tickers": ", ".join(audit["missing_tickers"]) or "—",
+                "Status": audit["status"],
+            })
+        st.dataframe(
+            pd.DataFrame(cal_rows).style.map(_status_color, subset=["Status"]),
+            hide_index=True,
+            use_container_width=True,
+        )
+        st.caption(
+            "The 39 added series were rebuilt from DATA-NEW(1).xlsx by exact "
+            "joins to each Bloomberg spill's own Date column. No blanket date "
+            "shift, row-position merge, interpolation, or zero substitution was "
+            "applied. See docs/CALENDAR_CORRECTION_2026-08-03.md and Merge_Log."
+        )
+
+        parent_audit = audit_parent_sector_return_range(ctx.df)
+        if not parent_audit.empty:
+            parent_display = parent_audit.rename(columns={
+                "horizon": "Horizon",
+                "start_date": "Start date",
+                "end_date": "End date",
+                "spx_return_pct": "SPX return (%)",
+                "min_sector_return_pct": "Min sector return (%)",
+                "max_sector_return_pct": "Max sector return (%)",
+                "sectors_above_spx": "Sectors above SPX",
+                "sectors_below_spx": "Sectors below SPX",
+                "sector_count": "Sector count",
+                "range_test_passed": "Range test passed",
+            })
+            parent_display["Status"] = parent_display["Range test passed"].map(
+                {True: "OK", False: "Needs investigation"}
+            )
+            st.markdown(
+                "<div style='margin:0.8rem 0 0.4rem;font-size:11px;color:#888;"
+                "letter-spacing:0.1em;text-transform:uppercase;'>"
+                "SPX parent / sector range audit</div>",
+                unsafe_allow_html=True,
+            )
+            st.dataframe(
+                parent_display.style.map(_status_color, subset=["Status"]).format({
+                    "SPX return (%)": "{:+.2f}",
+                    "Min sector return (%)": "{:+.2f}",
+                    "Max sector return (%)": "{:+.2f}",
+                }),
+                hide_index=True,
+                use_container_width=True,
+            )
+            st.caption(
+                "This necessary consistency check uses identical labelled timestamps. "
+                "A failure is an investigation flag, not proof of a particular date shift."
+            )
+    except Exception as exc:
+        st.warning(
+            f"Source-calendar audit is unavailable because the audit failed. "
+            f"({type(exc).__name__}: {str(exc)[:120]})"
+        )
+
+    # ==================================================================
+    # 2e. ANALYTICAL MODEL READINESS
     # ==================================================================
     st.markdown(
         "<div style='margin:1rem 0 0.4rem;font-size:11px;color:#888;"
         "letter-spacing:0.1em;text-transform:uppercase;'>"
-        "Future PDF-style model readiness</div>",
+        "Live analytical model readiness</div>",
+        unsafe_allow_html=True,
+    )
+    live_models = [
+        {"Model": "Sector Rotation & Breadth Monitor",
+         "Required": "11 S&P 500 sector indices + SPX + SPX_Sector_Weights (all available)",
+         "Status": "Live",
+         "Notes": "Descriptive monitor for the 11 sectors. Absolute + relative "
+                  "performance, breadth, dispersion, rotation quadrants, weight "
+                  "context. NOT causal attribution or official SPX return "
+                  "attribution. ETF proxies excluded from production."},
+        {"Model": "FX Rate Differential Monitor",
+         "Required": "FX spot + 2Y/10Y nominal + 10Y real differentials (all available)",
+         "Status": "Live",
+         "Notes": "Descriptive monitor for EURUSD/USDJPY/GBPUSD/AUDUSD. "
+                  "Fully aligned spot and yield differentials. "
+                  "Not causal attribution, fair value, or forecast."},
+    ]
+    st.dataframe(pd.DataFrame(live_models).style.map(_status_color, subset=["Status"]),
+                 hide_index=True, use_container_width=True)
+
+    st.markdown(
+        "<div style='margin:1rem 0 0.4rem;font-size:11px;color:#888;"
+        "letter-spacing:0.1em;text-transform:uppercase;'>"
+        "Future model readiness</div>",
         unsafe_allow_html=True,
     )
     future_models = [
@@ -311,16 +591,24 @@ def render(ctx: PageContext) -> None:
          "Required": "SOFR futures by expiry, contract month mapping, price-to-rate convention",
          "Status": "Not implemented",
          "Notes": "SFR1/SFR2/SFR3 generic prices available. Contract metadata missing."},
-        {"Model": "FX rate-differential attribution",
-         "Required": "FX spot + matching yield differentials + model implementation",
+        {"Model": "FX regression attribution",
+         "Required": "Regression methodology, coefficient stability tests, residual diagnostics",
          "Status": "Not implemented",
-         "Notes": "EURUSD/USDJPY/GBPUSD/AUDUSD spot data available. "
-                  "Rate-differential models not yet implemented."},
-        {"Model": "SPX sector attribution",
-         "Required": "Sector indices + weights + model implementation",
+         "Notes": "Requires methodology design. do_not_fake=True."},
+        {"Model": "FX fair-value / forecast model",
+         "Required": "Equilibrium framework, forecasting methodology",
          "Status": "Not implemented",
-         "Notes": "11 S&P 500 sector indices and SPX_Sector_Weights sheet available. "
-                  "Sector models not yet implemented."},
+         "Notes": "do_not_fake=True."},
+        {"Model": "SPX sector contribution estimate",
+         "Required": "Start-period weight × sector return with residual reconciliation",
+         "Status": "Not implemented",
+         "Notes": "Requires validated approximation methodology and reconciliation test. "
+                  "Sector price and weight data are available. do_not_fake=True."},
+        {"Model": "Official SPX sector attribution",
+         "Required": "Daily-weight methodology, divisor-consistent index treatment, or "
+                     "official contribution data",
+         "Status": "Not implemented",
+         "Notes": "Requires additional methodology or data source. do_not_fake=True."},
         {"Model": "Earnings vs valuation",
          "Required": "SPX forward EPS + trailing EPS or PE",
          "Status": "Missing data",
@@ -330,6 +618,149 @@ def render(ctx: PageContext) -> None:
                  hide_index=True, use_container_width=True)
     st.caption("'Not implemented' = data available but model not built. "
                "'Missing data' = required fields not confirmed in DATA.xlsx.")
+
+    # ── FX Rate Differential Monitor readiness ──
+    try:
+        from models.fx_rate_differential import available_fx_pairs, FX_PAIR_CONFIG
+        from config.tickers import TICKERS as _T
+        st.markdown(
+            "<div style='margin:1rem 0 0.4rem;font-size:11px;color:#888;"
+            "letter-spacing:0.1em;text-transform:uppercase;'>"
+            "FX Rate Differential Monitor — pair readiness</div>",
+            unsafe_allow_html=True,
+        )
+        avail_fx = available_fx_pairs(ctx.df)
+        fx_rows = []
+        for pair, cfg in FX_PAIR_CONFIG.items():
+            r = avail_fx[pair]
+            b, q = cfg["base_country"], cfg["quote_country"]
+            fx_rows.append({
+                "Pair": pair,
+                "Spot": _T.get(cfg["spot_key"], "—"),
+                f"{b} 2Y": _T.get(f"{b}_2Y", "—"),
+                f"{q} 2Y": _T.get(f"{q}_2Y", "—"),
+                f"{b} 10Y": _T.get(f"{b}_10Y", "—"),
+                f"{q} 10Y": _T.get(f"{q}_10Y", "—"),
+                f"{b} real10Y": _T.get(f"{b}_real_10y", "—"),
+                f"{q} real10Y": _T.get(f"{q}_real_10y", "—"),
+                "Missing": ", ".join(r.get("missing", [])) or "—",
+                "Aligned obs": r.get("aligned_obs", 0),
+                "First date": str(r.get("common_first_date", "—")),
+                "Latest date": str(r.get("common_latest_date", "—")),
+                "63D ready": "✓" if r.get("enough_history") else "✗",
+                "Status": r.get("status", "—"),
+            })
+        st.dataframe(pd.DataFrame(fx_rows).style.map(_status_color, subset=["Status"]),
+                     hide_index=True, use_container_width=True)
+    except Exception as exc:
+        st.warning(
+            f"FX readiness table is unavailable because the model audit failed. "
+            f"({type(exc).__name__}: {str(exc)[:120]})"
+        )
+
+    # ── Sector Rotation & Breadth Monitor readiness ──
+    try:
+        from models.sector_rotation import (
+            available_sector_inputs, build_sector_snapshot,
+            WEIGHT_SUM_TOLERANCE,
+        )
+        from data.external_loaders import load_spx_sector_weights
+        from config.tickers import SPX_SECTOR_CONFIG as _SSC
+        _weights = load_spx_sector_weights()
+        _snap = build_sector_snapshot(ctx.df, _weights)
+        _avail = available_sector_inputs(ctx.df, _weights)
+
+        st.markdown(
+            "<div style='margin:1rem 0 0.4rem;font-size:11px;color:#888;"
+            "letter-spacing:0.1em;text-transform:uppercase;'>"
+            "Sector Rotation &amp; Breadth Monitor — inputs</div>",
+            unsafe_allow_html=True,
+        )
+        sec_rows = []
+        for key, cfg in _SSC.items():
+            info = _avail["sectors"].get(key, {})
+            sec_rows.append({
+                "Sector": cfg["display_name"],
+                "Ticker": cfg["ticker"],
+                "First date": str(info.get("first_date", "—")),
+                "Latest date": str(info.get("latest_date", "—")),
+                "Obs": info.get("n_obs", 0),
+                "Status": "Ready" if info.get("available") else "Missing",
+            })
+        st.dataframe(pd.DataFrame(sec_rows).style.map(_status_color, subset=["Status"]),
+                     hide_index=True, use_container_width=True)
+        st.caption(
+            f"Sector-only common date: {_snap.get('sector_only_date', '—')} · "
+            f"Relative-to-SPX common date: {_snap.get('relative_model_date', '—')} · "
+            f"Weight date: {_snap.get('weight_date', '—')} · "
+            f"Sector-only obs: {_snap.get('sector_only_obs', 0)} · "
+            f"Relative obs: {_snap.get('relative_obs', 0)}"
+        )
+
+        # Weight audit
+        st.markdown(
+            "<div style='margin:0.8rem 0 0.4rem;font-size:11px;color:#888;"
+            "letter-spacing:0.1em;text-transform:uppercase;'>"
+            "SPX_Sector_Weights audit</div>",
+            unsafe_allow_html=True,
+        )
+        if _weights is not None and not _weights.empty:
+            _raw_weights = load_spx_sector_weights(include_future=True)
+            weight_cols_present = [
+                cfg["weight_column"] for cfg in _SSC.values()
+                if cfg["weight_column"] in _weights.columns
+            ]
+            missing_wcols = [
+                cfg["weight_column"] for cfg in _SSC.values()
+                if cfg["weight_column"] not in _weights.columns
+            ]
+            latest = (
+                _weights[weight_cols_present].iloc[-1]
+                if weight_cols_present else pd.Series(dtype=float)
+            )
+            latest_sum = float(latest.sum(min_count=1)) if len(latest) else float("nan")
+            sums = (
+                _weights[weight_cols_present].sum(axis=1, min_count=1)
+                if weight_cols_present else pd.Series(dtype=float)
+            )
+            outside = sums[(sums - 100).abs() > WEIGHT_SUM_TOLERANCE]
+            raw_rows = len(_raw_weights) if _raw_weights is not None else len(_weights)
+            future_rows = max(0, raw_rows - len(_weights))
+            status = "Out of tolerance" if len(outside) or missing_wcols else "OK"
+            w_audit = pd.DataFrame([{
+                "Sheet": "SPX_Sector_Weights",
+                "Raw rows": raw_rows,
+                "Eligible rows": len(_weights),
+                "Future rows": future_rows,
+                "First eligible date": str(_weights.index[0].date()),
+                "Latest eligible date": str(_weights.index[-1].date()),
+                "Latest weight sum (%)": f"{latest_sum:.2f}",
+                "Valid sector cols": len(weight_cols_present),
+                "Missing cols": ", ".join(missing_wcols) or "—",
+                "Rows outside tolerance": len(outside),
+                "Dates outside tolerance": ", ".join(
+                    str(d.date()) for d in outside.index[:12]
+                ) or "—",
+                "Sum tolerance": f"±{WEIGHT_SUM_TOLERANCE}pp",
+                "Status": status,
+            }])
+            st.dataframe(
+                w_audit.style.map(_status_color, subset=["Status"]),
+                hide_index=True,
+                use_container_width=True,
+            )
+            st.caption(
+                "Weights are not normalised by the application. Sector ETF proxy "
+                "columns (XLC/XLY/XLP/XLE/XLV/XLI/XLB/XLRE/XLU) are excluded "
+                "from the production sector model."
+            )
+        else:
+            st.warning("SPX_Sector_Weights sheet is unavailable.")
+    except Exception as exc:
+        st.warning(
+            f"Sector readiness table is unavailable because the model audit failed. "
+            f"({type(exc).__name__}: {str(exc)[:120]})"
+        )
 
     # ==================================================================
     # 3. DATA.xlsx TICKER COVERAGE
@@ -464,7 +895,7 @@ def render(ctx: PageContext) -> None:
             disp_ffa.style.format({"% ffilled (1y)": "{:.0f}%"}),
             hide_index=True, use_container_width=True, height=460)
         st.caption(
-            "Weekly series (Fed reserves/repo) are observed on Wednesdays; "
+            "Weekly H.4.1 series (reserve balances / CB liquidity swaps) are observed on Wednesdays; "
             "the z-score is computed on those true observations and forward-"
             "filled at most 'Max ffill' business days.")
 

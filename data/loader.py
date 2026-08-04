@@ -231,22 +231,32 @@ def _load_dataframe() -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 if _HAS_ST:
     @st.cache_data(show_spinner="Loading market data...")
-    def _load_data_cached(_source_hash: str) -> pd.DataFrame:
+    def _load_data_cached(source_hash: str) -> pd.DataFrame:
         # Keyed on the Excel content hash: a manually edited DATA.xlsx changes the
         # hash, busts this cache, and triggers an automatic rebuild via _load_core.
         return _load_core()
 
-    def load_data() -> pd.DataFrame:
-        return _load_data_cached(source_signature())
+    def load_data(include_future: bool = False) -> pd.DataFrame:
+        """Load market data. By default excludes rows dated after today (SG time)."""
+        full = _load_data_cached(source_signature())
+        if include_future:
+            return full
+        from data.date_integrity import split_market_data_by_asof
+        return split_market_data_by_asof(full)["eligible"]
 else:  # pragma: no cover
     from functools import lru_cache as _lru_cache
 
     @_lru_cache(maxsize=4)
-    def _load_data_cached_headless(_source_hash: str) -> pd.DataFrame:
+    def _load_data_cached_headless(source_hash: str) -> pd.DataFrame:
         return _load_core()
 
-    def load_data() -> pd.DataFrame:
-        return _load_data_cached_headless(source_signature())
+    def load_data(include_future: bool = False) -> pd.DataFrame:
+        """Load market data. By default excludes rows dated after today (SG time)."""
+        full = _load_data_cached_headless(source_signature())
+        if include_future:
+            return full
+        from data.date_integrity import split_market_data_by_asof
+        return split_market_data_by_asof(full)["eligible"]
 
 
 # ---------------------------------------------------------------------------

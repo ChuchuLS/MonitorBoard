@@ -10,11 +10,20 @@ global yields, cross-asset regimes, and macro scoring.
 > **Phase 1** delivered the research-pack shell.
 > **Phase 2** implemented Rate Decomposition, Curve Regimes, and Global Rates.
 > **Phase 3** added the daily summary, data dependency map, and export tools.
-> **Phase 5** added the content gap analysis (Section 08 · Model Roadmap).
+> **Phase 5** added the content gap analysis (Section 09 · Model Roadmap).
 >
 > HTML export is a side utility, not the main roadmap. The main roadmap is
 > building PDF-like research content — section by section, model by model —
 > inside the Streamlit app.
+>
+> **Ticker correction:** FARWCBLS INDEX is Central Bank Liquidity Swaps (H.4.1),
+> not Fed repo or SRF usage. The CLI numerical history was preserved when the
+> label was corrected. See `docs/NON_FABRICATION.md`.
+>
+> **Calendar correction:** the 39 fields added from `DATA-NEW(1).xlsx` were
+> rebuilt by exact joins to each Bloomberg output block's own Date column. No
+> inferred day shift or row-position merge is used. See
+> `docs/CALENDAR_CORRECTION_2026-08-03.md`.
 
 ---
 
@@ -47,7 +56,7 @@ used rather than a file timestamp because mtimes are unreliable after a git
 checkout or Cloud redeploy.
 
 You can confirm what happened any time on the **Data Quality & Methodology**
-page (Section 07), which shows the source file, the cache status, the latest
+page (Section 08), which shows the source file, the cache status, the latest
 data date, and the exact index methodology version + hash.
 
 > Running `python scripts/build_parquet.py` is optional — it just pre-warms the
@@ -81,10 +90,12 @@ page mirrors the front matter of an institutional chart pack.
 | 04  | Global Rates                    | **Live**             | DATA.xlsx / Sheet1 | Normalized global 10Y overlay, global curve snapshots, 2s10s slope ranking (US/DE/JP/UK/CA/AU/CH). |
 | 05  | Cross-Asset Regime Timeline     | **Live**             | DATA.xlsx / Sheet1 cross-asset columns | 8-regime directional classification using vol-scaled signals (20D change ÷ 21D vol). |
 | 05b | Market Linkage & Correlations   | Experimental         | DATA.xlsx / Sheet1 cross-asset columns | PCA-based 4-regime relative classification. Different model from 05. |
-| 06  | FX Complex PCA                  | Experimental         | DATA.xlsx / Sheet1 FX/FICC columns | DXY / EM FX / USDJPY basis PCA. NOT the rate-differential FX model. |
-| 07  | Data Quality & Methodology      | **Live**             | DATA.xlsx (all sections) | Source-of-truth trust chain, ticker coverage, scoring-sheet audit, methodology. |
+| 06  | Sector Rotation & Breadth       | **Live**             | DATA.xlsx / Sheet1 + SPX_Sector_Weights | 11 S&P 500 sector indices + SPX. Absolute + SPX-relative performance, breadth, cross-sectional dispersion, rotation quadrants, sector-weight context. Descriptive, not causal attribution or official SPX return attribution. ETF proxies excluded from production. |
+| 07  | FX Rate Differential Monitor    | **Live**             | DATA.xlsx / Sheet1 | EURUSD / USDJPY / GBPUSD / AUDUSD — fully aligned spot, 2Y nominal, 10Y nominal, and 10Y real differentials. Descriptive, not causal attribution or fair value. |
+| 07b | FX Complex PCA                  | Experimental         | DATA.xlsx / Sheet1 FX/FICC columns | DXY / EM FX / USDJPY basis PCA. Experimental — separate from the live rate-differential monitor. |
+| 08  | Data Quality & Methodology      | **Live**             | DATA.xlsx (all sections) | Source-of-truth trust chain, ticker coverage, scoring-sheet audit, methodology. |
 | A1  | Global Scoring (Appendix)       | **Live**             | DATA.xlsx / scoring sheets | Cross-sectional macro + market scoring: 10 rates, 17 equities. Standalone appendix. |
-| 08  | Model Roadmap & Content Gap     | **Live**             | DATA.xlsx (all sections) | Content gap analysis vs reference PDF — what is implemented, missing, and next. |
+| 09  | Model Roadmap & Content Gap     | **Live**             | DATA.xlsx (all sections) | Content gap analysis vs reference PDF — what is implemented, missing, and next. |
 
 ### Implemented now
 - Composite Liquidity Index (**v0.3, unchanged**): five buckets, coverage gate,
@@ -94,6 +105,9 @@ page mirrors the front matter of an institutional chart pack.
   vol-scaled 20D/21D signals by default).
 - Global Scoring appendix (rates + equity cross-sectional ranking).
 - DATA.xlsx workbook-section audit across Sheet1 and scoring sheets.
+- Sector Rotation & Breadth monitor using 11 S&P 500 sector indices, SPX and
+  periodic sector weights, with common-calendar returns and dynamic breadth
+  denominators.
 - PDF-style research-pack shell with per-section colours, page registry, and
   honest status classification.
 
@@ -101,7 +115,7 @@ page mirrors the front matter of an institutional chart pack.
 - **Rates Complex PCA** (02b) — within-rates PCA regime, NOT the decomposition.
 - **Market Linkage** (05b) — PCA-based 4-regime model, separate from the
   directional 8-regime timeline.
-- **FX Complex PCA** (06) — DXY / EM FX / basis PCA, NOT rate-differential FX.
+- **FX Complex PCA** (07b) — DXY / EM FX / basis PCA, NOT rate-differential FX.
 
 ### Partially implemented
 - **Policy & Short Rates** — spot rates live; FOMC path intentionally not built.
@@ -109,13 +123,24 @@ page mirrors the front matter of an institutional chart pack.
 ### Previously scaffold — now implemented
 - **Rate Decomposition** (02) — now live with US curve complex + attribution.
 - **Curve Regimes** (03) — now live with 6-pair regime matrix.
-- **Global Rates** (04) — now live with 6-country overlay + slope ranking.
+- **Global Rates** (04) — now live with 7-country overlay (incl. Switzerland) + slope ranking.
 
 ### Data files
 | File | Contents | Source of truth |
 |:-----|:---------|:---------------|
 | `data/DATA.xlsx` | Single workbook: Sheet1 = daily market data (188 cols); scoring sheets = Macro_GDP, Macro_CPI, Macro_Fiscal, Rates_10Y, Equity_ToT, Equity_FCI, Equity_EPS, Equity_Prices | Yes — the only file you manually update |
 | `data/latest.parquet` | Derived cache of Sheet1 | No — auto-rebuilt, not committed |
+
+
+### Added-data calendar lineage
+
+The added FX, sector, policy-futures and Switzerland-yield blocks are joined to
+`Sheet1` by the Date column emitted by their own Bloomberg spill. Sector weights
+use the Date column in `SPX_Sector_Weights`. The application does not shift
+weekend labels or merge these blocks by row position. Calendar profiles and the
+SPX parent/sector range test are shown on **Data Quality & Methodology**. Full
+correction details are recorded in
+`docs/CALENDAR_CORRECTION_2026-08-03.md` and the workbook's `Merge_Log` sheet.
 
 ### Research pack structure
 
@@ -124,26 +149,31 @@ page mirrors the front matter of an institutional chart pack.
 - 01 Policy & Short Rates (spot rates + funding plumbing)
 - 02 Rate Decomposition (breakeven identity: nominal = real + inflation)
 - 03 Curve Regimes (7-regime classification, 6 tenor pairs)
-- 04 Global Rates (6-country overlay + slope ranking)
+- 04 Global Rates (7-country overlay (incl. Switzerland) + slope ranking)
 - 05 Cross-Asset Regime Timeline (8-regime vol-scaled directional)
-- 07 Data Quality & Methodology (workbook audit + dependency map)
+- 06 Sector Rotation & Breadth (11 S&P 500 sectors + SPX — descriptive, not attribution)
+- 07 FX Rate Differential Monitor (EURUSD / USDJPY / GBPUSD / AUDUSD — descriptive, not causal)
+- 08 Data Quality & Methodology (workbook audit + dependency map)
 
 **Experimental pages** — working models from market-reading integration,
 labelled as experimental, not part of the PDF-style core:
 - 02b Rates Complex PCA (within-rates PCA regime)
 - 05b Market Linkage & Correlations (PCA 4-regime, 63D/20D)
-- 06 FX Complex PCA (DXY / EM FX / basis PCA)
+- 07b FX Complex PCA (DXY / EM FX / basis PCA)
 
 **Appendix:**
 - A1 Global Scoring (cross-sectional macro + market ranking)
 
-**Future PDF-style models requiring more data** — the app intentionally does
-NOT fake these. They will be built when the required Bloomberg fields are
-added to DATA.xlsx:
-- FOMC implied policy path (needs meeting-dated futures)
-- SOFR futures strip (needs contract-level SOFR futures)
-- FX rate-differential attribution (needs G10 FX spot pairs)
-- SPX sector attribution (needs sector indices + weights)
+**Future analytical modules not yet implemented** — the app intentionally does
+NOT fake these. Future analytical modules may require additional methodology,
+metadata, testing, or data.
+
+- FOMC implied policy path (generic futures available, meeting calendar + methodology needed)
+- SOFR futures strip (generic prices available, contract metadata needed)
+- FX regression attribution (descriptive monitor is live; regression methodology not designed)
+- FX fair-value / forecast model (equilibrium framework not designed)
+- SPX sector contribution estimate (data available; approximation methodology + residual reconciliation required)
+- Official SPX sector attribution (daily-weight methodology or official contribution data required)
 - Earnings vs valuation (EPS fields not confirmed)
 
 ---
@@ -161,16 +191,18 @@ The HTML report is a standalone offline file — all CSS and Plotly JS are embed
 inline, so it can be opened locally without internet access. Use your browser's
 Print → Save as PDF for a PDF version.
 
-Both exports use the same implemented models as the Streamlit app. They do not
-create fake missing-data models. Future automated PDF generation is a planned
-enhancement.
+The snapshot includes the page registry and key implemented outputs.
+The static HTML export currently covers a subset of the Streamlit models.
+Missing export coverage must not be interpreted as missing source data or
+an unimplemented Streamlit model. Future automated PDF generation is a
+planned enhancement.
 
-The Streamlit app also offers lazy download buttons on the **Contents** page
+The Streamlit app also offers lazy download buttons on the **Contents** page,
+inside the "Export research pack" expander.
 
 ---
 
 ## The Composite Liquidity Index — methodology (v0.3)
-(inside the "Export research pack" expander).
 
 ---
 
@@ -189,7 +221,7 @@ It is built from *raw* indicators — Bloomberg FCI and Chicago Fed NFCI are use
 | Money-market funding | 30% | SOFR−IORB, EFFR−IORB, SOFR−EFFR, TGCR/BGCR−IORB |
 | Dollar funding / XCCY | 20% | EUR/JPY/GBP/AUD/CAD 3M basis |
 | Credit liquidity | 20% | IG & HY OAS, EMBI, iTraxx, bank CDS, mortgage spread |
-| Central bank / reserves | 20% | Fed reserve balances, Fed repo/SRF usage |
+| Central bank / reserves | 20% | Reserve balances (H.4.1), central bank liquidity swaps (H.4.1) |
 | Market liquidity / vol | 10% | UST liquidity index, swap spread, (MOVE, VIX if present) |
 
 **2. Direction adjustment.** Each indicator is multiplied by ±1 *before*
@@ -202,7 +234,7 @@ than 20 distinct values, so a near-flat series (e.g. EFFR−IORB before 2019) ca
 turn a 1bp move into a fake ±3σ spike. The whole index runs on a **business-day
 grid**, so stray weekend prints in the raw feed can't create inconsistent coverage.
 
-**3a. Weekly / low-frequency series (new in v0.3).** Fed reserves and repo are
+**3a. Weekly / low-frequency series (new in v0.3).** Reserve balances with Federal Reserve Banks and Central Bank Liquidity Swaps (H.4.1) are
 reported **weekly on Wednesdays** but arrive as daily-repeated values in
 `DATA.xlsx`. Treating every repeated row as a fresh print deflates their variance
 and defeats the forward-fill cap. Instead each component carries metadata

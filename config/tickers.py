@@ -103,8 +103,8 @@ TICKERS: dict[str, str] = {
     # --- Money-market additions / overnight composite ---------------------
     "USRG_1T":   "USRG1T CURNCY",
     # --- Central bank / reserve liquidity ---------------------------------
-    "FED_RESERVES": "FARBRBFB INDEX",   # reserve balances ($mn)
-    "FED_REPO":     "FARWCBLS INDEX",   # Fed repo / SRF-style usage (Wed level)
+    "FED_RESERVES": "FARBRBFB INDEX",   # Reserve Balances with Fed Reserve Banks (H.4.1, USD millions, weekly)
+    "CENTRAL_BANK_LIQUIDITY_SWAPS": "FARWCBLS INDEX",  # Central Bank Liquidity Swaps (H.4.1, USD millions, weekly) — NOT repo/SRF
     # --- Cross-asset / FICC (merged from CROSSASSET + FICCREADING) --------
     "SPX":       "SPX INDEX",          # S&P 500
     "DXY":       "DXY CURNCY",         # Dollar index
@@ -184,6 +184,40 @@ SPX_SECTOR_TICKERS = {
     "S5MATR": "S5MATR INDEX",
 }
 
+# ── SPX 11-sector production configuration ──
+# Single canonical mapping used throughout the sector monitor.
+SPX_SECTOR_CONFIG = {
+    "communication_services":  {"ticker": "S5TELS INDEX", "display_name": "Communication Services",
+                                 "weight_column": "SPX_WEIGHT_COMM_SERVICES"},
+    "consumer_discretionary":  {"ticker": "S5COND INDEX", "display_name": "Consumer Discretionary",
+                                 "weight_column": "SPX_WEIGHT_CONSUMER_DISCRETIONARY"},
+    "consumer_staples":        {"ticker": "S5CONS INDEX", "display_name": "Consumer Staples",
+                                 "weight_column": "SPX_WEIGHT_CONSUMER_STAPLES"},
+    "energy":                  {"ticker": "S5ENRS INDEX", "display_name": "Energy",
+                                 "weight_column": "SPX_WEIGHT_ENERGY"},
+    "financials":              {"ticker": "S5FINL INDEX", "display_name": "Financials",
+                                 "weight_column": "SPX_WEIGHT_FINANCIALS"},
+    "health_care":             {"ticker": "S5HLTH INDEX", "display_name": "Health Care",
+                                 "weight_column": "SPX_WEIGHT_HEALTH_CARE"},
+    "industrials":             {"ticker": "S5INDU INDEX", "display_name": "Industrials",
+                                 "weight_column": "SPX_WEIGHT_INDUSTRIALS"},
+    "information_technology":  {"ticker": "S5INFT INDEX", "display_name": "Information Technology",
+                                 "weight_column": "SPX_WEIGHT_INFO_TECH"},
+    "materials":               {"ticker": "S5MATR INDEX", "display_name": "Materials",
+                                 "weight_column": "SPX_WEIGHT_MATERIALS"},
+    "real_estate":             {"ticker": "S5RLST INDEX", "display_name": "Real Estate",
+                                 "weight_column": "SPX_WEIGHT_REAL_ESTATE"},
+    "utilities":               {"ticker": "S5UTIL INDEX", "display_name": "Utilities",
+                                 "weight_column": "SPX_WEIGHT_UTILITIES"},
+}
+
+SPX_SECTOR_ETF_PROXY_METADATA = {
+    "allowed_in_production": False,
+    "reason": ("ETF proxies (XLC/XLY/XLP/XLE/XLV/XLI/XLB/XLRE/XLU) are excluded "
+               "from the production sector model. The S5xxx sector indices are the "
+               "canonical production input."),
+}
+
 # Sector ETF proxies — NOT true SPX sector indices, label as proxy only
 SPX_SECTOR_ETF_PROXIES = {
     "XLC": "XLC US EQUITY",   "XLY": "XLY US EQUITY",
@@ -245,4 +279,46 @@ CREDIT_INDICES = {
     "iTraxx Japan (bp)":         ("ITRX_JAPAN",   "spread"),
     "iTraxx Asia ex-Japan (bp)": ("ITRX_ASIA_XJ", "spread"),
     "iTraxx Australia (bp)":     ("ITRX_AUS",     "spread"),
+}
+
+# ── Ticker confirmation metadata ──
+# Fields whose Bloomberg descriptions / units are NOT yet documented.
+# These must NOT appear in production charts until confirmed.
+TICKER_METADATA = {
+    "GCF": {
+        "ticker": "UREPGATO INDEX",
+        "display_name": "GCF Repo Average Rate",
+        "description_status": "confirmed",
+        "allowed_in_production": True,
+        "source_documentation": "Bloomberg DES / OFR Short-Term Funding Monitor",
+        "unit": "percent",
+        "frequency": "daily",
+    },
+    "TPR": {
+        "ticker": "UREPTATO INDEX",
+        "display_name": "Tri-Party Repo Average Rate",
+        "description_status": "confirmed",
+        "allowed_in_production": True,
+        "source_documentation": "Bloomberg DES / OFR Short-Term Funding Monitor",
+        "unit": "percent",
+        "frequency": "daily",
+    },
+    "FED_RESERVES": {
+        "ticker": "FARBRBFB INDEX",
+        "display_name": "Reserve Balances with Federal Reserve Banks",
+        "description_status": "confirmed",
+        "allowed_in_production": True,
+        "source_documentation": "Bloomberg DES / Federal Reserve H.4.1",
+        "unit": "USD millions",
+        "frequency": "weekly",
+    },
+    "CENTRAL_BANK_LIQUIDITY_SWAPS": {
+        "ticker": "FARWCBLS INDEX",
+        "display_name": "Central Bank Liquidity Swaps",
+        "description_status": "confirmed",
+        "allowed_in_production": True,
+        "source_documentation": "Bloomberg DES / Federal Reserve H.4.1",
+        "unit": "USD millions",
+        "frequency": "weekly",
+    },
 }

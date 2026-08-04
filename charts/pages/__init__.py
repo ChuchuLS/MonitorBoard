@@ -12,7 +12,9 @@ from . import regimes as _regimes
 from . import global_rates as _global_rates
 from . import cross_asset as _cross_asset
 from . import market_linkage as _market_linkage
+from . import sector_rotation as _sector_rotation
 from . import fx as _fx
+from . import fx_rate_diff as _fx_rate_diff
 from . import data_quality as _data_quality
 from . import scoring as _scoring
 from . import model_roadmap as _model_roadmap
@@ -29,6 +31,8 @@ RENDERERS = {
     "cross_asset":    _cross_asset.render,
     "market_linkage": _market_linkage.render,
     "fx":             _fx.render,
+    "fx_rate_diff":   _fx_rate_diff.render,
+    "sector_rotation": _sector_rotation.render,
     "data_quality":   _data_quality.render,
     "scoring":        _scoring.render,
     "model_roadmap":  _model_roadmap.render,

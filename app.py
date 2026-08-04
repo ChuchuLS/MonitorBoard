@@ -79,33 +79,38 @@ st.markdown(page_css(), unsafe_allow_html=True)
 df = load_data()
 
 
-# Cached builders — keyed on DATA.xlsx content hash
+# Production date — controls cache invalidation on date rollover
+from data.date_integrity import current_production_date
+_prod_date = current_production_date(timezone="Asia/Singapore").isoformat()
+
+
+# Cached builders — keyed on DATA.xlsx content hash + production date
 @st.cache_data(show_spinner="Building Composite Liquidity Index...")
-def _build_index(_source_hash: str):
+def _build_index(source_hash: str, production_date: str):
     return compute_index(load_data())
 
 @st.cache_data(show_spinner="Building methodology audit & reconciliation...")
-def _build_audit(_source_hash: str):
+def _build_audit(source_hash: str, production_date: str):
     df_local = load_data()
-    cur = _build_index(_source_hash)
+    cur = _build_index(source_hash, production_date)
     legacy = compute_legacy_index(df_local)
     return {
-        "methodology": methodology_audit(cur, df_local, data_hash=_source_hash),
+        "methodology": methodology_audit(cur, df_local, data_hash=source_hash),
         "reconciliation": reconciliation(cur, legacy, df_local),
         "components": component_contribution_table(cur, df_local),
         "ffill_audit": forward_fill_audit(cur, df_local),
     }
 
 @st.cache_data(show_spinner="Preparing Excel export...")
-def _build_export(_source_hash: str) -> bytes:
+def _build_export(source_hash: str, production_date: str) -> bytes:
     df_local = load_data()
-    cur = _build_index(_source_hash)
-    return build_index_workbook(cur, _build_audit(_source_hash), df_local)
+    cur = _build_index(source_hash, production_date)
+    return build_index_workbook(cur, _build_audit(source_hash, production_date), df_local)
 
 
 sig = source_signature()
-index_result = _build_index(sig)
-audit_bundle = _build_audit(sig)
+index_result = _build_index(sig, _prod_date)
+audit_bundle = _build_audit(sig, _prod_date)
 
 
 # Sidebar
@@ -179,7 +184,7 @@ dff = date_filter(df, start_date, end_date)
 ctx = PageContext(
     df=df, dff=dff, start_date=start_date, end_date=end_date,
     index_result=index_result, audit_bundle=audit_bundle,
-    export_builder=lambda: _build_export(sig),
+    export_builder=lambda: _build_export(sig, _prod_date),
     export_name=export_filename(audit_bundle),
 )
 

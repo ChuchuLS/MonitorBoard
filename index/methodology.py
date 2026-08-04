@@ -57,6 +57,17 @@ INDEX_METHODOLOGY: dict = {
     "min_components_per_bucket": MIN_COMPONENTS_PER_BUCKET,
     "warmup_days_after_first_valid": WARMUP_DAYS_AFTER_FIRST_VALID,
     "bucket_weights": {b: BUCKETS[b]["weight"] for b in BUCKETS},
+    "ticker_corrections": [
+        {
+            "date": "2026-07",
+            "component": "cb_liquidity_swaps (was cb_repo)",
+            "ticker": "FARWCBLS INDEX",
+            "previous_label": "Fed repo / SRF usage",
+            "confirmed_label": "Central Bank Liquidity Swaps (Federal Reserve H.4.1)",
+            "action": "Relabelled without changing historical numerical values. "
+                      "Component role, direction, and weight remain subject to methodology review.",
+        },
+    ],
 }
 
 # Legacy methodology = the rules in force before v0.3: rolling z + bucket mean +

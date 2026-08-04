@@ -74,7 +74,9 @@ def render(ctx: PageContext) -> None:
     live_mods = by_status("Live") + by_status("Partial") + by_status("Experimental")
     if live_mods:
         df_live = pd.DataFrame([{
-            "Section": m["section"], "Module": m["title"],
+            "App section": m.get("app_section") or m.get("section", "—"),
+            "Reference section": m.get("reference_section") or m.get("section", "—"),
+            "Module": m["title"],
             "Status": m["current_status"],
             "Implemented in": m.get("implemented_in") or "—",
             "Notes": m.get("build_notes", ""),
@@ -89,7 +91,9 @@ def render(ctx: PageContext) -> None:
     missing_mods = by_status("Data Missing") + by_status("Not Started")
     if missing_mods:
         df_missing = pd.DataFrame([{
-            "Section": m["section"], "Module": m["title"],
+            "App section": m.get("app_section") or "—",
+            "Reference section": m.get("reference_section") or m.get("section", "—"),
+            "Module": m["title"],
             "Required data": ", ".join(m.get("required_data", [])[:3]) + ("…" if len(m.get("required_data", [])) > 3 else ""),
             "Missing": ", ".join(m.get("missing_data", [])),
             "Priority": BUILD_PRIORITIES.get(m["recommended_priority"], "—"),
@@ -104,13 +108,25 @@ def render(ctx: PageContext) -> None:
     if dnf:
         render_model_note(
             "Integrity constraint",
-            "These modules require specific data that is not in DATA.xlsx. "
-            "They will NOT be built with synthetic, proxied, or fabricated "
-            "inputs. They stay on the roadmap until the real data arrives."
+            "These modules require missing data, confirmed metadata, or an "
+            "implemented and tested methodology. They must not be completed "
+            "with fabricated inputs, undocumented proxies, or unsupported "
+            "assumptions."
         )
-        dnf_items = [(m["title"], m.get("missing_data", ["—"])[0] if m.get("missing_data") else "—")
-                     for m in dnf]
-        render_current_reading_list("Blocked by missing data", dnf_items)
+        def _blocker_reason(m):
+            dss = m.get("data_source_status", "")
+            missing = m.get("missing_data", [])
+            notes = m.get("build_notes", "")
+            if missing:
+                return f"Missing data: {', '.join(missing)}"
+            if dss and dss.lower() != "available":
+                return f"Data source status: {dss}"
+            if notes:
+                return notes
+            return "Methodology or metadata pending"
+        dnf_items = [(m["title"], _blocker_reason(m)) for m in dnf]
+        render_current_reading_list(
+            "Blocked pending data, metadata, or methodology", dnf_items)
 
     # ── D. Next recommended build ──
     st.markdown("<div style='margin:1rem 0 0.3rem;font-size:11px;color:#888;"

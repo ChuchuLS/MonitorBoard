@@ -98,10 +98,27 @@ def render(ctx: PageContext) -> None:
             all_dates.append(sdf.index.max())
             sheet_info.append({"Sheet": k, "Latest date": str(sdf.index.max().date()),
                                "Rows": len(sdf), "Cols": sdf.shape[1]})
-    asof = max(all_dates) if all_dates else pd.Timestamp.now()
+    asof_raw = max(all_dates) if all_dates else None
+
+    from models.scoring.engine import determine_scoring_asof
+    asof_info = determine_scoring_asof(data)
+    if asof_info["asof_date"] is None:
+        render_page_header(page, latest_date="—",
+            viewing="No eligible production scoring dates available.")
+        from charts.common import render_missing_data_warning
+        render_missing_data_warning(
+            message="<b>Scoring unavailable.</b> All available scoring observation "
+                    "dates are in the future or no data was loaded. "
+                    "No rates or equity scores will be calculated.")
+        render_section_footer(page)
+        return
+
+    asof = pd.Timestamp(asof_info["asof_date"])
+    future_rows = asof_info.get("future_rows", [])
 
     render_page_header(page, latest_date=asof.strftime("%b %d, %Y").upper(),
-                       viewing="Data source: DATA.xlsx / scoring sheets")
+                       viewing=f"Production scoring as of: {asof.date()}"
+                               f"{' · ' + str(len(future_rows)) + ' future-dated rows excluded' if future_rows else ''}")
 
     render_explanation_box(
         "Cross-sectional scoring model",
@@ -109,10 +126,17 @@ def render(ctx: PageContext) -> None:
         "<b>macro</b> factors (GDP, CPI, fiscal balance) and <b>market</b> "
         "factors (momentum, carry, real yield for rates; terms of trade, "
         "FCI, EPS revisions for equities). Each factor is z-scored "
-        "cross-sectionally (across the panel of countries/indices on the "
-        "same date) so the ranking is relative, not absolute. A positive "
-        "composite score means that market is favoured vs peers <i>today</i>.",
+        "cross-sectionally so the ranking is relative, not absolute. A positive "
+        "composite score means higher-ranked relative to peers using "
+        "observations available on or before the production model as-of date.",
     )
+
+    if future_rows:
+        with st.expander(f"⚠ {len(future_rows)} future-dated scoring rows excluded"):
+            st.caption("These rows are dated after the current production date "
+                       "and are excluded pending classification.")
+            st.dataframe(pd.DataFrame(future_rows), hide_index=True,
+                         use_container_width=True)
 
     # Per-sheet freshness table
     with st.expander("DATA.xlsx scoring-sheet freshness", expanded=False):

@@ -1,7 +1,7 @@
 """
 models/qlist.py
 ===============
-Q-list answering engine. Generates structured answers to the 8 standard
+Q-list answering engine. Generates structured answers to the 10 standard
 questions using real model outputs. No fabrication — every answer traces
 to a specific model function and data column.
 
@@ -25,7 +25,7 @@ class QAnswer:
 
 
 def build_qlist(df: pd.DataFrame, index_result, cli_index: pd.Series) -> list[QAnswer]:
-    """Build answers to all 8 questions. Returns a list of QAnswer objects."""
+    """Build answers to all 10 questions. Returns a list of QAnswer objects."""
     answers = []
 
     # ── Q1: Is liquidity tightening or loosening? ──
@@ -251,5 +251,86 @@ def build_qlist(df: pd.DataFrame, index_result, cli_index: pd.Series) -> list[QA
     except Exception:
         answers.append(QAnswer("Is liquidity correlated with risk assets?",
                                "Model error", "—", "data_missing", []))
+
+    # ── Q9: Which FX pair has the strongest current rate-differential linkage? ──
+    try:
+        from models.fx_rate_differential import (
+            build_fx_current_reading as _fx_reading, FX_PAIR_CONFIG as _fxcfg,
+            ALIGNMENT_METRIC_MAP as _align_map,
+        )
+        best_pair, best_corr, best_metric = None, 0, None
+        details = []
+        for pair in _fxcfg:
+            reading = _fx_reading(df, pair)
+            if reading.get("status") != "Ready":
+                details.append(f"{pair}: {reading.get('status', '—')} (excluded)")
+                continue
+            corr_val = reading.get("strongest_corr_value", 0)
+            corr_met = reading.get("strongest_corr_metric", "—")
+            # Get alignment for the SAME leg
+            align_key = _align_map.get(corr_met, "alignment_nom_2y_diff")
+            leg_align = reading.get(align_key, "—")
+            model_date = reading.get("common_latest_date") or reading.get("model_date", "—")
+            details.append(f"{pair}: {corr_met} ({corr_val:+.3f}), "
+                           f"{corr_met} align={leg_align}, date={model_date}")
+            if abs(corr_val) > abs(best_corr):
+                best_corr = corr_val
+                best_pair = pair
+                best_metric = corr_met
+        if best_pair:
+            br = _fx_reading(df, best_pair)
+            best_align_key = _align_map.get(best_metric, "alignment_nom_2y_diff")
+            best_leg_align = br.get(best_align_key, "—")
+            best_date = br.get("common_latest_date") or br.get("model_date", "—")
+            answers.append(QAnswer(
+                question="Which FX pair has the strongest current rate-differential linkage?",
+                answer=f"{best_pair} — {best_metric} linkage {best_corr:+.3f}; "
+                       f"current {best_metric} alignment: {best_leg_align}; "
+                       f"model date {best_date}",
+                evidence="models.fx_rate_differential.build_fx_current_reading()",
+                data_status="real_data",
+                details=details,
+            ))
+        else:
+            answers.append(QAnswer("Which FX pair has the strongest linkage?",
+                                   "No Ready pairs with valid correlations", "—", "data_missing", []))
+    except Exception:
+        answers.append(QAnswer("Which FX pair has the strongest linkage?",
+                               "Model error", "—", "data_missing", []))
+
+    # ── Q10: Which SPX sectors rank highest and lowest versus SPX? ──
+    try:
+        from models.sector_rotation import build_sector_current_reading
+        from data.external_loaders import load_spx_sector_weights
+        _weights = load_spx_sector_weights()
+        _sec = build_sector_current_reading(df, _weights)
+        if _sec.get("status") == "Ready":
+            top_str = "; ".join(f"{n} ({v:+.2f}pp)" for n, v in _sec.get("top_rel", []))
+            bot_str = "; ".join(f"{n} ({v:+.2f}pp)" for n, v in _sec.get("bottom_rel", []))
+            rb = _sec.get("relative_breadth_pct")
+            answers.append(QAnswer(
+                question="Which SPX sectors rank highest and lowest versus SPX?",
+                answer=f"Top-ranked 3 on 20D relative performance: {top_str}. Lowest-ranked 3: {bot_str}. "
+                       f"SPX-outperform breadth: {_sec.get('outperf_count', 0)}/"
+                       f"{_sec.get('positive_denom', 0)} "
+                       f"({rb:.0f}%). Model date: {_sec.get('relative_model_date', '—')}.",
+                evidence="models.sector_rotation.build_sector_current_reading()",
+                data_status="real_data",
+                details=[
+                    f"Sector-only date: {_sec.get('sector_only_date')}",
+                    f"Relative model date: {_sec.get('relative_model_date')}",
+                    f"Weight date: {_sec.get('weight_date')}",
+                    f"20D positive breadth: {_sec.get('positive_count', 0)}/"
+                    f"{_sec.get('positive_denom', 0)}",
+                ],
+            ))
+        else:
+            answers.append(QAnswer(
+                "Which SPX sectors rank highest and lowest versus SPX?",
+                f"Data Missing ({_sec.get('status', 'unknown')})", "—", "data_missing", []))
+    except Exception:
+        answers.append(QAnswer(
+            "Which SPX sectors rank highest and lowest versus SPX?",
+            "Model error", "—", "data_missing", []))
 
     return answers

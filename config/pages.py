@@ -86,7 +86,7 @@ PAGES: list[dict] = [
         "status": "live",
         "data_source": "sheet1_market",
         "description": "Global 10Y normalized overlay, yield curve snapshots, and "
-                       "2s10s slope ranking across US, DE, JP, UK, CA, AU. "
+                       "2s10s slope ranking across US, DE, JP, UK, CA, AU, CH. "
                        "",
         "builds_on": "regimes",
         "next": "cross_asset",
@@ -119,28 +119,58 @@ PAGES: list[dict] = [
                        "4-regime relative classification. Experimental — not the "
                        "same model as the 8-regime directional timeline.",
         "builds_on": "cross_asset",
+        "next": "sector_rotation",
+    },
+    {
+        "id": "sector_rotation",
+        "label": "Sectors",
+        "title": "Sector Rotation & Breadth",
+        "section": "06",
+        "color_key": "cross_asset",
+        "status": "live",
+        "data_source": "sheet1_market",
+        "description": "Descriptive monitor for the 11 S&P 500 sector indices: "
+                       "absolute and relative performance vs SPX, breadth, "
+                       "cross-sectional dispersion, rotation quadrants, and "
+                       "sector-weight context. Not causal attribution or "
+                       "official SPX return attribution. ETF proxies are "
+                       "excluded from the production model.",
+        "builds_on": "market_linkage",
+        "next": "fx_rate_diff",
+    },
+    {
+        "id": "fx_rate_diff",
+        "label": "FX Rates",
+        "title": "FX Rate Differential Monitor",
+        "section": "07",
+        "color_key": "fx",
+        "status": "live",
+        "data_source": "sheet1_market",
+        "description": "Descriptive FX rate-differential monitor for EURUSD, USDJPY, "
+                       "GBPUSD, AUDUSD against 2Y/10Y nominal and 10Y real yield "
+                       "differentials. Not causal attribution or fair value.",
+        "builds_on": "sector_rotation",
         "next": "fx",
     },
     {
         "id": "fx",
-        "label": "FX",
+        "label": "FX PCA",
         "title": "FX Complex PCA",
-        "section": "06",
+        "section": "07b",
         "color_key": "fx",
         "status": "experimental",
         "data_source": "sheet1_market",
         "description": "PCA-based regime classification on DXY / EM FX / USDJPY "
-                       "12M xccy basis. Experimental — this is NOT the PDF-style "
-                       "rate-differential FX model (which requires FX spot + "
-                       "matching yield differentials).",
-        "builds_on": "market_linkage",
+                       "12M xccy basis. Experimental — separate from the live "
+                       "FX rate-differential monitor.",
+        "builds_on": "fx_rate_diff",
         "next": "data_quality",
     },
     {
         "id": "data_quality",
         "label": "Data",
         "title": "Data Quality & Methodology",
-        "section": "07",
+        "section": "08",
         "color_key": "data_quality",
         "status": "live",
         "data_source": "all",
@@ -161,8 +191,7 @@ PAGES: list[dict] = [
         "data_source": "scoring_sheets",
         "description": "Cross-sectional macro + market scoring model for 10 "
                        "sovereign bond markets and 17 equity index futures. "
-                       "Appendix — standalone model, not part of the 00–07 "
-                       "PDF-style flow. Uses DATA.xlsx / scoring sheets.",
+                       "Appendix — standalone model. Uses DATA.xlsx / scoring sheets.",
         "builds_on": "data_quality",
         "next": "model_roadmap",
     },
@@ -170,7 +199,7 @@ PAGES: list[dict] = [
         "id": "model_roadmap",
         "label": "Roadmap",
         "title": "Model Roadmap & Content Gap",
-        "section": "08",
+        "section": "09",
         "color_key": "data_quality",
         "status": "live",
         "data_source": "sheet1_market",

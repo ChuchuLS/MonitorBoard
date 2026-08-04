@@ -144,8 +144,15 @@ def _df_table(df, max_rows=30):
     return f"<table><thead><tr>{hdr}</tr></thead><tbody>{rows}</tbody></table>"
 
 
+# Module-level flag controlling whether Plotly figures are rendered
+_RENDER_CHARTS = True
+
+
 def _try_plotly_html(fig) -> str:
-    """Convert a Plotly figure to an HTML fragment."""
+    """Convert a Plotly figure to an HTML fragment.
+    If _RENDER_CHARTS is False, returns a placeholder — no fig.to_html() call."""
+    if not _RENDER_CHARTS:
+        return "<p class='sub'>Chart omitted (lightweight mode).</p>"
     try:
         return ("<div class='plotly-chart'>"
                 + fig.to_html(full_html=False, include_plotlyjs=False)
@@ -439,7 +446,7 @@ def _build_data_quality(df, lvd, sig):
     future = [
         ("FOMC path", "Missing data"),
         ("SOFR futures strip", "Missing data"),
-        ("FX rate-differential", "Missing data"),
+        ("FX Rate Differential Monitor", "Live in Streamlit; not currently included in the static HTML export"),
         ("SPX sector attribution", "Missing data"),
         ("Earnings vs valuation", "Missing data"),
     ]
@@ -460,8 +467,11 @@ def build_html(include_plotlyjs: bool = True,
     plotly_mode:
         "inline" (default) — embed Plotly JS inline for offline use
         "cdn"    — use CDN (smaller file, needs internet)
-        "none"   — no Plotly JS (tables only)
+        "none"   — no Plotly JS, no fig.to_html() calls (tables only, lightweight)
     """
+    global _RENDER_CHARTS
+    _RENDER_CHARTS = (plotly_mode != "none")
+
     df = load_data()
     lvd = latest_valid_date(df)
     sig = source_signature()

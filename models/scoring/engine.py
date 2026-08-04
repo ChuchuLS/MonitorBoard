@@ -367,3 +367,35 @@ def score_equity(data: dict, asof: pd.Timestamp, weights: dict) -> pd.DataFrame:
 # ============================================================
 # RENDERING (Pulsar HTML style)
 # ============================================================
+
+
+def determine_scoring_asof(data: dict, current_date=None) -> dict:
+    """Determine the production scoring as-of date.
+    Excludes future-dated rows from the production date.
+    Returns {asof_date, future_rows: [{sheet, date, ...}]}."""
+    from data.date_integrity import current_production_date
+    cd = current_production_date(current_date)
+
+    future_rows = []
+    latest_eligible = None
+
+    for key, df in (data or {}).items():
+        if df is None or df.empty:
+            continue
+        for d in df.index:
+            dd = d.date() if hasattr(d, 'date') else d
+            if dd > cd:
+                future_rows.append({
+                    "sheet": key, "date": str(dd),
+                    "cols_with_data": int(df.loc[d].notna().sum()),
+                    "status": "Needs classification",
+                })
+            else:
+                if latest_eligible is None or dd > latest_eligible:
+                    latest_eligible = dd
+
+    return {
+        "asof_date": latest_eligible,
+        "future_rows": future_rows,
+        "current_date": cd,
+    }

@@ -796,7 +796,7 @@ def _render_components_table(result: IndexResult) -> None:
         "to a rolling z-score (5y window, 2y min, clipped ±3, with a low-variation "
         "guard). A bucket sub-index is the mean of its z-scores, but only counts on "
         f"days it has ≥ {MIN_COMPONENTS_PER_BUCKET} live components; the composite is "
-        "the weight-renormalised average. Weekly series (Fed reserves/repo) are "
+        "the weight-renormalised average. Weekly H.4.1 series (reserve balances / CB liquidity swaps) are "
         "forward-fill-capped so a stale value can't masquerade as a live daily print.")
 
 
@@ -947,7 +947,7 @@ def _render_ffill_audit(ffa: pd.DataFrame | None) -> None:
             hide_index=True, use_container_width=True,
             height=min(560, 42 + 34 * len(disp)))
         st.caption(
-            "Weekly series (Fed reserves/repo) are observed on Wednesdays; the z is "
+            "Weekly H.4.1 series (reserve balances / CB liquidity swaps) are observed on Wednesdays; the z is "
             "computed on those true observations and forward-filled at most "
             "'Max ffill' business days. '% ffilled' near 80% for weekly series is "
             "expected (4 of 5 weekdays are fills); a component goes not-live once "
