@@ -1,7 +1,7 @@
 """
 models/qlist.py
 ===============
-Q-list answering engine. Generates structured answers to the 10 standard
+Q-list answering engine. Generates structured answers to the 14 standard
 questions using real model outputs. No fabrication — every answer traces
 to a specific model function and data column.
 
@@ -25,7 +25,7 @@ class QAnswer:
 
 
 def build_qlist(df: pd.DataFrame, index_result, cli_index: pd.Series) -> list[QAnswer]:
-    """Build answers to all 10 questions. Returns a list of QAnswer objects."""
+    """Build answers to all 14 questions. Returns a list of QAnswer objects."""
     answers = []
 
     # ── Q1: Is liquidity tightening or loosening? ──
@@ -332,5 +332,181 @@ def build_qlist(df: pd.DataFrame, index_result, cli_index: pd.Series) -> list[QA
         answers.append(QAnswer(
             "Which SPX sectors rank highest and lowest versus SPX?",
             "Model error", "—", "data_missing", []))
+
+    # ── Q11: Which sectors contributed most to the estimated SPX return? ──
+    try:
+        from models.sector_contribution import build_sector_contribution_current_reading
+        from data.external_loaders import load_spx_sector_weights as _load_contrib_weights
+        _contrib = build_sector_contribution_current_reading(
+            df, _load_contrib_weights(), horizon=20
+        )
+        if _contrib.get("status") == "Ready":
+            pos = "; ".join(
+                f"{row['display_name']} ({row['estimated_contribution_pp']:+.3f}pp)"
+                for row in _contrib.get("top_positive", [])
+            ) or "—"
+            neg = "; ".join(
+                f"{row['display_name']} ({row['estimated_contribution_pp']:+.3f}pp)"
+                for row in _contrib.get("top_negative", [])
+            ) or "—"
+            answers.append(QAnswer(
+                question="Which sectors contributed most to the estimated SPX return?",
+                answer=(
+                    f"Largest positive 20D estimates: {pos}. Largest negative estimates: {neg}. "
+                    f"Actual SPX return {_contrib.get('actual_spx_return_pct'):+.2f}%, "
+                    f"estimated {_contrib.get('estimated_spx_return_pct'):+.2f}%, "
+                    f"residual {_contrib.get('residual_pp'):+.3f}pp. "
+                    f"Window {_contrib.get('start_date')} to {_contrib.get('end_date')}; "
+                    f"start weight {_contrib.get('weight_date')}."
+                ),
+                evidence="models.sector_contribution.build_sector_contribution_current_reading()",
+                data_status="real_data",
+                details=[
+                    "Approximation: start-period periodic weight × sector simple return.",
+                    "Residual = actual SPX return − estimated return.",
+                    "Not official SPX attribution.",
+                ],
+            ))
+        else:
+            answers.append(QAnswer(
+                "Which sectors contributed most to the estimated SPX return?",
+                f"Data Missing ({_contrib.get('status', 'unknown')})",
+                "models.sector_contribution.build_sector_contribution_current_reading()",
+                "data_missing",
+                _contrib.get("warnings", []),
+            ))
+    except Exception:
+        answers.append(QAnswer(
+            "Which sectors contributed most to the estimated SPX return?",
+            "Model error", "—", "data_missing", []))
+
+    # ── Q12: Are SPX returns moving with FY1 earnings or valuation? ──
+    try:
+        from data.equity_earnings_loader import load_equity_earnings_data
+        from models.earnings_valuation import build_earnings_current_reading
+        _earn = build_earnings_current_reading(load_equity_earnings_data(), code="ES1")
+        if _earn.get("status") == "Ready" and pd.notna(_earn.get("current_price_return_pct")):
+            answers.append(QAnswer(
+                question="Are recent SPX returns driven more by FY1 earnings revisions or valuation multiple changes?",
+                answer=(
+                    f"Over {_earn.get('decomposition_horizon', 4)} common weekly observations, "
+                    f"SPX returned {_earn.get('current_price_return_pct'):+.2f}%; "
+                    f"FY1 EPS contributed {_earn.get('current_eps_growth_pct'):+.2f}% and "
+                    f"the implied FY1 P/E changed {_earn.get('current_valuation_change_pct'):+.2f}%. "
+                    f"Larger component: {_earn.get('current_driver')}. "
+                    f"Model date {_earn.get('model_date')}."
+                ),
+                evidence="models.earnings_valuation.build_earnings_current_reading()",
+                data_status="real_data",
+                details=[
+                    "Exact log identity: SPX return = FY1 EPS growth + implied FY1 P/E change.",
+                    "EPS field: BEST_EPS with BEST_FPERIOD_OVERRIDE=1FY; weekly.",
+                    f"Identity residual: {_earn.get('current_identity_residual_pct'):+.8f}%.",
+                    f"Weekly OLS diagnostic: beta {_earn.get('regression_beta', float('nan')):+.3f}, "
+                    f"R² {_earn.get('regression_r_squared', float('nan')):.3f}; descriptive, not causal.",
+                ],
+            ))
+        else:
+            answers.append(QAnswer(
+                "Are recent SPX returns driven more by FY1 earnings revisions or valuation multiple changes?",
+                f"Data Missing ({_earn.get('status', 'unknown')})",
+                "models.earnings_valuation.build_earnings_current_reading()",
+                "data_missing",
+                _earn.get("missing", []),
+            ))
+    except Exception:
+        answers.append(QAnswer(
+            "Are recent SPX returns driven more by FY1 earnings revisions or valuation multiple changes?",
+            "Model error", "—", "data_missing", []))
+
+    # ── Q13: Which cross-asset relationships are strongest now? ──
+    try:
+        from data.external_loaders import load_ficc as _load_linkage_ficc
+        from models.market_linkage import build_market_linkage_current_reading
+        _linkage_frame = _load_linkage_ficc()
+        _linkage = (
+            build_market_linkage_current_reading(_linkage_frame, corr_window=20)
+            if _linkage_frame is not None else {"status": "Missing data"}
+        )
+        if _linkage.get("status") == "Ready":
+            _pos = _linkage.get("strongest_positive") or {}
+            _neg = _linkage.get("strongest_negative") or {}
+            answers.append(QAnswer(
+                question="Which cross-asset relationships are strongest right now?",
+                answer=(
+                    f"Strongest positive 20-observation relationship: "
+                    f"{_pos.get('label', '—')} ({_pos.get('correlation', float('nan')):+.2f}). "
+                    f"Strongest negative: {_neg.get('label', '—')} "
+                    f"({_neg.get('correlation', float('nan')):+.2f}). "
+                    f"Mean absolute pair correlation: "
+                    f"{_linkage.get('mean_abs_correlation', float('nan')):.2f}. "
+                    f"Model date {_linkage.get('model_date')}."
+                ),
+                evidence="models.market_linkage.build_market_linkage_current_reading()",
+                data_status="real_data",
+                details=[
+                    "Universe: SPX, UST 10Y, DXY, BCOM and US HY OAS.",
+                    "All level series are aligned before daily transformations.",
+                    "Correlation describes co-movement; it is not causal attribution or a forecast.",
+                ],
+            ))
+        else:
+            answers.append(QAnswer(
+                "Which cross-asset relationships are strongest right now?",
+                f"Data Missing ({_linkage.get('status', 'unknown')})",
+                "models.market_linkage.build_market_linkage_current_reading()",
+                "data_missing",
+                _linkage.get("missing", []),
+            ))
+    except Exception:
+        answers.append(QAnswer(
+            "Which cross-asset relationships are strongest right now?",
+            "Model error", "—", "data_missing", []))
+
+    # ── Q14: What does the generic policy-futures strip imply? ──
+    try:
+        from models.policy_futures_generic import build_policy_futures_family_snapshot
+        _pf_details = []
+        _pf_ready = []
+        for _family in ("FF", "SER", "SFR"):
+            _snap = build_policy_futures_family_snapshot(df, _family)
+            if _snap.get("status") != "Ready" or _snap.get("strip_table").empty:
+                _pf_details.append(f"{_family}: {_snap.get('status', 'Missing data')}")
+                continue
+            _tbl = _snap["strip_table"]
+            _front = _tbl.loc[_tbl["rank"] == 1].iloc[0]
+            _third = _tbl.loc[_tbl["rank"] == 3].iloc[0]
+            _pf_ready.append((_family, _snap, _front, _third))
+            _pf_details.append(
+                f"{_family}: front {_front['implied_rate_pct']:.3f}%, "
+                f"third {_third['implied_rate_pct']:.3f}%, "
+                f"3−1 {_snap['front_to_third_bp']:+.1f}bp, date {_snap['model_date']}"
+            )
+        if _pf_ready:
+            _lead = _pf_ready[0]
+            answers.append(QAnswer(
+                question="What does the generic policy-futures strip imply?",
+                answer=(
+                    "Continuous-rank implied rates are available for FF, 1-Month SOFR "
+                    "and 3-Month SOFR. " + " · ".join(_pf_details) + "."
+                ),
+                evidence="models.policy_futures_generic.build_policy_futures_family_snapshot()",
+                data_status="real_data" if len(_pf_ready) == 3 else "partial",
+                details=[
+                    "Implied reference rate = 100 − futures price.",
+                    "Generic ranks roll across underlying contracts and are not fixed expiries.",
+                    "This does not infer a meeting-by-meeting FOMC path or probability.",
+                ],
+            ))
+        else:
+            answers.append(QAnswer(
+                "What does the generic policy-futures strip imply?",
+                "Data Missing", "—", "data_missing", _pf_details,
+            ))
+    except Exception:
+        answers.append(QAnswer(
+            "What does the generic policy-futures strip imply?",
+            "Model error", "—", "data_missing", [],
+        ))
 
     return answers

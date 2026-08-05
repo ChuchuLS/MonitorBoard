@@ -44,6 +44,7 @@ from models.global_rates import (
     available_country_curves, build_slope_ranking,
     country_1m_changes, build_curve_snapshots, COUNTRY_LABELS,
 )
+from models.country_rate_boards import build_global_country_board_overview
 from models.cross_asset.directional import (
     classify_8regime, REGIMES_8,
     days_in_current_regime as ca_days_in,
@@ -239,6 +240,59 @@ def _build_liquidity(r):
     return html
 
 
+def _build_policy_futures(df):
+    """Static table for the live generic policy-futures monitor."""
+    from models.policy_futures_generic import build_policy_futures_overview
+
+    overview = build_policy_futures_overview(df, horizons=(20,))
+    html = ("<div class='page'>"
+            + _section_header("01b", "Policy Futures Generic Strip", "#35bdf4",
+                              "Continuous FF / 1-Month SOFR / 3-Month SOFR ranks; not a FOMC path."))
+    if overview.empty or overview["implied_rate_pct"].dropna().empty:
+        html += "<p class='sub'>No aligned generic futures data.</p></div>"
+        return html
+
+    ready = overview[overview["status"] == "Ready"].copy()
+    family_rows = []
+    for family, grp in ready.groupby("family", sort=False):
+        front = grp.loc[grp["rank"] == 1]
+        third = grp.loc[grp["rank"] == 3]
+        if front.empty or third.empty:
+            continue
+        family_rows.append({
+            "Family": family,
+            "Contract": front.iloc[0]["family_name"],
+            "Front implied rate": f"{front.iloc[0]['implied_rate_pct']:.3f}%",
+            "Third implied rate": f"{third.iloc[0]['implied_rate_pct']:.3f}%",
+            "Rank 3 − Rank 1": f"{front.iloc[0]['front_to_third_bp']:+.1f} bp",
+            "Curve description": front.iloc[0]["curve_shape"],
+            "Common date": str(front.iloc[0]["model_date"]),
+        })
+    if family_rows:
+        html += _df_table(pd.DataFrame(family_rows))
+
+    detail = ready[["family_name", "rank_label", "ticker", "price",
+                    "implied_rate_pct", "change_20d_bp", "relative_to_front_bp",
+                    "model_date"]].copy()
+    detail.columns = ["Family", "Generic rank", "Ticker", "Price", "Implied rate (%)",
+                      "20D rate change (bp)", "Vs front (bp)", "Common date"]
+    for col in ["Price", "Implied rate (%)"]:
+        detail[col] = detail[col].map(lambda v: "—" if pd.isna(v) else f"{v:.4f}")
+    for col in ["20D rate change (bp)", "Vs front (bp)"]:
+        detail[col] = detail[col].map(lambda v: "—" if pd.isna(v) else f"{v:+.1f}")
+    html += "<h3>Generic ranks</h3>" + _df_table(detail, max_rows=20)
+    html += _method_box(
+        "Methodology and limitation",
+        "Implied reference rate = 100 − futures price. FF reflects a monthly average "
+        "EFFR contract, SER a monthly average SOFR contract, and SFR a compounded "
+        "three-month SOFR reference-quarter contract. Generic ranks roll across "
+        "underlying contracts and are not fixed expiries; no FOMC meeting path or "
+        "probability is inferred."
+    )
+    html += "</div>"
+    return html
+
+
 def _build_decomposition(df):
     snap = build_us_curve_snapshot(df)
     if snap.empty:
@@ -370,6 +424,32 @@ def _build_global(df):
         sdisp.columns = ["Country", "2s10s Slope", "Inverted"]
         html += _df_table(sdisp)
 
+    # Country Rate Boards — common calendar overview. The full selectable board
+    # remains a Streamlit page; this table keeps static coverage honest.
+    boards = build_global_country_board_overview(df, horizon=20)
+    if not boards.empty:
+        html += "<h3>04b Country Rate Boards — Common 20D Overview</h3>"
+        bdisp = boards[[
+            "label", "yield_2y_pct", "yield_10y_pct", "yield_30y_pct",
+            "change_20d_10y_bp", "slope_2s10s_bp",
+            "change_20d_2s10s_bp", "model_date",
+        ]].copy()
+        for col in ["yield_2y_pct", "yield_10y_pct", "yield_30y_pct"]:
+            bdisp[col] = bdisp[col].apply(lambda x: f"{x:.2f}%")
+        for col in ["change_20d_10y_bp", "slope_2s10s_bp", "change_20d_2s10s_bp"]:
+            bdisp[col] = bdisp[col].apply(lambda x: f"{x:+.0f} bp")
+        bdisp.columns = [
+            "Country", "2Y", "10Y", "30Y", "20D 10Y Change",
+            "2s10s", "20D 2s10s Change", "Common Date",
+        ]
+        html += _df_table(bdisp)
+        html += _method_box(
+            "Country board methodology",
+            "All seven countries are compared on one shared 2Y/5Y/10Y/30Y "
+            "observation calendar. No forward-fill is used. The full selectable "
+            "country board is available in Streamlit section 04b.",
+        )
+
     html += "</div>"
     return html
 
@@ -439,19 +519,24 @@ def _build_data_quality(df, lvd, sig):
         ("Curve Regimes", "Ready" if not miss_decomp else "Missing"),
         ("Global Rates", f"{len(available_country_curves(df))} countries"),
         ("Cross-Asset", "Ready" if all(c in cols for c in ["SPX INDEX", "USGG10YR INDEX", "DXY CURNCY"]) else "Missing"),
+        ("Market Linkage & Correlations", "Ready" if all(c in cols for c in ["SPX INDEX", "USGG10YR INDEX", "DXY CURNCY", "BCOM INDEX", "LF98OAS INDEX"]) else "Missing"),
     ]
     html += _reading_box("Phase 2 Model Readiness", readiness)
 
-    # Future
+    # Streamlit coverage and future models
     future = [
-        ("FOMC path", "Missing data"),
-        ("SOFR futures strip", "Missing data"),
+        ("Policy Futures Generic Strip", "Live — FF / SER / SFR continuous ranks; included in this HTML"),
+        ("FOMC path", "Not implemented — actual contract months and meeting methodology required"),
+        ("Market Linkage & Correlations", "Live in Streamlit; not currently included as a full static HTML page"),
+        ("Sector Rotation & Breadth", "Live in Streamlit; not currently included in the static HTML export"),
+        ("Sector Contribution Estimate", "Live in Streamlit; approximation with explicit residual; not official attribution; not currently included in the static HTML export"),
         ("FX Rate Differential Monitor", "Live in Streamlit; not currently included in the static HTML export"),
-        ("SPX sector attribution", "Missing data"),
-        ("Earnings vs valuation", "Missing data"),
+        ("Official SPX sector attribution", "Not implemented — daily-weight or official contribution methodology required"),
+        ("SPX FY1 Earnings & Valuation", "Live in Streamlit; BEST_EPS with 1FY override; exact weekly decomposition; not currently included as a full static HTML page"),
+        ("Forward estimate vs realized EPS", "Not implemented — realized/trailing EPS field and period definition not supplied"),
     ]
-    html += "<h3>Future Models</h3>"
-    html += _reading_box("Requires additional data", future)
+    html += "<h3>Streamlit Coverage & Future Models</h3>"
+    html += _reading_box("Coverage and readiness", future)
 
     html += "</div>"
     return html
@@ -499,6 +584,7 @@ def build_html(include_plotlyjs: bool = True,
         _build_cover(df, r, lvd, sig),
         _build_contents(),
         _build_liquidity(r),
+        _build_policy_futures(df),
         _build_decomposition(df),
         _build_regimes(df),
         _build_global(df),

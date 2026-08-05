@@ -227,11 +227,59 @@ SPX_SECTOR_ETF_PROXIES = {
     "XLU": "XLU US EQUITY",
 }
 
-# Policy futures — data available, models NOT yet implemented
+# Policy futures — generic continuous series available in DATA.xlsx.
+# These are rolling rank series, not fixed expiries.  The production generic
+# strip may convert price to an implied reference rate, but it must not infer a
+# meeting-by-meeting FOMC path without actual contract-month metadata.
 POLICY_FUTURES_TICKERS = {
     "FF1": "FF1 COMB COMDTY",   "FF2": "FF2 COMB COMDTY",   "FF3": "FF3 COMB COMDTY",
     "SFR1": "SFR1 COMB COMDTY", "SFR2": "SFR2 COMB COMDTY", "SFR3": "SFR3 COMB COMDTY",
     "SER1": "SER1 COMB COMDTY", "SER2": "SER2 COMB COMDTY", "SER3": "SER3 COMB COMDTY",
+}
+
+POLICY_FUTURES_CONFIG = {
+    "FF": {
+        "display_name": "30-Day Federal Funds Futures",
+        "reference_rate_label": "Monthly average daily EFFR",
+        "reference_period": "Contract delivery month",
+        "quote_conversion": "Implied reference rate (%) = 100 − futures price",
+        "bloomberg_root": "FF Comdty",
+        "source_documentation": "CME/CBOT Rulebook Chapter 22 — 30-Day Federal Funds Futures",
+        "spot_reference_key": "EFFR",
+        "generic_tickers": {
+            1: POLICY_FUTURES_TICKERS["FF1"],
+            2: POLICY_FUTURES_TICKERS["FF2"],
+            3: POLICY_FUTURES_TICKERS["FF3"],
+        },
+    },
+    "SER": {
+        "display_name": "1-Month SOFR Futures",
+        "reference_rate_label": "Monthly average daily SOFR",
+        "reference_period": "Contract delivery month",
+        "quote_conversion": "Implied reference rate (%) = 100 − futures price",
+        "bloomberg_root": "SER Comdty",
+        "source_documentation": "CME Group — Understanding SOFR Futures / vendor-code table",
+        "spot_reference_key": "SOFR",
+        "generic_tickers": {
+            1: POLICY_FUTURES_TICKERS["SER1"],
+            2: POLICY_FUTURES_TICKERS["SER2"],
+            3: POLICY_FUTURES_TICKERS["SER3"],
+        },
+    },
+    "SFR": {
+        "display_name": "3-Month SOFR Futures",
+        "reference_rate_label": "Compounded SOFR reference-quarter rate",
+        "reference_period": "Three-month reference quarter",
+        "quote_conversion": "Implied reference rate (%) = 100 − futures price",
+        "bloomberg_root": "SFR Comdty",
+        "source_documentation": "CME Group — Three-Month SOFR Futures Rates and Future SOFR Levels",
+        "spot_reference_key": "SOFR",
+        "generic_tickers": {
+            1: POLICY_FUTURES_TICKERS["SFR1"],
+            2: POLICY_FUTURES_TICKERS["SFR2"],
+            3: POLICY_FUTURES_TICKERS["SFR3"],
+        },
+    },
 }
 
 # Countries with full 2/5/10/30 nominal coverage for regime classification

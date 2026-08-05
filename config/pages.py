@@ -41,12 +41,29 @@ PAGES: list[dict] = [
         "title": "Policy & Short Rates",
         "section": "01",
         "color_key": "policy",
-        "status": "partial",
+        "status": "live",
         "data_source": "sheet1_market",
-        "description": "Fed policy rates, SOFR/EFFR/IORB plumbing and spreads, "
-                       "funding-market pressure indicators. FOMC path and SOFR "
-                       "futures strip pending meeting-dated futures data.",
+        "description": "Live confirmed policy and funding-plumbing monitor: "
+                       "SOFR / EFFR / IORB, TGCR / BGCR / GCF / Tri-Party spreads, "
+                       "funding-pressure diagnostics and weekly H.4.1 context. "
+                       "The generic futures strip is a separate live page; a "
+                       "meeting-by-meeting FOMC path remains unimplemented.",
         "builds_on": "liquidity",
+        "next": "policy_futures",
+    },
+    {
+        "id": "policy_futures",
+        "label": "Futures Strip",
+        "title": "Policy Futures Generic Strip",
+        "section": "01b",
+        "color_key": "policy",
+        "status": "live",
+        "data_source": "sheet1_market",
+        "description": "Continuous-contract monitor for FF1–FF3, SER1–SER3 and "
+                       "SFR1–SFR3. Converts price to implied reference rate using "
+                       "100 − price, shows generic-rank curves and history, and "
+                       "explicitly avoids expiry or FOMC-meeting inference.",
+        "builds_on": "policy",
         "next": "decomposition",
     },
     {
@@ -86,9 +103,24 @@ PAGES: list[dict] = [
         "status": "live",
         "data_source": "sheet1_market",
         "description": "Global 10Y normalized overlay, yield curve snapshots, and "
-                       "2s10s slope ranking across US, DE, JP, UK, CA, AU, CH. "
-                       "",
+                       "2s10s slope ranking across seven markets: US, DE, JP, UK, "
+                       "CA, AU and CH.",
         "builds_on": "regimes",
+        "next": "country_boards",
+    },
+    {
+        "id": "country_boards",
+        "label": "Country Boards",
+        "title": "Country Rate Boards",
+        "section": "04b",
+        "color_key": "global_rates",
+        "status": "live",
+        "data_source": "sheet1_market",
+        "description": "Fully aligned 2Y / 5Y / 10Y / 30Y nominal sovereign curve "
+                       "boards for US, DE, JP, UK, CA, AU and CH. Shows yield levels, "
+                       "common-calendar changes, curve slopes, percentiles and a "
+                       "descriptive curve-move reading. No forward-fill or forecast claim.",
+        "builds_on": "global_rates",
         "next": "cross_asset",
     },
     {
@@ -103,7 +135,7 @@ PAGES: list[dict] = [
                        "DXY vol-scaled signals: 20D change ÷ 21D trailing "
                        "volatility. The sign of each signal determines UP/DOWN. "
                        "Uses DATA.xlsx / Sheet1 cross-asset columns (SPX, USGG10YR, DXY).",
-        "builds_on": "global_rates",
+        "builds_on": "country_boards",
         "next": "market_linkage",
     },
     {
@@ -112,13 +144,27 @@ PAGES: list[dict] = [
         "title": "Market Linkage & Correlations",
         "section": "05b",
         "color_key": "cross_asset",
+        "status": "live",
+        "data_source": "sheet1_market",
+        "description": "Live descriptive co-movement monitor for SPX / UST 10Y / "
+                       "DXY / BCOM / US HY OAS. Uses one fully aligned calendar, "
+                       "pairwise rolling correlations, a current matrix and mean "
+                       "absolute correlation. Not causal attribution or a forecast.",
+        "builds_on": "cross_asset",
+        "next": "market_linkage_pca",
+    },
+    {
+        "id": "market_linkage_pca",
+        "label": "Linkage PCA",
+        "title": "Market Linkage PCA",
+        "section": "05c",
+        "color_key": "cross_asset",
         "status": "experimental",
         "data_source": "sheet1_market",
-        "description": "PCA-based dominant-theme extraction on SPX / UST 10Y / DXY. "
-                       "Rolling correlations, PC1 loadings and explained variance, "
-                       "4-regime relative classification. Experimental — not the "
-                       "same model as the 8-regime directional timeline.",
-        "builds_on": "cross_asset",
+        "description": "Experimental rolling PCA on SPX / UST 10Y / DXY. "
+                       "PC1 loadings, explained variance and a four-regime relative "
+                       "classification. Separate from the live descriptive 05b monitor.",
+        "builds_on": "market_linkage",
         "next": "sector_rotation",
     },
     {
@@ -135,7 +181,34 @@ PAGES: list[dict] = [
                        "sector-weight context. Not causal attribution or "
                        "official SPX return attribution. ETF proxies are "
                        "excluded from the production model.",
-        "builds_on": "market_linkage",
+        "builds_on": "market_linkage_pca",
+        "next": "sector_contribution",
+    },
+    {
+        "id": "sector_contribution",
+        "label": "Sector Est.",
+        "title": "Sector Contribution Estimate",
+        "section": "06b",
+        "color_key": "cross_asset",
+        "status": "live",
+        "data_source": "sheet1_market",
+        "description": "Approximate SPX sector return contribution using the latest "
+                       "periodic sector weights available on or before each return "
+                       "window start date. Explicit residual reconciliation. Not "
+                       "official index-provider attribution.",
+        "builds_on": "sector_rotation",
+        "next": "earnings_valuation",
+    },
+    {
+        "id": "earnings_valuation",
+        "label": "Earnings",
+        "title": "SPX FY1 Earnings & Valuation",
+        "section": "06c",
+        "color_key": "cross_asset",
+        "status": "live",
+        "data_source": "scoring_sheets",
+        "description": "SPX Index level, confirmed weekly FY1 consensus EPS (BEST_EPS with 1FY override), implied FY1 P/E, exact log-return decomposition into earnings growth and multiple change, plus a clearly labelled weekly OLS diagnostic. Not fair value or a forecast.",
+        "builds_on": "sector_contribution",
         "next": "fx_rate_diff",
     },
     {
@@ -149,7 +222,7 @@ PAGES: list[dict] = [
         "description": "Descriptive FX rate-differential monitor for EURUSD, USDJPY, "
                        "GBPUSD, AUDUSD against 2Y/10Y nominal and 10Y real yield "
                        "differentials. Not causal attribution or fair value.",
-        "builds_on": "sector_rotation",
+        "builds_on": "earnings_valuation",
         "next": "fx",
     },
     {
@@ -276,9 +349,11 @@ DATA_SOURCES = {
         "role": "Main market data: liquidity, rates, credit, cross-asset, FICC, FX PCA inputs",
         "source_of_truth": True,
         "pages": [
-            "liquidity", "policy", "decomposition", "regimes",
-            "global_rates", "cross_asset", "market_linkage",
-            "rates_pca", "fx",
+            "liquidity", "policy", "policy_futures", "decomposition", "regimes",
+            "global_rates", "country_boards", "cross_asset", "market_linkage",
+            "market_linkage_pca",
+            "rates_pca", "sector_rotation", "sector_contribution",
+            "fx_rate_diff", "fx",
         ],
     },
     "scoring_sheets": {
@@ -286,6 +361,6 @@ DATA_SOURCES = {
         "sheet": "Macro_GDP / Macro_CPI / Macro_Fiscal / Rates_10Y / Equity_*",
         "role": "Global scoring model sheets (macro + market factors)",
         "source_of_truth": True,
-        "pages": ["scoring"],
+        "pages": ["earnings_valuation", "scoring"],
     },
 }
