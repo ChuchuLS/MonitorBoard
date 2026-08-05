@@ -39,6 +39,7 @@ REQUIRED_SCORING_SHEETS = ["Macro_GDP", "Macro_CPI", "Macro_Fiscal", "Rates_10Y"
 
 # Cross-asset columns required in DATA.xlsx Sheet1
 REQUIRED_CROSSASSET_COLS = ["SPX INDEX", "USGG10YR INDEX", "DXY CURNCY"]
+REQUIRED_LINKAGE_COLS = ["SPX INDEX", "USGG10YR INDEX", "DXY CURNCY", "BCOM INDEX", "LF98OAS INDEX"]
 REQUIRED_FICC_COLS = ["USGG10YR INDEX", "DXY CURNCY", "SPX INDEX",
                       "USYC2Y10 INDEX", "USGGBE10 INDEX", "USGGT10Y INDEX",
                       "MOVE INDEX", "FXJPEMCS INDEX", "JYBSS12M CURNCY"]
@@ -135,7 +136,7 @@ def render(ctx: PageContext) -> None:
         scoring_rows = sum(len(d) for d in scoring_data.values())
         scoring_cols = sum(d.shape[1] for d in scoring_data.values())
 
-    all_req_cols = sorted(set(REQUIRED_CROSSASSET_COLS + REQUIRED_FICC_COLS))
+    all_req_cols = sorted(set(REQUIRED_CROSSASSET_COLS + REQUIRED_FICC_COLS + REQUIRED_LINKAGE_COLS))
     present_cols = set(str(c).strip() for c in ctx.df.columns)
     missing_cols = [c for c in all_req_cols if c not in present_cols]
 
@@ -264,6 +265,47 @@ def render(ctx: PageContext) -> None:
     st.dataframe(readiness.style.map(_status_color, subset=["Status"]),
                  hide_index=True, use_container_width=True)
 
+    # Country Rate Boards — readiness is based on fully aligned four-tenor
+    # histories rather than column presence alone.
+    try:
+        from models.country_rate_boards import (
+            available_country_boards, build_global_country_board_overview,
+        )
+        _cb_ready = available_country_boards(ctx.df)
+        _cb_overview = build_global_country_board_overview(ctx.df, horizon=20)
+        st.markdown(
+            "<div style='margin:0.8rem 0 0.4rem;font-size:11px;color:#888;"
+            "letter-spacing:0.1em;text-transform:uppercase;'>"
+            "Country Rate Boards — aligned input readiness</div>",
+            unsafe_allow_html=True,
+        )
+        _cb_rows = []
+        for _country, _info in _cb_ready.items():
+            _cb_rows.append({
+                "Country": _info.get("label", _country),
+                "Status": _info.get("status", "Missing data"),
+                "Aligned observations": _info.get("aligned_observations", 0),
+                "First common date": _info.get("first_date") or "—",
+                "Latest common date": _info.get("model_date") or "—",
+                "Missing tenors": ", ".join(_info.get("missing_tenors", [])) or "—",
+            })
+        st.dataframe(
+            pd.DataFrame(_cb_rows).style.map(_status_color, subset=["Status"]),
+            hide_index=True, use_container_width=True,
+        )
+        if not _cb_overview.empty:
+            st.caption(
+                "Seven-country comparison common date: "
+                f"{_cb_overview['model_date'].iloc[0]} · "
+                f"common observations: {_cb_overview['aligned_observations'].iloc[0]}. "
+                "No forward-fill is used in country-board calculations."
+            )
+    except Exception as exc:
+        st.warning(
+            "Country Rate Boards readiness is unavailable because the audit failed. "
+            f"({type(exc).__name__}: {str(exc)[:120]})"
+        )
+
     # ==================================================================
     # 2c. MODEL DATA DEPENDENCY MAP
     # ==================================================================
@@ -277,6 +319,7 @@ def render(ctx: PageContext) -> None:
     from models.rate_decomposition import US_NOMINAL, US_BREAKEVEN
     dep_req_decomp = list(US_NOMINAL.values()) + list(US_BREAKEVEN.values())
     dep_req_ca = ["SPX INDEX", "USGG10YR INDEX", "DXY CURNCY"]
+    dep_req_linkage = ["SPX INDEX", "USGG10YR INDEX", "DXY CURNCY", "BCOM INDEX", "LF98OAS INDEX"]
     dep_req_ficc = ["USGG10YR INDEX", "USYC2Y10 INDEX", "USGGBE10 INDEX",
                     "USGGT10Y INDEX", "MOVE INDEX", "FXJPEMCS INDEX", "JYBSS12M CURNCY"]
 
@@ -303,6 +346,68 @@ def render(ctx: PageContext) -> None:
         )
     except Exception as exc:
         special_dependencies["Sector rotation & breadth"] = (
+            "Missing data", f"Audit failed: {type(exc).__name__}", "—"
+        )
+
+    try:
+        from models.country_rate_boards import (
+            available_country_boards as _available_country_boards,
+            build_global_country_board_overview as _build_country_board_overview,
+        )
+        _cb_dep = _available_country_boards(ctx.df)
+        _cb_statuses = [v.get("status", "Missing data") for v in _cb_dep.values()]
+        _cb_status = (
+            "Ready" if _cb_statuses and all(v == "Ready" for v in _cb_statuses)
+            else "Partial" if any(v in {"Ready", "Partial"} for v in _cb_statuses)
+            else "Missing data"
+        )
+        _cb_missing = sorted({
+            f"{country}:{tenor}"
+            for country, info in _cb_dep.items()
+            for tenor in info.get("missing_tenors", [])
+        })
+        _cb_overview = _build_country_board_overview(ctx.df, horizon=20)
+        _cb_date = (
+            str(_cb_overview["model_date"].iloc[0])
+            if not _cb_overview.empty else "—"
+        )
+        special_dependencies["Country rate boards"] = (
+            _cb_status, ", ".join(_cb_missing) or "—", _cb_date,
+        )
+    except Exception as exc:
+        special_dependencies["Country rate boards"] = (
+            "Missing data", f"Audit failed: {type(exc).__name__}", "—"
+        )
+
+    try:
+        from data.equity_earnings_loader import load_equity_earnings_data
+        from models.earnings_valuation import assess_earnings_readiness
+        _earnings_dep = assess_earnings_readiness(load_equity_earnings_data(), code="ES1")
+        special_dependencies["SPX FY1 earnings & valuation"] = (
+            _earnings_dep.get("status", "Missing data"),
+            ", ".join(_earnings_dep.get("missing", [])) or "—",
+            str(_earnings_dep.get("model_date") or "—"),
+        )
+    except Exception as exc:
+        special_dependencies["SPX FY1 earnings & valuation"] = (
+            "Missing data", f"Audit failed: {type(exc).__name__}", "—"
+        )
+
+    try:
+        from data.external_loaders import load_ficc as _load_linkage_ficc
+        from models.market_linkage import assess_market_linkage_readiness as _assess_linkage
+        _linkage_ficc = _load_linkage_ficc()
+        _linkage_dep = _assess_linkage(_linkage_ficc, corr_window=63) if _linkage_ficc is not None else {
+            "status": "Missing data", "missing": ["FICC input frame"],
+            "common_latest_date": None,
+        }
+        special_dependencies["Market linkage & correlations"] = (
+            _linkage_dep.get("status", "Missing data"),
+            ", ".join(_linkage_dep.get("missing", [])) or "—",
+            str(_linkage_dep.get("common_latest_date") or "—"),
+        )
+    except Exception as exc:
+        special_dependencies["Market linkage & correlations"] = (
             "Missing data", f"Audit failed: {type(exc).__name__}", "—"
         )
 
@@ -336,9 +441,12 @@ def render(ctx: PageContext) -> None:
         ("02b Rates PCA", "Within-rates PCA", dep_req_ficc, True),
         ("03 Curve Regimes", "7-regime classifier", dep_req_decomp, False),
         ("04 Global Rates", "Cross-country curves", None, False),
+        ("04b Country Boards", "Country rate boards", None, False),
         ("05 Cross-Asset", "8-regime directional", dep_req_ca, False),
-        ("05b Linkage", "PCA 4-regime", dep_req_ca, True),
+        ("05b Linkage", "Market linkage & correlations", dep_req_linkage, False),
+        ("05c Linkage PCA", "PCA 4-regime", dep_req_ca, True),
         ("06 Sectors", "Sector rotation & breadth", None, False),
+        ("06c Earnings", "SPX FY1 earnings & valuation", None, False),
         ("07 FX Rates", "FX rate-differential monitor", None, False),
         ("07b FX PCA", "FX complex PCA", dep_req_ficc, True),
         ("A1 Scoring", "Macro + market scoring", None, False),
@@ -548,6 +656,95 @@ def render(ctx: PageContext) -> None:
             f"({type(exc).__name__}: {str(exc)[:120]})"
         )
 
+    # ── Five-asset Market Linkage audit ──
+    try:
+        from data.external_loaders import load_ficc as _load_ml_ficc
+        from models.market_linkage import (
+            MARKET_LINKAGE_CONFIG as _ML_CONFIG,
+            build_market_linkage_snapshot as _build_ml_snapshot,
+        )
+        _ml_ficc = _load_ml_ficc()
+        _ml_snap = _build_ml_snapshot(_ml_ficc, corr_window=20, long_window=63) if _ml_ficc is not None else {}
+        st.markdown(
+            "<div style='margin:1rem 0 0.4rem;font-size:11px;color:#888;"
+            "letter-spacing:0.1em;text-transform:uppercase;'>"
+            "Market Linkage &amp; Correlations — source and alignment audit</div>",
+            unsafe_allow_html=True,
+        )
+        _ml_rows = []
+        _missing_ml = set(_ml_snap.get("missing", []))
+        for _asset, _meta in _ML_CONFIG.items():
+            _ml_rows.append({
+                "Asset": _meta["label"],
+                "Bloomberg ticker": _meta["ticker"],
+                "Transformation": _meta["transform"],
+                "Present": "No" if _asset in _missing_ml else "Yes",
+            })
+        st.dataframe(pd.DataFrame(_ml_rows), hide_index=True, use_container_width=True)
+        st.caption(
+            f"Status: {_ml_snap.get('status', 'Missing data')} · "
+            f"Common observations: {_ml_snap.get('aligned_observations', 0)} · "
+            f"Common first date: {_ml_snap.get('common_first_date', '—')} · "
+            f"Common latest date: {_ml_snap.get('common_latest_date', '—')}. "
+            "All five level series are intersected before daily transformations. "
+            "Correlation is descriptive and not causal attribution."
+        )
+    except Exception as exc:
+        st.warning(
+            "Market Linkage readiness is unavailable because the audit failed. "
+            f"({type(exc).__name__}: {str(exc)[:120]})"
+        )
+
+    # ── Policy Futures Generic Strip audit ──
+    try:
+        from config.tickers import POLICY_FUTURES_CONFIG as _PF_CONFIG
+        from models.policy_futures_generic import (
+            available_policy_futures_families as _available_pf,
+            build_policy_futures_family_snapshot as _build_pf_snapshot,
+        )
+        _pf_ready = _available_pf(ctx.df)
+        _pf_rows = []
+        for _family, _cfg in _PF_CONFIG.items():
+            _r = _pf_ready[_family]
+            _snap = _build_pf_snapshot(ctx.df, _family)
+            _pf_rows.append({
+                "Family": _family,
+                "Contract": _cfg["display_name"],
+                "Generic tickers": " / ".join(_cfg["generic_tickers"].values()),
+                "Reference rate": _cfg["reference_rate_label"],
+                "Source documentation": _cfg["source_documentation"],
+                "Common observations": _r.get("aligned_observations", 0),
+                "First common date": str(_r.get("common_first_date") or "—"),
+                "Latest common date": str(_r.get("model_date") or "—"),
+                "Rank 3 − Rank 1 (bp)": _snap.get("front_to_third_bp"),
+                "Status": _r.get("status", "Missing data"),
+            })
+        st.markdown(
+            "<div style='margin:1rem 0 0.4rem;font-size:11px;color:#888;"
+            "letter-spacing:0.1em;text-transform:uppercase;'>"
+            "Policy Futures Generic Strip — source and alignment audit</div>",
+            unsafe_allow_html=True,
+        )
+        st.dataframe(
+            pd.DataFrame(_pf_rows).style.format({
+                "Rank 3 − Rank 1 (bp)": "{:+.1f}",
+            }, na_rep="—").map(_status_color, subset=["Status"]),
+            hide_index=True,
+            use_container_width=True,
+        )
+        st.caption(
+            "FF = 30-Day Federal Funds futures; SER = 1-Month SOFR futures; "
+            "SFR = 3-Month SOFR futures. Prices are converted to implied "
+            "reference rates using 100 − price. Generic ranks roll and are not "
+            "fixed expiries, so this audit does not validate a meeting-by-meeting "
+            "FOMC path or probabilities."
+        )
+    except Exception as exc:
+        st.warning(
+            "Policy-futures readiness is unavailable because the audit failed. "
+            f"({type(exc).__name__}: {str(exc)[:120]})"
+        )
+
     # ==================================================================
     # 2e. ANALYTICAL MODEL READINESS
     # ==================================================================
@@ -558,6 +755,23 @@ def render(ctx: PageContext) -> None:
         unsafe_allow_html=True,
     )
     live_models = [
+        {"Model": "Policy & Short Rates",
+         "Required": "Confirmed SOFR / EFFR / IORB / TGCR / BGCR / GCF / TPR inputs",
+         "Status": "Live",
+         "Notes": "Live spot-rate, spread and funding-pressure monitor. The generic "
+                  "policy-futures strip is a separate live module; the meeting-by-meeting "
+                  "FOMC path remains unimplemented."},
+        {"Model": "Policy Futures Generic Strip",
+         "Required": "FF1–FF3 + SER1–SER3 + SFR1–SFR3 on common family calendars",
+         "Status": "Live",
+         "Notes": "Continuous-contract implied-rate monitor using 100 − price. Generic "
+                  "ranks are not fixed expiries; no meeting path or probability is inferred."},
+        {"Model": "Market Linkage & Correlations",
+         "Required": "SPX + UST 10Y + DXY + BCOM + US HY OAS (fully aligned)",
+         "Status": "Live",
+         "Notes": "Ten pairwise rolling correlations, current matrix and mean absolute "
+                  "correlation. Descriptive co-movement only; not causal attribution, "
+                  "fair value or forecast."},
         {"Model": "Sector Rotation & Breadth Monitor",
          "Required": "11 S&P 500 sector indices + SPX + SPX_Sector_Weights (all available)",
          "Status": "Live",
@@ -565,6 +779,19 @@ def render(ctx: PageContext) -> None:
                   "performance, breadth, dispersion, rotation quadrants, weight "
                   "context. NOT causal attribution or official SPX return "
                   "attribution. ETF proxies excluded from production."},
+        {"Model": "Sector Contribution Estimate",
+         "Required": "11 sector indices + SPX + periodic start weights (all available)",
+         "Status": "Live",
+         "Notes": "Start-period periodic weight × sector simple return with an "
+                  "explicit residual versus actual SPX. Approximation only; not "
+                  "official index-provider attribution."},
+        {"Model": "SPX FY1 Earnings & Valuation",
+         "Required": "SPX Index + BEST_EPS with BEST_FPERIOD_OVERRIDE=1FY",
+         "Status": "Live",
+         "Notes": "Weekly exact-date monitor. Implied FY1 P/E and exact log identity "
+                  "decomposition into FY1 EPS growth and multiple change. A separate "
+                  "26-week OLS diagnostic is descriptive and not the reference pack's "
+                  "3-year daily model."},
         {"Model": "FX Rate Differential Monitor",
          "Required": "FX spot + 2Y/10Y nominal + 10Y real differentials (all available)",
          "Status": "Live",
@@ -583,14 +810,10 @@ def render(ctx: PageContext) -> None:
     )
     future_models = [
         {"Model": "FOMC implied policy path",
-         "Required": "Meeting-dated futures, FOMC calendar, contract conventions",
+         "Required": "Actual contract codes/months, FOMC calendar and meeting-path methodology",
          "Status": "Not implemented",
-         "Notes": "Generic FF/SFR/SER futures prices available in Sheet1. "
-                  "Expiry metadata, conventions, and calendar not yet documented."},
-        {"Model": "SOFR futures strip",
-         "Required": "SOFR futures by expiry, contract month mapping, price-to-rate convention",
-         "Status": "Not implemented",
-         "Notes": "SFR1/SFR2/SFR3 generic prices available. Contract metadata missing."},
+         "Notes": "The generic strip is Live, but continuous ranks cannot identify fixed "
+                  "expiry months or meeting probabilities."},
         {"Model": "FX regression attribution",
          "Required": "Regression methodology, coefficient stability tests, residual diagnostics",
          "Status": "Not implemented",
@@ -599,20 +822,16 @@ def render(ctx: PageContext) -> None:
          "Required": "Equilibrium framework, forecasting methodology",
          "Status": "Not implemented",
          "Notes": "do_not_fake=True."},
-        {"Model": "SPX sector contribution estimate",
-         "Required": "Start-period weight × sector return with residual reconciliation",
-         "Status": "Not implemented",
-         "Notes": "Requires validated approximation methodology and reconciliation test. "
-                  "Sector price and weight data are available. do_not_fake=True."},
         {"Model": "Official SPX sector attribution",
          "Required": "Daily-weight methodology, divisor-consistent index treatment, or "
                      "official contribution data",
          "Status": "Not implemented",
          "Notes": "Requires additional methodology or data source. do_not_fake=True."},
-        {"Model": "Earnings vs valuation",
-         "Required": "SPX forward EPS + trailing EPS or PE",
+        {"Model": "Forward estimate vs realized EPS",
+         "Required": "Confirmed realized/trailing EPS series with comparable period definition",
          "Status": "Missing data",
-         "Notes": "EPS/PE field presence and meanings not confirmed in workbook."},
+         "Notes": "FY1 BEST_EPS is confirmed and live. Realized/trailing EPS is not supplied, "
+                  "so forecast-versus-realized analysis remains blocked."},
     ]
     st.dataframe(pd.DataFrame(future_models).style.map(_status_color, subset=["Status"]),
                  hide_index=True, use_container_width=True)
@@ -759,6 +978,105 @@ def render(ctx: PageContext) -> None:
     except Exception as exc:
         st.warning(
             f"Sector readiness table is unavailable because the model audit failed. "
+            f"({type(exc).__name__}: {str(exc)[:120]})"
+        )
+
+    # ── Sector Contribution Estimate audit ──
+    try:
+        from models.sector_contribution import build_sector_contribution_summary
+        from data.external_loaders import load_spx_sector_weights as _load_sc_weights
+        _sc_summary = build_sector_contribution_summary(
+            ctx.df, _load_sc_weights(), horizons=(1, 5, 20, 63)
+        )
+        st.markdown(
+            "<div style='margin:1rem 0 0.4rem;font-size:11px;color:#888;"
+            "letter-spacing:0.1em;text-transform:uppercase;'>"
+            "Sector Contribution Estimate — reconciliation audit</div>",
+            unsafe_allow_html=True,
+        )
+        if not _sc_summary.empty:
+            _sc_display = _sc_summary.rename(columns={
+                "horizon": "Window",
+                "start_date": "Start date",
+                "end_date": "End date",
+                "weight_date": "Weight date",
+                "weight_age_days": "Weight age (days)",
+                "weight_sum_pct": "Weight sum (%)",
+                "actual_spx_return_pct": "Actual SPX return (%)",
+                "estimated_spx_return_pct": "Estimated return (%)",
+                "residual_pp": "Residual (pp)",
+                "status": "Status",
+            })
+            _sc_display["Window"] = _sc_display["Window"].map(lambda v: f"{int(v)}D")
+            st.dataframe(
+                _sc_display.style.format({
+                    "Weight sum (%)": "{:.2f}",
+                    "Actual SPX return (%)": "{:+.2f}",
+                    "Estimated return (%)": "{:+.2f}",
+                    "Residual (pp)": "{:+.3f}",
+                }, na_rep="—").map(_status_color, subset=["Status"]),
+                hide_index=True,
+                use_container_width=True,
+            )
+            st.caption(
+                "Estimate = latest periodic weight available on or before the "
+                "window start date × sector simple return. Weights are not "
+                "normalised. Residual = actual SPX return − estimated return. "
+                "This is not official attribution."
+            )
+        else:
+            st.warning("Sector contribution reconciliation audit is unavailable.")
+    except Exception as exc:
+        st.warning(
+            f"Sector contribution audit is unavailable because the model audit failed. "
+            f"({type(exc).__name__}: {str(exc)[:120]})"
+        )
+
+    # ── SPX FY1 Earnings & Valuation audit ──
+    try:
+        from data.equity_earnings_loader import load_equity_earnings_data
+        from models.earnings_valuation import (
+            EPS_FIELD_METADATA, build_earnings_valuation_snapshot,
+            build_global_earnings_overview,
+        )
+        _earn_data = load_equity_earnings_data()
+        _earn_snap = build_earnings_valuation_snapshot(_earn_data)
+        _earn_global = build_global_earnings_overview(_earn_data, horizon=13)
+        st.markdown(
+            "<div style='margin:1rem 0 0.4rem;font-size:11px;color:#888;"
+            "letter-spacing:0.1em;text-transform:uppercase;'>"
+            "SPX FY1 Earnings &amp; Valuation — source and alignment audit</div>",
+            unsafe_allow_html=True,
+        )
+        _earn_rows = pd.DataFrame([{
+            "Model": "SPX FY1 Earnings & Valuation",
+            "EPS field": EPS_FIELD_METADATA["field"],
+            "Forecast override": EPS_FIELD_METADATA["forecast_period_override"],
+            "EPS frequency": EPS_FIELD_METADATA["frequency"],
+            "Common observations": _earn_snap.get("aligned_observations", 0),
+            "First common date": str(_earn_snap.get("first_date") or "—"),
+            "Latest common date": str(_earn_snap.get("model_date") or "—"),
+            "Regression status": _earn_snap.get("regression_status", "—"),
+            "Status": _earn_snap.get("status", "Missing data"),
+        }])
+        st.dataframe(
+            _earn_rows.style.map(_status_color, subset=["Status"]),
+            hide_index=True, use_container_width=True,
+        )
+        _ready_count = int((_earn_global["status"] == "Ready").sum()) if not _earn_global.empty else 0
+        _missing_names = (
+            _earn_global.loc[_earn_global["status"] != "Ready", "index"].tolist()
+            if not _earn_global.empty else []
+        )
+        st.caption(
+            f"Global exact-date overview: {_ready_count}/17 indices Ready. "
+            f"Non-Ready: {', '.join(_missing_names) or 'none'}. "
+            "No EPS or price values are forward-filled. The implied FY1 P/E is calculated "
+            "as index level ÷ FY1 EPS; it is not a Bloomberg-supplied P/E field."
+        )
+    except Exception as exc:
+        st.warning(
+            "SPX earnings/valuation audit is unavailable because the audit failed. "
             f"({type(exc).__name__}: {str(exc)[:120]})"
         )
 

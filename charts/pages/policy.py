@@ -193,9 +193,10 @@ def render(ctx: PageContext) -> None:
 
     # G. Scope warnings
     render_missing_data_warning(
-        message="<b>FOMC path and SOFR strip</b> are not live. Generic FF / SFR / SER "
-                "futures prices exist in DATA.xlsx, but expiry metadata, contract "
-                "conventions, meeting calendar, and methodology are not yet implemented.",
+        message="<b>Meeting-by-meeting FOMC path</b> is not live. The separate "
+                "01b Policy Futures Generic Strip uses FF / SER / SFR continuous "
+                "rank series, but generic ranks do not identify fixed expiries or "
+                "meeting probabilities.",
     )
 
     render_model_note("Methodology",

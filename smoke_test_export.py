@@ -37,12 +37,23 @@ print(f"   lightweight: {len(html_str):,} chars in {elapsed_light:.2f}s ✓")
 # 3. Full inline Plotly export (opt-in via env var)
 if os.environ.get("FULL_EXPORT_SMOKE") == "1":
     print("\n3. FULL inline Plotly HTML export ...")
+    # Run the heavy inline build in a fresh process. Reusing the process after
+    # lightweight mode can leave Plotly/module-level render state in a slow or
+    # non-deterministic state in some headless environments.
     t_full = time.time()
-    html_full, fn_full = build_html(include_plotlyjs=True, plotly_mode="inline")
+    full_code = (
+        "from scripts.export_research_pack_html import build_html; "
+        "h, f = build_html(include_plotlyjs=True, plotly_mode='inline'); "
+        "assert len(h) > 1000000 and 'Plotly.newPlot' in h; "
+        "print(len(h))"
+    )
+    full_result = subprocess.run(
+        ["python", "-c", full_code], capture_output=True, text=True, timeout=120
+    )
+    assert full_result.returncode == 0, full_result.stderr[:500]
+    full_len = int(full_result.stdout.strip().splitlines()[-1])
     elapsed_full = time.time() - t_full
-    assert len(html_full) > 1_000_000
-    assert "Plotly.newPlot" in html_full
-    print(f"   full: {len(html_full):,} chars in {elapsed_full:.2f}s ✓")
+    print(f"   full: {full_len:,} chars in {elapsed_full:.2f}s ✓")
 else:
     print("\n3. FULL inline Plotly test SKIPPED (set FULL_EXPORT_SMOKE=1 to enable)")
 

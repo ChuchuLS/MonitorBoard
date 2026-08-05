@@ -35,7 +35,7 @@ except Exception:
 print("   all imports OK")
 
 # Registry / theme sanity — Phase 1 shell must be internally consistent.
-assert len(PAGES) == 14, f"expected 14 registered pages, got {len(PAGES)}"
+assert len(PAGES) == 19, f"expected 19 registered pages, got {len(PAGES)}"
 if _HAS_STREAMLIT_PAGES:
     for p in PAGES:
         for k in ("id", "label", "title", "section", "color_key", "status",
@@ -213,9 +213,11 @@ print(f"    compute_index is deterministic and unchanged "
 # All page modules import cleanly
 if _HAS_STREAMLIT_PAGES:
     from charts.pages import (contents, liquidity_overview, policy, decomposition,
-                              rates_pca, regimes, global_rates, cross_asset,
-                              market_linkage, fx, data_quality, scoring)
-    print("    all 12 page modules import cleanly (contents + 11 sections)")
+                              rates_pca, regimes, global_rates, country_boards,
+                              cross_asset, market_linkage, sector_rotation,
+                              sector_contribution, earnings_valuation, fx_rate_diff, fx, data_quality,
+                              scoring, model_roadmap)
+    print("    all registered page modules import cleanly")
 else:
     print("    (Streamlit page imports skipped — not available)")
 
@@ -441,12 +443,16 @@ print("    FX Rate Differential Monitor: Live (four Ready pairs expected)")
 print("    FX regression attribution: Not implemented")
 print("    FX fair-value / forecast: Not implemented")
 
-# FOMC / SOFR futures inputs
-fomc_cols = ["FF1 COMB COMDTY"]
+# Policy-futures status separation
+pf_cols = [
+    "FF1 COMB COMDTY", "FF2 COMB COMDTY", "FF3 COMB COMDTY",
+    "SER1 COMB COMDTY", "SER2 COMB COMDTY", "SER3 COMB COMDTY",
+    "SFR1 COMB COMDTY", "SFR2 COMB COMDTY", "SFR3 COMB COMDTY",
+]
 cols_upper = {c.upper().strip() for c in df.columns}
-fomc_missing = [c for c in fomc_cols if c.upper().strip() not in cols_upper]
-fomc_status = "Missing data" if fomc_missing else "Data available (model not implemented)"
-print(f"    FOMC path futures: {fomc_status}")
+pf_missing = [c for c in pf_cols if c.upper().strip() not in cols_upper]
+print(f"    Policy Futures Generic Strip: {'Ready inputs' if not pf_missing else 'Missing data'}")
+print("    Meeting-by-meeting FOMC path: Not implemented")
 
 # Direct call to build_snapshot (no subprocess) for routine testing
 from scripts.export_research_pack_snapshot import build_snapshot
@@ -725,7 +731,7 @@ from models.qlist import build_qlist, QAnswer
 from index.composite import compute_index as _ci_q
 r_q = _ci_q(df)
 qlist = build_qlist(df, r_q, r_q.index)
-assert len(qlist) == 10, f"expected 10 Q-list answers, got {len(qlist)}"
+assert len(qlist) == 14, f"expected 14 Q-list answers, got {len(qlist)}"
 for qa in qlist:
     assert isinstance(qa, QAnswer)
     assert qa.question, "question must not be empty"
@@ -941,9 +947,9 @@ for fp in _g7d.glob("charts/**/*.py", recursive=True) + \
         assert bad not in txt, f"Stale repo label '{bad}' in {fp}"
 print("    D. No 'Fed reserves/repo' labels anywhere ✓")
 
-# E. Q-list says nine questions
+# E. Q-list question count
 qlist_src = open("models/qlist.py").read()
-assert "10 standard" in qlist_src or "ten" in qlist_src.lower() or "9 standard" in qlist_src
+assert "14 standard" in qlist_src or "fourteen" in qlist_src.lower()
 print("    E. Q-list question-count documentation is current ✓")
 
 # Phase 7.1E: Registry/documentation/test-runner cleanup
@@ -1034,11 +1040,17 @@ for m in _rm_e:
     if m["module_id"] in ("fx_eurusd", "fx_usdjpy", "fx_gbpusd", "fx_audusd"):
         assert m.get("app_section") == "07", f"{m['module_id']} app_section must be 07"
         assert "FX" in (m.get("reference_section") or ""), f"{m['module_id']} reference_section must mention FX"
-    if m["module_id"] in ("spx_sector", "earnings_val", "spx_sector_contribution"):
+    if m["module_id"] == "spx_sector":
         assert m.get("app_section") is None or m.get("app_section") == "None", \
-            f"{m['module_id']} app_section must be None"
+            "spx_sector app_section must be None"
+        assert "Equities" in (m.get("reference_section") or "")
+    if m["module_id"] == "earnings_val":
+        assert m.get("app_section") == "06c", "earnings_val app_section must be 06c"
         assert "Equities" in (m.get("reference_section") or "") or "Earnings" in (m.get("reference_section") or "")
-print(f"    G. Roadmap: FX app_section=07/ref=07·FX, Equities app_section=None/ref=06·Equities ✓")
+    if m["module_id"] == "spx_sector_contribution":
+        assert m.get("app_section") == "06b"
+        assert "Equities" in (m.get("reference_section") or "")
+print(f"    G. Roadmap: FX=07, contribution=06b, earnings=06c, future attribution unassigned ✓")
 
 # H. FX four-pair readiness after exact source-Date merge
 from models.fx_rate_differential import available_fx_pairs as _afx_e
@@ -1332,6 +1344,596 @@ q_counts_s = {}
 for p in snap_s["per_sector"]:
     q_counts_s[p["quadrant"]] = q_counts_s.get(p["quadrant"], 0) + 1
 print(f"    Quadrant counts: {q_counts_s}")
+
+# Phase 8.2: Sector Contribution Estimate
+print("30. Phase 8.2 Sector Contribution Estimate ...")
+
+# A. Pure architecture
+sc_src = open("models/sector_contribution.py").read()
+sc_tree = _ast_s.parse(sc_src)
+for node in _ast_s.walk(sc_tree):
+    if isinstance(node, (_ast_s.Import, _ast_s.ImportFrom)):
+        mod = getattr(node, "module", None) or ""
+        for n in node.names:
+            assert "streamlit" not in mod.lower() and "streamlit" not in n.name.lower()
+print("    A. Pure contribution model: no Streamlit imports ✓")
+
+from models.sector_contribution import (
+    DEFAULT_CONTRIBUTION_HORIZONS,
+    MAX_WEIGHT_AGE_DAYS,
+    build_sector_contribution_estimate,
+    build_sector_contribution_summary,
+    build_sector_contribution_history,
+    build_sector_contribution_current_reading,
+    select_start_weight,
+)
+
+# B. Formula, common timestamps, and exact residual disclosure
+_sc_results = {}
+for _h in DEFAULT_CONTRIBUTION_HORIZONS:
+    _r = build_sector_contribution_estimate(df, _weights_s, horizon=_h)
+    _sc_results[_h] = _r
+    assert _r["status"] == "Ready", (_h, _r)
+    assert _r["weight_date"] <= _r["start_date"] <= _r["end_date"]
+    assert _r["weight_age_days"] <= MAX_WEIGHT_AGE_DAYS
+    assert _r["weight_normalised"] is False
+    assert _r["official_attribution"] is False
+    assert len(_r["per_sector"]) == 11
+    assert abs(_r["actual_spx_return_pct"] - (
+        _r["estimated_spx_return_pct"] + _r["residual_pp"]
+    )) < 1e-12
+    _aligned = build_sector_relative_frame(df)
+    _start = _aligned.index[-_h - 1]
+    _end = _aligned.index[-1]
+    assert _r["start_date"] == _start.date() and _r["end_date"] == _end.date()
+    for _row in _r["per_sector"]:
+        _expected = _row["start_weight_pct"] / 100.0 * _row["sector_return_pct"]
+        assert abs(_row["estimated_contribution_pp"] - _expected) < 1e-12
+print("    B. Start-weight × simple-return formula and residual reconciliation ✓")
+
+# C. No normalisation; exact source weight is used
+_r20 = _sc_results[20]
+_wsel = select_start_weight(_weights_s, _r20["start_date"])
+assert abs(_wsel.weight_sum_pct - _r20["weight_sum_pct"]) < 1e-12
+assert abs(_r20["weight_sum_pct"] - 100.0) <= 0.15
+print(f"    C. 20D weight date={_r20['weight_date']}, sum={_r20['weight_sum_pct']:.2f}%, not normalised ✓")
+
+# D. Missing weight and missing sector remain Partial / NaN, never zero
+_w_missing = _weights_s.drop(columns=[next(iter(SPX_SECTOR_CONFIG.values()))["weight_column"]])
+_r_w_missing = build_sector_contribution_estimate(df, _w_missing, horizon=20)
+assert _r_w_missing["status"] == "Partial"
+assert pd.isna(_r_w_missing["estimated_spx_return_pct"])
+assert pd.isna(_r_w_missing["residual_pp"])
+_r_p_missing = build_sector_contribution_estimate(_df_test, _weights_s, horizon=20)
+assert _r_p_missing["status"] == "Partial"
+assert pd.isna(_r_p_missing["estimated_spx_return_pct"])
+_missing_it = next(row for row in _r_p_missing["per_sector"] if row["ticker"] == "S5INFT INDEX")
+assert pd.isna(_missing_it["estimated_contribution_pp"])
+print("    D. Missing price/weight: Partial, estimate withheld, no zero substitution ✓")
+
+# E. Future weight cannot be used for a past start date
+_w_future = _weights_s.copy()
+_future_row = _w_future.iloc[-1].copy()
+_w_future.loc[pd.Timestamp("2099-12-31")] = _future_row
+_r_future = build_sector_contribution_estimate(df, _w_future, horizon=20)
+assert _r_future["weight_date"] == _r20["weight_date"]
+assert _r_future["weight_date"] <= _r_future["start_date"]
+print("    E. Future weight rows are excluded by start-date selection ✓")
+
+# F. Rolling history and summary
+_sc_summary = build_sector_contribution_summary(df, _weights_s)
+assert list(_sc_summary["horizon"]) == list(DEFAULT_CONTRIBUTION_HORIZONS)
+assert (_sc_summary["status"] == "Ready").all()
+_sc_hist = build_sector_contribution_history(df, _weights_s, horizon=20)
+assert not _sc_hist.empty
+assert np.allclose(
+    _sc_hist["actual_spx_return_pct"],
+    _sc_hist["estimated_spx_return_pct"] + _sc_hist["residual_pp"],
+    atol=1e-12, rtol=0,
+)
+assert (_sc_hist["weight_date"] <= _sc_hist["start_date"]).all()
+print(f"    F. Rolling 20D history: {len(_sc_hist)} estimates, every residual reconciles ✓")
+
+# G. Page architecture and wording
+_sc_page_src = open("charts/pages/sector_contribution.py").read()
+assert "build_sector_contribution_current_reading" in _sc_page_src
+assert "official attribution" in _sc_page_src.lower()
+assert "not official" in _sc_page_src.lower()
+assert "weights are not normalised" in _sc_page_src.lower() or "not normalised" in _sc_page_src.lower()
+for _bad in ("investors bought", "flows into", "will outperform", "official contribution data shown"):
+    assert _bad not in _sc_page_src.lower()
+print("    G. Page uses pure model and explicit approximation wording ✓")
+
+# H. Registry, roadmap, Data Quality, README, snapshot
+_sc_page = next((p for p in _P_s if p["id"] == "sector_contribution"), None)
+assert _sc_page and _sc_page["section"] == "06b" and _sc_page["status"] == "live"
+_sc_rm = next((r for r in _rm_s if r["module_id"] == "spx_sector_contribution"), None)
+assert _sc_rm and _sc_rm["current_status"] == "Live"
+assert _sc_rm["implemented_in"] == "models/sector_contribution.py"
+assert _sc_rm["app_section"] == "06b"
+assert _ofa["current_status"] == "Not Started"
+assert "Sector Contribution Estimate" in dq_s and "reconciliation audit" in dq_s
+assert "| 06b | Sector Contribution Estimate" in readme_s
+assert "SPX sector contribution estimate (data available" not in readme_s
+_snapshot_sc = build_snapshot()
+assert "sector_contribution_estimate" in _snapshot_sc
+assert _snapshot_sc["sector_contribution_estimate"]["official_attribution"] is False
+print("    H. Registry/DQ/roadmap/README/snapshot status consistent ✓")
+
+# I. Q-list question 11
+_qlist_sc = build_qlist(df, r_q, r_q.index)
+assert len(_qlist_sc) == 14
+_sc_q = next(q for q in _qlist_sc if "estimated SPX return" in q.question)
+assert _sc_q.data_status == "real_data"
+assert "residual" in _sc_q.answer.lower() and "weight" in _sc_q.answer.lower()
+assert "official" in " ".join(_sc_q.details).lower()
+print("    I. Q11 uses real estimate, residual, weight date, and non-official disclosure ✓")
+
+print(f"    20D actual SPX: {_r20['actual_spx_return_pct']:+.3f}%")
+print(f"    20D estimated:  {_r20['estimated_spx_return_pct']:+.3f}%")
+print(f"    20D residual:   {_r20['residual_pp']:+.3f}pp")
+print("    Top positive: " + "; ".join(
+    f"{row['display_name']} {row['estimated_contribution_pp']:+.3f}pp"
+    for row in build_sector_contribution_current_reading(df, _weights_s, 20)["top_positive"]
+))
+print("    Top negative: " + "; ".join(
+    f"{row['display_name']} {row['estimated_contribution_pp']:+.3f}pp"
+    for row in build_sector_contribution_current_reading(df, _weights_s, 20)["top_negative"]
+))
+
+# Phase 9.1: Country Rate Boards
+print("31. Phase 9.1 Country Rate Boards ...")
+import ast as _ast_cb
+_cb_src = open("models/country_rate_boards.py").read()
+_cb_tree = _ast_cb.parse(_cb_src)
+for _node in _ast_cb.walk(_cb_tree):
+    if isinstance(_node, (_ast_cb.Import, _ast_cb.ImportFrom)):
+        _mod = getattr(_node, "module", None) or ""
+        for _name in _node.names:
+            assert "streamlit" not in _mod.lower() and "streamlit" not in _name.name.lower()
+assert ".ffill(" not in _cb_src, "country boards must not forward-fill"
+print("    A. Pure model: no Streamlit and no forward-fill ✓")
+
+from models.country_rate_boards import (
+    BOARD_HORIZONS, BOARD_SLOPE_PAIRS, available_country_boards,
+    build_country_board, build_country_curve_frame,
+    build_country_board_current_reading, build_global_country_board_overview,
+)
+from config.tickers import REGIME_COUNTRIES as _CB_COUNTRIES, TICKERS as _CB_TICKERS
+
+_cb_ready = available_country_boards(df)
+assert set(_cb_ready) == set(_CB_COUNTRIES)
+assert all(info["status"] == "Ready" for info in _cb_ready.values()), _cb_ready
+assert all(info["aligned_observations"] >= 64 for info in _cb_ready.values())
+print("    B. Seven fully aligned country boards are Ready ✓")
+
+for _country in _CB_COUNTRIES:
+    _frame = build_country_curve_frame(df, _country)
+    assert list(_frame.columns) == ["2Y", "5Y", "10Y", "30Y"]
+    assert not _frame.empty and not _frame.isna().any().any()
+    _board = build_country_board(df, _country)
+    assert _board["status"] == "Ready"
+    assert _board["model_date"] == _frame.index[-1].date()
+    assert len(_board["yield_table"]) == 4
+    assert len(_board["slope_table"]) == len(BOARD_SLOPE_PAIRS)
+    _yt = _board["yield_table"].set_index("tenor")
+    for _h in BOARD_HORIZONS:
+        if len(_frame) > _h:
+            _expected = 100.0 * (_frame["10Y"].iloc[-1] - _frame["10Y"].iloc[-_h - 1])
+            assert abs(_yt.at["10Y", f"change_{_h}d_bp"] - _expected) < 1e-12
+    _read = build_country_board_current_reading(df, _country, horizon=20)
+    assert _read["status"] == "Ready" and _read["model_date"] == _board["model_date"]
+print("    C. Levels, changes and slopes use each country's common four-tenor calendar ✓")
+
+_cb_overview = build_global_country_board_overview(df, horizon=20)
+assert len(_cb_overview) == len(_CB_COUNTRIES)
+assert _cb_overview["model_date"].nunique() == 1
+assert _cb_overview["aligned_observations"].nunique() == 1
+assert (_cb_overview["status"] == "Ready").all()
+_cb_common_date = _cb_overview["model_date"].iloc[0]
+print(f"    D. Seven-country overview common date={_cb_common_date}, "
+      f"observations={int(_cb_overview['aligned_observations'].iloc[0])} ✓")
+
+# Missing-tenor regression: one country becomes Partial without a proxy or zero.
+_cb_missing_df = df.drop(columns=[_CB_TICKERS["DE_30Y"]])
+_cb_missing = available_country_boards(_cb_missing_df)["DE"]
+assert _cb_missing["status"] == "Partial"
+assert "30Y" in _cb_missing["missing_tenors"]
+assert build_country_curve_frame(_cb_missing_df, "DE").empty
+assert build_country_board(_cb_missing_df, "DE")["status"] == "Partial"
+print("    E. Missing tenor -> Partial; no substitution or zero fill ✓")
+
+_cb_page_src = open("charts/pages/country_boards.py").read()
+assert "build_country_board" in _cb_page_src
+assert "build_global_country_board_overview" in _cb_page_src
+assert ".ffill(" not in _cb_page_src
+for _bad in ("will outperform", "policy recommendation", "trade recommendation", "caused by"):
+    assert _bad not in _cb_page_src.lower()
+print("    F. Page renders pure model output and makes no forecast/causal claim ✓")
+
+from config.model_roadmap import ROADMAP as _CB_ROADMAP
+_cb_page = next(p for p in PAGES if p["id"] == "country_boards")
+assert _cb_page["section"] == "04b" and _cb_page["status"] == "live"
+assert _cb_page["builds_on"] == "global_rates" and _cb_page["next"] == "cross_asset"
+_cb_rm = next(r for r in _CB_ROADMAP if r["module_id"] == "country_boards")
+assert _cb_rm["current_status"] == "Live"
+assert _cb_rm["implemented_in"] == "models/country_rate_boards.py"
+assert _cb_rm["app_section"] == "04b"
+_cb_readme = open("README.md").read()
+assert "| 04b | Country Rate Boards" in _cb_readme
+_cb_dq = open("charts/pages/data_quality.py").read()
+assert "Country Rate Boards — aligned input readiness" in _cb_dq
+_cb_snapshot = build_snapshot()
+assert "country_rate_boards" in _cb_snapshot
+assert len(_cb_snapshot["country_rate_boards"]["countries"]) == 7
+_cb_html_src = open("scripts/export_research_pack_html.py").read()
+assert "04b Country Rate Boards" in _cb_html_src
+print("    G. Registry, Roadmap, README, Data Quality, snapshot and HTML are consistent ✓")
+
+for _, _row in _cb_overview.iterrows():
+    print(
+        f"    {_row['country']}: 10Y={_row['yield_10y_pct']:.3f}% "
+        f"20DΔ={_row['change_20d_10y_bp']:+.1f}bp "
+        f"2s10s={_row['slope_2s10s_bp']:+.1f}bp "
+        f"20D slopeΔ={_row['change_20d_2s10s_bp']:+.1f}bp"
+    )
+
+# Phase 9.2: SPX FY1 Earnings & Valuation
+print("32. Phase 9.2 SPX FY1 Earnings & Valuation ...")
+import ast as _ast_ev
+_ev_src = open("models/earnings_valuation.py").read()
+_ev_tree = _ast_ev.parse(_ev_src)
+for _node in _ast_ev.walk(_ev_tree):
+    if isinstance(_node, (_ast_ev.Import, _ast_ev.ImportFrom)):
+        _mod = getattr(_node, "module", None) or ""
+        for _name in _node.names:
+            assert "streamlit" not in _mod.lower() and "streamlit" not in _name.name.lower()
+assert ".ffill(" not in _ev_src, "earnings model must not forward-fill"
+print("    A. Pure model: no Streamlit and no forward-fill ✓")
+
+from data.equity_earnings_loader import load_equity_earnings_data
+from models.earnings_valuation import (
+    EPS_FIELD_METADATA, build_equity_earnings_frame,
+    build_earnings_valuation_snapshot, build_global_earnings_overview,
+    calculate_horizon_decomposition, build_weekly_regression_history,
+)
+_ev_data = load_equity_earnings_data()
+assert set(_ev_data) >= {"eps", "prices", "metadata"}
+assert EPS_FIELD_METADATA["field"] == "BEST_EPS"
+assert EPS_FIELD_METADATA["forecast_period_override"] == "1FY"
+assert EPS_FIELD_METADATA["frequency"] == "weekly"
+print("    B. Confirmed field contract: BEST_EPS + 1FY + weekly ✓")
+
+_ev_frame = build_equity_earnings_frame(_ev_data, code="ES1")
+assert len(_ev_frame) >= 27
+assert list(_ev_frame.columns) == ["price", "eps_fy1", "fy1_pe"]
+assert not _ev_frame.isna().any().any()
+assert (_ev_frame > 0).all().all()
+_ev_snap = build_earnings_valuation_snapshot(_ev_data, code="ES1")
+assert _ev_snap["status"] == "Ready"
+assert _ev_snap["model_date"] == _ev_frame.index[-1].date()
+assert _ev_snap["aligned_observations"] == len(_ev_frame)
+print(f"    C. SPX common weekly observations={len(_ev_frame)}, date={_ev_snap['model_date']} ✓")
+
+_ev_dec = calculate_horizon_decomposition(_ev_frame, horizons=(1, 4, 13, 26))
+assert (_ev_dec["status"] == "Ready").all()
+assert _ev_dec["identity_residual_pct"].abs().max() < 1e-10
+for _, _row in _ev_dec.iterrows():
+    assert abs(_row["price_return_pct"] - _row["eps_growth_pct"] - _row["valuation_change_pct"]) < 1e-10
+print("    D. Exact log identity reconciles for 1W/4W/13W/26W ✓")
+
+# Missing EPS must remain missing rather than becoming zero or a proxy.
+_ev_missing = {**_ev_data, "eps": _ev_data["eps"].drop(columns=["ES1"])}
+_ev_missing_snap = build_earnings_valuation_snapshot(_ev_missing, code="ES1")
+assert _ev_missing_snap["status"] == "Missing data"
+assert "FY1 EPS" in " ".join(_ev_missing_snap["missing"])
+assert pd.isna(_ev_missing_snap.get("eps_fy1", float("nan")))
+print("    E. Missing SPX EPS -> Missing data; no zero/proxy substitution ✓")
+
+_ev_reg = build_weekly_regression_history(_ev_frame, beta_window=26, min_beta_obs=20, decomposition_horizon=4)
+assert not _ev_reg.dropna(subset=["beta", "r_squared"]).empty
+assert ((_ev_reg["r_squared"].dropna() >= 0) & (_ev_reg["r_squared"].dropna() <= 1 + 1e-12)).all()
+assert abs(
+    _ev_snap["current_price_return_pct"]
+    - _ev_snap["current_eps_growth_pct"]
+    - _ev_snap["current_valuation_change_pct"]
+) < 1e-10
+print("    F. Weekly OLS diagnostic is available and separately labelled ✓")
+
+_ev_global = build_global_earnings_overview(_ev_data, horizon=13)
+assert len(_ev_global) == 17
+assert (_ev_global["status"] == "Ready").sum() >= 15
+assert "KM1" in _ev_global.loc[_ev_global["status"] != "Ready", "code"].tolist()
+print(f"    G. Global overview: {int((_ev_global['status']=='Ready').sum())}/17 Ready; exact dates per index ✓")
+
+_ev_page = next(p for p in PAGES if p["id"] == "earnings_valuation")
+assert _ev_page["section"] == "06c" and _ev_page["status"] == "live"
+assert _ev_page["builds_on"] == "sector_contribution" and _ev_page["next"] == "fx_rate_diff"
+_ev_page_src = open("charts/pages/earnings_valuation.py").read()
+assert "build_earnings_valuation_snapshot" in _ev_page_src
+assert "BEST_FPERIOD_OVERRIDE=1FY" in _ev_page_src
+for _bad in ("fair value is", "will outperform", "caused by earnings"):
+    assert _bad not in _ev_page_src.lower()
+print("    H. Page registry and no-fabrication wording ✓")
+
+from config.model_roadmap import ROADMAP as _EV_ROADMAP
+_ev_rm = next(r for r in _EV_ROADMAP if r["module_id"] == "earnings_val")
+assert _ev_rm["current_status"] == "Live"
+assert _ev_rm["implemented_in"] == "models/earnings_valuation.py"
+_ev_realized_rm = next(r for r in _EV_ROADMAP if r["module_id"] == "forward_vs_realized_eps")
+assert _ev_realized_rm["current_status"] == "Data Missing"
+_ev_readme = open("README.md").read()
+assert "| 06c | SPX FY1 Earnings & Valuation" in _ev_readme
+_ev_dq = open("charts/pages/data_quality.py").read()
+assert "SPX FY1 Earnings &amp; Valuation — source and alignment audit" in _ev_dq
+_ev_snapshot = build_snapshot()
+assert "spx_earnings_valuation" in _ev_snapshot
+assert _ev_snapshot["spx_earnings_valuation"]["fair_value_model"] is False
+_ev_html = open("scripts/export_research_pack_html.py").read()
+assert "SPX FY1 Earnings & Valuation" in _ev_html
+print("    I. Roadmap, README, Data Quality, snapshot and HTML are consistent ✓")
+
+_ev_qlist = build_qlist(df, r_q, r_q.index)
+_ev_q = next(q for q in _ev_qlist if "FY1 earnings revisions" in q.question)
+assert _ev_q.data_status == "real_data"
+assert "P/E" in _ev_q.answer and "Model date" in _ev_q.answer
+print("    J. Q12 uses exact decomposition and model date ✓")
+
+print(f"    SPX level: {_ev_snap['price']:.2f}")
+print(f"    FY1 EPS: {_ev_snap['eps_fy1']:.4f}")
+print(f"    Implied FY1 P/E: {_ev_snap['fy1_pe']:.2f}x")
+print(f"    4W SPX return: {_ev_snap['current_price_return_pct']:+.3f}%")
+print(f"    4W FY1 EPS growth: {_ev_snap['current_eps_growth_pct']:+.3f}%")
+print(f"    4W P/E change: {_ev_snap['current_valuation_change_pct']:+.3f}%")
+print(f"    Weekly OLS beta/R²: {_ev_snap['regression_beta']:+.3f} / {_ev_snap['regression_r_squared']:.3f}")
+
+# ===========================================================================
+# Phase 9.3 — five-asset Market Linkage & Correlations
+# ===========================================================================
+print("33. Phase 9.3 Market Linkage & Correlations ...")
+from models.market_linkage import (
+    MARKET_LINKAGE_CONFIG as _ML_CONFIG,
+    ASSETS as _ML_ASSETS,
+    all_pair_keys as _ml_pair_keys,
+    assess_market_linkage_readiness as _assess_ml,
+    build_market_linkage_levels as _build_ml_levels,
+    build_market_linkage_returns as _build_ml_returns,
+    build_rolling_pairwise_correlations as _build_ml_corrs,
+    build_correlation_matrix as _build_ml_matrix,
+    build_market_linkage_snapshot as _build_ml_snapshot,
+    build_market_linkage_current_reading as _build_ml_reading,
+)
+from data.external_loaders import load_ficc as _load_ml_ficc
+
+_ml_model_src = open("models/market_linkage.py").read()
+assert "streamlit" not in _ml_model_src.lower()
+assert "ffill(" not in _ml_model_src and ".fillna(0" not in _ml_model_src
+assert len(_ML_CONFIG) == 5 and len(_ML_ASSETS) == 5
+assert len(_ml_pair_keys()) == 10
+print("    A. Pure five-asset model: no Streamlit, no fill or zero substitution ✓")
+
+_ml_ficc = _load_ml_ficc()
+assert _ml_ficc is not None
+assert all(a in _ml_ficc.columns for a in _ML_ASSETS), _ml_ficc.columns.tolist()
+_ml_levels = _build_ml_levels(_ml_ficc)
+_ml_returns = _build_ml_returns(_ml_ficc)
+assert not _ml_levels.empty and not _ml_levels.isna().any().any()
+assert not _ml_returns.empty and not _ml_returns.isna().any().any()
+assert _ml_returns.index.equals(_ml_levels.index[1:])
+assert len(_ml_returns) == len(_ml_levels) - 1
+print(f"    B. Fully aligned levels={len(_ml_levels)}, returns={len(_ml_returns)}, date={_ml_levels.index.max().date()} ✓")
+
+_ml_spx_expected = 100 * np.log(_ml_levels["SPX"].iloc[1] / _ml_levels["SPX"].iloc[0])
+_ml_ust_expected = 100 * (_ml_levels["USGG10YR"].iloc[1] - _ml_levels["USGG10YR"].iloc[0])
+_ml_oas_expected = 100 * (_ml_levels["LF98OAS"].iloc[1] - _ml_levels["LF98OAS"].iloc[0])
+assert np.isclose(_ml_returns["SPX"].iloc[0], _ml_spx_expected)
+assert np.isclose(_ml_returns["USGG10YR"].iloc[0], _ml_ust_expected)
+assert np.isclose(_ml_returns["LF98OAS"].iloc[0], _ml_oas_expected)
+print("    C. Transform contract: price log returns, yield/spread basis-point changes ✓")
+
+_ml_corrs = _build_ml_corrs(_ml_ficc, window=20)
+_ml_matrix = _build_ml_matrix(_ml_ficc, window=20)
+assert list(_ml_corrs.columns) == _ml_pair_keys()
+assert _ml_matrix.shape == (5, 5)
+assert np.allclose(_ml_matrix.values, _ml_matrix.values.T, equal_nan=False)
+assert np.allclose(np.diag(_ml_matrix.values), np.ones(5))
+_ml_snap = _build_ml_snapshot(_ml_ficc, corr_window=20, long_window=63)
+assert _ml_snap["status"] == "Ready"
+assert _ml_snap["model_date"] == _ml_levels.index.max().date()
+assert np.isfinite(_ml_snap["mean_abs_correlation"])
+assert _ml_snap["strongest_positive"] is not None
+assert _ml_snap["strongest_negative"] is not None
+print("    D. Ten pair correlations + symmetric matrix + current strongest pairs ✓")
+
+_ml_missing = _ml_ficc.drop(columns=["LF98OAS"])
+_ml_missing_ready = _assess_ml(_ml_missing, corr_window=63)
+_ml_missing_snap = _build_ml_snapshot(_ml_missing, corr_window=20, long_window=63)
+assert _ml_missing_ready["status"] == "Partial"
+assert "LF98OAS" in _ml_missing_ready["missing"]
+assert _ml_missing_snap["status"] == "Partial"
+assert _ml_missing_snap["mean_abs_correlation"] is None
+print("    E. Missing HY OAS -> Partial; no proxy, zero or fabricated correlation ✓")
+
+_ml_read = _build_ml_reading(_ml_ficc, corr_window=20)
+assert _ml_read["status"] == "Ready"
+assert _ml_read["model_date"] == _ml_snap["model_date"]
+assert "caused" not in _ml_read["summary"].lower()
+assert "fair value" not in _ml_read["summary"].lower()
+assert "forecast" not in _ml_read["summary"].lower()
+print("    F. Current reading is descriptive and non-causal ✓")
+
+_ml_page = next(p for p in PAGES if p["id"] == "market_linkage")
+_ml_pca_page = next(p for p in PAGES if p["id"] == "market_linkage_pca")
+assert _ml_page["section"] == "05b" and _ml_page["status"] == "live"
+assert _ml_pca_page["section"] == "05c" and _ml_pca_page["status"] == "experimental"
+assert _ml_page["next"] == "market_linkage_pca"
+_ml_page_src = open("charts/pages/market_linkage.py").read()
+_ml_pca_src = open("charts/pages/market_linkage_pca.py").read()
+assert "build_market_linkage_snapshot" in _ml_page_src
+assert "rolling(" not in _ml_page_src, "live page must render pure-model correlation output"
+assert 'get_page("market_linkage_pca")' in _ml_pca_src
+print("    G. 05b Live descriptive page and 05c Experimental PCA are separated ✓")
+
+from config.model_roadmap import ROADMAP as _ML_ROADMAP
+_ml_rm = next(r for r in _ML_ROADMAP if r["module_id"] == "market_linkage")
+_ml_pca_rm = next(r for r in _ML_ROADMAP if r["module_id"] == "market_linkage_pca")
+assert _ml_rm["current_status"] == "Live" and _ml_rm["implemented_in"] == "models/market_linkage.py"
+assert "LF98OAS INDEX" in _ml_rm["required_data"]
+assert _ml_pca_rm["current_status"] == "Experimental"
+_ml_readme = open("README.md").read()
+assert "| 05b | Market Linkage & Correlations   | **Live**" in _ml_readme
+assert "| 05c | Market Linkage PCA" in _ml_readme
+_ml_dq = open("charts/pages/data_quality.py").read()
+assert "Market Linkage &amp; Correlations — source and alignment audit" in _ml_dq
+_ml_snap_export = build_snapshot()
+assert "market_linkage" in _ml_snap_export
+assert _ml_snap_export["market_linkage"]["causal_attribution"] is False
+_ml_html = open("scripts/export_research_pack_html.py").read()
+assert "Market Linkage & Correlations" in _ml_html
+print("    H. Registry, Roadmap, README, Data Quality, snapshot and HTML are consistent ✓")
+
+_ml_qlist = build_qlist(df, r_q, r_q.index)
+_ml_q = next(q for q in _ml_qlist if "cross-asset relationships" in q.question)
+assert _ml_q.data_status == "real_data"
+assert "Strongest positive" in _ml_q.answer and "Strongest negative" in _ml_q.answer
+assert "Model date" in _ml_q.answer
+print("    I. Q13 uses the live fully aligned model ✓")
+
+print(f"    Common model date: {_ml_snap['model_date']}")
+print(f"    Common observations: {_ml_snap['aligned_observations']}")
+print(f"    Mean absolute 20D correlation: {_ml_snap['mean_abs_correlation']:.3f}")
+print(f"    Strongest positive: {_ml_snap['strongest_positive']['label']} "
+      f"{_ml_snap['strongest_positive']['correlation']:+.3f}")
+print(f"    Strongest negative: {_ml_snap['strongest_negative']['label']} "
+      f"{_ml_snap['strongest_negative']['correlation']:+.3f}")
+
+# ===========================================================================
+# Phase 9.4 — Policy live-status separation
+# ===========================================================================
+print("34. Phase 9.4 Policy live-status separation ...")
+_pol_page = next(p for p in PAGES if p["id"] == "policy")
+assert _pol_page["status"] == "live"
+assert "generic futures strip is a separate live page" in _pol_page["description"]
+from config.model_roadmap import ROADMAP as _POL_ROADMAP
+_pol_spot_rm = next(r for r in _POL_ROADMAP if r["module_id"] == "policy_spot")
+_pol_fomc_rm = next(r for r in _POL_ROADMAP if r["module_id"] == "fomc_path")
+_pol_sofr_rm = next(r for r in _POL_ROADMAP if r["module_id"] == "sofr_strip")
+assert _pol_spot_rm["current_status"] == "Live"
+assert _pol_spot_rm["app_section"] == "01"
+assert all(k in _pol_spot_rm["required_data"] for k in ["SOFR", "EFFR", "IORB", "GCF", "TPR"])
+assert _pol_fomc_rm["current_status"] != "Live"
+assert _pol_sofr_rm["current_status"] == "Live" and _pol_sofr_rm["app_section"] == "01b"
+_pol_readme = open("README.md").read()
+assert "| 01  | Policy & Short Rates            | **Live**" in _pol_readme
+assert "| 01b | Policy Futures Generic Strip" in _pol_readme
+assert "### Partially implemented" not in _pol_readme
+_pol_dq = open("charts/pages/data_quality.py").read()
+assert '{"Model": "Policy & Short Rates"' in _pol_dq
+assert '{"Model": "Policy Futures Generic Strip"' in _pol_dq
+assert "FOMC implied policy path" in _pol_dq
+print("    A. Live spot/funding and generic-strip models remain separate from the FOMC-path gap ✓")
+
+# ===========================================================================
+# Phase 10.1 — Policy Futures Generic Strip
+# ===========================================================================
+print("35. Phase 10.1 Policy Futures Generic Strip ...")
+from config.tickers import POLICY_FUTURES_CONFIG, POLICY_FUTURES_TICKERS
+from models.policy_futures_generic import (
+    available_policy_futures_families,
+    build_policy_futures_price_frame,
+    build_policy_futures_implied_rate_frame,
+    build_policy_futures_family_snapshot,
+    build_policy_futures_overview,
+    build_policy_futures_current_reading,
+    classify_generic_curve,
+)
+assert set(POLICY_FUTURES_CONFIG) == {"FF", "SER", "SFR"}
+assert len(POLICY_FUTURES_TICKERS) == 9
+for _family, _cfg in POLICY_FUTURES_CONFIG.items():
+    assert set(_cfg["generic_tickers"]) == {1, 2, 3}
+    assert _cfg["quote_conversion"].startswith("Implied reference rate")
+print("    A. Registry: FF / SER / SFR, three generic ranks each ✓")
+
+_pf_avail = available_policy_futures_families(df)
+for _family in ("FF", "SER", "SFR"):
+    assert _pf_avail[_family]["status"] == "Ready", _pf_avail[_family]
+    _prices = build_policy_futures_price_frame(df, _family)
+    _rates = build_policy_futures_implied_rate_frame(df, _family)
+    assert not _prices.empty and not _rates.empty
+    assert _prices.index.equals(_rates.index)
+    assert list(_prices.columns) == [1, 2, 3]
+    np.testing.assert_allclose(_rates.values, 100.0 - _prices.values, rtol=0, atol=1e-12)
+    assert not _rates.isna().any().any()
+print("    B. Common-calendar price-to-rate conversion = 100 − price ✓")
+
+_pf_snaps = {f: build_policy_futures_family_snapshot(df, f) for f in ("FF", "SER", "SFR")}
+for _family, _snap in _pf_snaps.items():
+    assert _snap["status"] == "Ready"
+    assert _snap["model_date"] == _snap["implied_rate_history"].index.max().date()
+    assert len(_snap["strip_table"]) == 3
+    _front = _snap["strip_table"].loc[_snap["strip_table"]["rank"] == 1].iloc[0]
+    _third = _snap["strip_table"].loc[_snap["strip_table"]["rank"] == 3].iloc[0]
+    assert abs((_third["implied_rate_pct"] - _front["implied_rate_pct"]) * 100 - _snap["front_to_third_bp"]) < 1e-9
+    assert _snap["spot_reference_date"] <= _snap["model_date"]
+print("    C. Family snapshots, generic slopes and same-date spot comparisons reconcile ✓")
+
+# Missing rank must be Partial and must not be replaced by zero or another family.
+_ff2 = POLICY_FUTURES_CONFIG["FF"]["generic_tickers"][2]
+_df_missing_pf = df.drop(columns=[_ff2])
+_miss_pf = build_policy_futures_family_snapshot(_df_missing_pf, "FF")
+assert _miss_pf["status"] == "Partial"
+assert _ff2 in _miss_pf["missing"]
+assert _miss_pf["strip_table"].empty
+print("    D. Missing generic rank -> Partial; no zero/proxy substitution ✓")
+
+# Arbitrary observation-window change is computed from the aligned frame.
+_ff_read_10 = build_policy_futures_current_reading(df, "FF", change_window=10)
+_ff_rates = build_policy_futures_implied_rate_frame(df, "FF")
+_expected_10 = 100.0 * (_ff_rates[1].iloc[-1] - _ff_rates[1].iloc[-11])
+assert abs(_ff_read_10["front_change_bp"] - _expected_10) < 1e-9
+print("    E. Arbitrary change window uses the aligned generic calendar ✓")
+
+# Production wording / architecture.
+_pf_model_src = open("models/policy_futures_generic.py").read()
+assert "import streamlit" not in _pf_model_src.lower()
+for _bad in ["meeting probability", "post-meeting rate", "fixed expiry"]:
+    # Allowed only in explicit limitations / negations; no calculation fields use these names.
+    assert f'"{_bad}"' not in _pf_model_src
+_pf_page_src = open("charts/pages/policy_futures.py").read()
+assert "build_policy_futures_family_snapshot" in _pf_page_src
+assert "100 − price" in _pf_page_src
+assert "not a meeting path" in _pf_page_src.lower()
+assert ".ffill(" not in _pf_model_src and "fillna(0" not in _pf_model_src
+print("    F. Pure model and no-fabrication page wording ✓")
+
+_pf_page = next(p for p in PAGES if p["id"] == "policy_futures")
+assert _pf_page["section"] == "01b" and _pf_page["status"] == "live"
+assert _pf_page["builds_on"] == "policy" and _pf_page["next"] == "decomposition"
+assert PAGES_BY_ID["policy"]["next"] == "policy_futures"
+assert "policy_futures" in RENDERERS if _HAS_STREAMLIT_PAGES else True
+assert "policy_futures_generic_strip" in build_snapshot()
+_html_pf_src = open("scripts/export_research_pack_html.py").read()
+assert "def _build_policy_futures" in _html_pf_src
+assert "Policy Futures Generic Strip" in _html_pf_src
+print("    G. Page registry, snapshot and static HTML integration ✓")
+
+_pf_qlist = build_qlist(df, r_q, r_q.index)
+_pf_q = next(q for q in _pf_qlist if "generic policy-futures strip" in q.question.lower())
+assert _pf_q.data_status == "real_data"
+assert "not fixed expiries" in " ".join(_pf_q.details).lower()
+assert "FOMC" in " ".join(_pf_q.details)
+print("    H. Q14 reports the generic strip without a meeting-path claim ✓")
+
+for _family, _snap in _pf_snaps.items():
+    _tbl = _snap["strip_table"]
+    _front = _tbl.loc[_tbl["rank"] == 1].iloc[0]
+    _third = _tbl.loc[_tbl["rank"] == 3].iloc[0]
+    print(f"    {_family}: date={_snap['model_date']} obs={_snap['aligned_observations']} "
+          f"front={_front['implied_rate_pct']:.3f}% third={_third['implied_rate_pct']:.3f}% "
+          f"3−1={_snap['front_to_third_bp']:+.1f}bp "
+          f"front−spot={_snap['front_minus_spot_bp']:+.1f}bp")
+
+# Move final marker after all phases.
 
 print("\nALL SMOKE TESTS PASSED ✓")
 import time as _t_end

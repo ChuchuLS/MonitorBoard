@@ -67,7 +67,7 @@ def render(ctx: PageContext) -> None:
 
     render_explanation_box(
         "Global rates overview",
-        "Cross-country yield curve comparison for available G6 markets. "
+        "Cross-country yield curve comparison for seven available sovereign markets. "
         "The 10Y overlay normalizes each country's yield to its own 1-year "
         "min/max for visual comparison (not a shared y-axis). Slope ranking "
         "sorts by 2s10s steepness.",
