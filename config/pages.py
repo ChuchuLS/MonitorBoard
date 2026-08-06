@@ -30,8 +30,8 @@ PAGES: list[dict] = [
         "data_source": "sheet1_market",
         "description": "Composite Liquidity Index — five-bucket, coverage-gated "
                        "rolling z-score gauge (higher = looser). Includes bucket "
-                       "and component contributions, benchmark validation, and "
-                       "methodology audit.",
+                       "and component contributions, benchmark validation, "
+                       "methodology audit, and a compact XCCY basis summary.",
         "builds_on": None,
         "next": "policy",
     },
@@ -233,9 +233,11 @@ PAGES: list[dict] = [
         "color_key": "fx",
         "status": "experimental",
         "data_source": "sheet1_market",
-        "description": "PCA-based regime classification on DXY / EM FX / USDJPY "
-                       "12M xccy basis. Experimental — separate from the live "
-                       "FX rate-differential monitor.",
+        "description": "Experimental PCA-based regime classification on DXY / "
+                       "EM FX / USDJPY 12M xccy basis, followed by the full "
+                       "EUR / JPY / AUD / GBP / CAD 3M and 12M cross-currency "
+                       "basis history dashboard. Separate from the live FX "
+                       "rate-differential monitor.",
         "builds_on": "fx_rate_diff",
         "next": "data_quality",
     },
