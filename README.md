@@ -82,7 +82,7 @@ page mirrors the front matter of an institutional chart pack.
 
 | No. | Section                         | Status               | Data source | What it shows |
 |----:|:--------------------------------|:---------------------|:------------|:--------------|
-| 00  | Liquidity Overview              | **Live**             | DATA.xlsx | Composite Liquidity Index (v0.3) with bucket & component contributions, benchmark validation, methodology audit, one-click Excel export. |
+| 00  | Liquidity Overview              | **Live**             | DATA.xlsx | Composite Liquidity Index (v0.3) with bucket & component contributions, benchmark validation, methodology audit, one-click Excel export, and a compact latest-value XCCY basis summary. |
 | 01  | Policy & Short Rates            | **Live**             | DATA.xlsx | Confirmed SOFR / EFFR / IORB and repo-rate spreads, funding-pressure diagnostics, and weekly H.4.1 context. The generic futures strip is a separate live page; the meeting-by-meeting FOMC path remains unimplemented. |
 | 01b | Policy Futures Generic Strip     | **Live**             | DATA.xlsx / Sheet1 | FF1–FF3, SER1–SER3 and SFR1–SFR3 continuous ranks converted to implied reference rates using 100 − price. Generic ranks roll and are not fixed expiries; no FOMC meeting path or probability is inferred. |
 | 02  | Rate Decomposition              | **Live**             | DATA.xlsx / Sheet1 | US curve complex, selectable-tenor rolling rate attribution, and 2s10s curve decomposition using breakeven identity. |
@@ -97,7 +97,7 @@ page mirrors the front matter of an institutional chart pack.
 | 06b | Sector Contribution Estimate     | **Live**             | DATA.xlsx / Sheet1 + SPX_Sector_Weights | Start-period periodic weight × sector simple return, with an explicit residual versus actual SPX. Transparent approximation only; not official index-provider attribution. |
 | 06c | SPX FY1 Earnings & Valuation     | **Live**             | DATA.xlsx / Equity_EPS + Equity_Prices | Confirmed BEST_EPS with 1FY override, implied FY1 P/E, exact log-return split into EPS growth and multiple change, plus a clearly labelled weekly OLS diagnostic. Not fair value or forecast. |
 | 07  | FX Rate Differential Monitor    | **Live**             | DATA.xlsx / Sheet1 | EURUSD / USDJPY / GBPUSD / AUDUSD — fully aligned spot, 2Y nominal, 10Y nominal, and 10Y real differentials. Descriptive, not causal attribution or fair value. |
-| 07b | FX Complex PCA                  | Experimental         | DATA.xlsx / Sheet1 FX/FICC columns | DXY / EM FX / USDJPY basis PCA. Experimental — separate from the live rate-differential monitor. |
+| 07b | FX Complex PCA                  | Experimental         | DATA.xlsx / Sheet1 FX/FICC columns | DXY / EM FX / USDJPY basis PCA plus the full EUR / JPY / AUD / GBP / CAD 3M and 12M XCCY basis history dashboard. PCA remains experimental; XCCY charts are descriptive source series. |
 | 08  | Data Quality & Methodology      | **Live**             | DATA.xlsx (all sections) | Source-of-truth trust chain, ticker coverage, scoring-sheet audit, methodology. |
 | A1  | Global Scoring (Appendix)       | **Live**             | DATA.xlsx / scoring sheets | Cross-sectional macro + market scoring: 10 rates, 17 equities. Standalone appendix. |
 | 09  | Model Roadmap & Content Gap     | **Live**             | DATA.xlsx (all sections) | Content gap analysis vs reference PDF — what is implemented, missing, and next. |
@@ -137,7 +137,7 @@ page mirrors the front matter of an institutional chart pack.
 - **Rates Complex PCA** (02b) — within-rates PCA regime, NOT the decomposition.
 - **Market Linkage PCA** (05c) — PCA-based 4-regime model, separate from the
   live descriptive 05b monitor and the directional 8-regime timeline.
-- **FX Complex PCA** (07b) — DXY / EM FX / basis PCA, NOT rate-differential FX.
+- **FX Complex PCA** (07b) — DXY / EM FX / basis PCA, plus the full 5×2 3M/12M XCCY basis history dashboard. The PCA is experimental; the basis charts are descriptive source-series views.
 
 ### Previously scaffold — now implemented
 - **Rate Decomposition** (02) — now live with US curve complex + attribution.
@@ -184,7 +184,7 @@ correction details are recorded in
 labelled as experimental, not part of the PDF-style core:
 - 02b Rates Complex PCA (within-rates PCA regime)
 - 05c Market Linkage PCA (experimental 4-regime, 63D/20D)
-- 07b FX Complex PCA (DXY / EM FX / basis PCA)
+- 07b FX Complex PCA + full 3M/12M Cross-Currency Basis dashboard
 
 **Appendix:**
 - A1 Global Scoring (cross-sectional macro + market ranking)

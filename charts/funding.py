@@ -18,6 +18,7 @@ from config.theme import (
 )
 from charts.common import ofr_chart
 from data.loader import get_series
+from models.xccy_basis import build_xccy_snapshot, XCCY_CURRENCIES
 
 
 def _spread_defs(dff: pd.DataFrame) -> list[tuple]:
@@ -146,34 +147,75 @@ def render_money_market(dff: pd.DataFrame) -> None:
                     config={"displayModeBar": False})
 
 
-def render_xccy(dff: pd.DataFrame) -> None:
-    """Dollar Funding / XCCY Basis section: 3M (top) and 12M (bottom) minis."""
+def render_xccy(dff: pd.DataFrame, *, key_prefix: str = "xccy") -> None:
+    """Render the full 5-by-2 XCCY basis history dashboard.
+
+    Top row is 3M and bottom row is 12M. Missing series are surfaced visibly;
+    no forward fill, interpolation, proxy substitution, or zero replacement is
+    applied.
+    """
     from charts.common import mini_dark, section_header
     from config.theme import ACCENT_AMBER, ACCENT_CYAN
 
     section_header("Cross-Currency Basis Swaps",
                    "Top: 3M · Bottom: 12M · negative = USD funding premium · bp")
-    xccy_list = [("EUR", "EUR"), ("JPY", "JPY"), ("AUD", "AUD"),
-                 ("GBP", "GBP"), ("CAD", "CAD")]
 
     cols = st.columns(5)
-    for col, (ccy, label) in zip(cols, xccy_list):
+    for col, (ccy, label) in zip(cols, XCCY_CURRENCIES):
         with col:
             s = get_series(dff, f"XCCY_{ccy}")
             if len(s):
                 st.plotly_chart(
                     mini_dark(s, f"{label}/USD 3M basis", color=ACCENT_AMBER),
-                    use_container_width=True, key=f"xccy3m_{ccy}",
+                    use_container_width=True, key=f"{key_prefix}_3m_{ccy}",
                     config={"displayModeBar": False})
             else:
                 st.warning(f"{label}/USD 3M basis unavailable")
 
     cols = st.columns(5)
-    for col, (ccy, label) in zip(cols, xccy_list):
+    for col, (ccy, label) in zip(cols, XCCY_CURRENCIES):
         with col:
             s = get_series(dff, f"XCCY12_{ccy}")
             if len(s):
                 st.plotly_chart(
                     mini_dark(s, f"{label}/USD 12M basis", color=ACCENT_CYAN),
-                    use_container_width=True, key=f"xccy12m_{ccy}",
+                    use_container_width=True, key=f"{key_prefix}_12m_{ccy}",
                     config={"displayModeBar": False})
+            else:
+                st.warning(f"{label}/USD 12M basis unavailable")
+
+    snapshot = build_xccy_snapshot(dff)
+    ready = int((snapshot["Status"] == "Ready").sum())
+    st.caption(
+        f"{ready}/5 currency pairs have both 3M and 12M observations. "
+        "Latest dates are series-specific; no missing observation is filled."
+    )
+
+
+def render_xccy_summary(dff: pd.DataFrame) -> None:
+    """Render a compact latest-value XCCY summary for the Liquidity page."""
+    from charts.common import section_header
+
+    section_header(
+        "Dollar Funding / XCCY Basis",
+        "Latest 3M and 12M observations · full history on 07b FX Complex PCA",
+    )
+    snapshot = build_xccy_snapshot(dff)
+    if snapshot.empty or (snapshot["Status"] == "Missing data").all():
+        st.warning("Cross-currency basis data are unavailable.")
+        return
+
+    display = snapshot.copy()
+    display["3M basis (bp)"] = display["3M basis (bp)"].map(
+        lambda value: "—" if pd.isna(value) else f"{value:+.1f}"
+    )
+    display["12M basis (bp)"] = display["12M basis (bp)"].map(
+        lambda value: "—" if pd.isna(value) else f"{value:+.1f}"
+    )
+    display["3M date"] = display["3M date"].map(lambda value: value or "—")
+    display["12M date"] = display["12M date"].map(lambda value: value or "—")
+    st.dataframe(display, hide_index=True, use_container_width=True)
+    st.caption(
+        "Negative basis is displayed as a USD funding premium convention. "
+        "The table is descriptive and does not infer causality or funding flows."
+    )

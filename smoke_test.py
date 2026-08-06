@@ -1933,6 +1933,49 @@ for _family, _snap in _pf_snaps.items():
           f"3−1={_snap['front_to_third_bp']:+.1f}bp "
           f"front−spot={_snap['front_minus_spot_bp']:+.1f}bp")
 
+# ===========================================================================
+# Phase 10.2 — Restore full XCCY basis dashboard to FX
+# ===========================================================================
+print("36. Phase 10.2 XCCY basis page placement and visibility ...")
+from models.xccy_basis import build_xccy_snapshot, XCCY_CURRENCIES
+
+_xccy_snapshot = build_xccy_snapshot(df)
+assert len(_xccy_snapshot) == 5
+assert set(_xccy_snapshot["Currency"]) == {"EUR", "JPY", "AUD", "GBP", "CAD"}
+assert (_xccy_snapshot["Status"] == "Ready").all(), _xccy_snapshot.to_dict("records")
+assert _xccy_snapshot[["3M basis (bp)", "12M basis (bp)"]].notna().all().all()
+print("    A. Five currencies × 3M/12M source-series snapshot is Ready ✓")
+
+_fx_src = open("charts/pages/fx.py").read()
+_liq_src = open("charts/pages/liquidity_overview.py").read()
+_funding_src = open("charts/funding.py").read()
+assert 'render_xccy(ctx.dff, key_prefix="fx_xccy")' in _fx_src
+assert "XCCY basis now shown on the Liquidity page" not in _fx_src
+assert "render_xccy_summary(ctx.dff)" in _liq_src
+assert "render_xccy(ctx.dff)" not in _liq_src
+assert "except Exception:\n        pass" not in _liq_src[_liq_src.find("Compact XCCY"): _liq_src.find("CLI Rolling Correlations")]
+assert "Cross-Currency Basis charts are unavailable" in _fx_src
+assert "Dollar-funding / XCCY summary is unavailable" in _liq_src
+print("    B. Full charts are on FX; Liquidity keeps a compact summary; failures are visible ✓")
+
+assert "from models.xccy_basis import build_xccy_snapshot" in _funding_src
+assert "def render_xccy_summary" in _funding_src
+assert "3M basis unavailable" in _funding_src
+assert "12M basis unavailable" in _funding_src
+assert "fillna(0" not in _funding_src and ".ffill(" not in _funding_src
+print("    C. Missing tenors are explicit; no fill, proxy, or zero substitution ✓")
+
+_xccy_readme = open("README.md").read()
+assert "full EUR / JPY / AUD / GBP / CAD 3M and 12M XCCY basis history dashboard" in _xccy_readme
+_fx_page_cfg = next(p for p in PAGES if p["id"] == "fx")
+assert "full" in _fx_page_cfg["description"].lower() and "3m and 12m" in _fx_page_cfg["description"].lower()
+print("    D. Page registry and README document the restored location ✓")
+
+for _row in _xccy_snapshot.to_dict("records"):
+    print(f"    {_row['Currency']}: 3M={_row['3M basis (bp)']:+.1f}bp "
+          f"({_row['3M date']}) 12M={_row['12M basis (bp)']:+.1f}bp "
+          f"({_row['12M date']})")
+
 # Move final marker after all phases.
 
 print("\nALL SMOKE TESTS PASSED ✓")

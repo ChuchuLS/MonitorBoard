@@ -9,6 +9,8 @@ Falls back to XCCY basis preview if FICC columns are missing from DATA.xlsx.
 
 from __future__ import annotations
 
+import logging
+
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -24,6 +26,8 @@ from charts.funding import render_xccy
 from data.external_loaders import load_ficc
 
 from ._context import PageContext
+
+logger = logging.getLogger(__name__)
 
 
 def _build_fx_regime(prices: pd.DataFrame, window: int = 60):
@@ -147,6 +151,16 @@ def render(ctx: PageContext) -> None:
                 disp["AvgRun"] = disp["AvgRun"].round(1)
                 st.dataframe(disp, hide_index=True, use_container_width=True)
 
-    # XCCY basis now shown on the Liquidity page (Section 00)
+    # Full dollar-funding basis dashboard remains on the FX page.
+    st.markdown("<div style='height:0.8rem;'></div>", unsafe_allow_html=True)
+    try:
+        render_xccy(ctx.dff, key_prefix="fx_xccy")
+    except Exception as exc:
+        logger.exception("Failed to render the FX XCCY basis dashboard")
+        st.warning(
+            "Cross-Currency Basis charts are unavailable because rendering "
+            f"failed ({type(exc).__name__}). The underlying data have not "
+            "been replaced or interpreted as zero."
+        )
 
     render_section_footer(page)

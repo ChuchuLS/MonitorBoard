@@ -10,6 +10,8 @@ module only adds the header, KPI strip, explanation box and footer around it.
 
 from __future__ import annotations
 
+import logging
+
 import pandas as pd
 import streamlit as st
 
@@ -21,8 +23,11 @@ from charts.common import (
     render_explanation_box, render_section_footer,
 )
 from charts.liquidity import render_summary_panel, render_index_page
+from charts.funding import render_xccy_summary
 
 from ._context import PageContext
+
+logger = logging.getLogger(__name__)
 
 
 def render(ctx: PageContext) -> None:
@@ -87,18 +92,16 @@ def render(ctx: PageContext) -> None:
         export_name=ctx.export_name,
     )
 
-    # ── XCCY Basis Swaps ──
+    # ── Compact XCCY basis summary; full 5×2 history remains on FX 07b. ──
     try:
-        from charts.funding import render_xccy
-        st.markdown(
-            "<div style='margin:1.2rem 0 0.3rem;font-size:11px;color:#888;"
-            "letter-spacing:0.1em;text-transform:uppercase;'>"
-            "Cross-currency basis swaps</div>",
-            unsafe_allow_html=True,
+        render_xccy_summary(ctx.dff)
+    except Exception as exc:
+        logger.exception("Failed to render the Liquidity XCCY summary")
+        st.warning(
+            "Dollar-funding / XCCY summary is unavailable because the audit "
+            f"failed ({type(exc).__name__}). This does not mean the source "
+            "series are zero or absent."
         )
-        render_xccy(ctx.dff)
-    except Exception:
-        pass
 
     # ── CLI Rolling Correlations (only if target data exists) ──
     try:
