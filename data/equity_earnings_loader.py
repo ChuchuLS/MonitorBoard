@@ -1,6 +1,6 @@
 """Production-safe loaders for Equity_EPS and Equity_Prices.
 
-The workbook stores Equity_EPS as 17 independent Bloomberg BDH spills with
+The workbook stores Equity_EPS as independent Bloomberg BDH spills with
 interleaved Date/value columns.  Equity_Prices uses one shared Date column.
 This loader preserves each EPS series' own Date column and never forward-fills,
 interpolates, or replaces missing values with zero.
@@ -38,6 +38,32 @@ def _clean_label(value) -> str:
     return str(value).strip()
 
 
+# The newly added CSI A500 and DJI Bloomberg blocks intentionally keep their
+# own Date/value columns, but their internal short-code row is blank.  Resolve
+# those two series from the ticker row rather than inventing or reusing another
+# market code.  Normalisation is case/space insensitive so workbook display
+# casing can change without breaking the production mapping.
+_TICKER_CODE_ALIASES = {
+    "CSIA500INDEX": "CSI_A500",
+    "DJIINDEX": "DJI",
+}
+_CODE_COUNTRY_FALLBACK = {
+    "CSI_A500": "China",
+    "DJI": "USA",
+}
+
+
+def _normalise_token(value) -> str:
+    return "".join(ch for ch in _clean_label(value).upper() if ch.isalnum())
+
+
+def _canonical_code(raw_code, ticker) -> str:
+    code = _clean_label(raw_code)
+    if code:
+        return code
+    return _TICKER_CODE_ALIASES.get(_normalise_token(ticker), "")
+
+
 def _parse_eps_sheet(path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     raw = pd.read_excel(path, sheet_name="Equity_EPS", header=None)
     if raw.empty or raw.shape[0] < 6 or raw.shape[1] < 2:
@@ -49,7 +75,8 @@ def _parse_eps_sheet(path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     for pair in range(pair_count):
         date_col = pair * 2
         value_col = date_col + 1
-        code = _clean_label(raw.iloc[3, value_col])
+        ticker = _clean_label(raw.iloc[4, value_col])
+        code = _canonical_code(raw.iloc[3, value_col], ticker)
         if not code:
             continue
         dates = pd.to_datetime(raw.iloc[5:, date_col], errors="coerce")
@@ -60,8 +87,8 @@ def _parse_eps_sheet(path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
         series[code] = s
         meta_rows.append({
             "code": code,
-            "country": _clean_label(raw.iloc[2, value_col]),
-            "ticker": _clean_label(raw.iloc[4, value_col]),
+            "country": _clean_label(raw.iloc[2, value_col]) or _CODE_COUNTRY_FALLBACK.get(code, ""),
+            "ticker": ticker,
             "eps_field": "BEST_EPS",
             "forecast_period_override": "1FY",
             "frequency": "weekly",
@@ -81,7 +108,8 @@ def _parse_price_sheet(path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     series = {}
     meta_rows = []
     for value_col in range(1, raw.shape[1]):
-        code = _clean_label(raw.iloc[3, value_col])
+        ticker = _clean_label(raw.iloc[4, value_col])
+        code = _canonical_code(raw.iloc[3, value_col], ticker)
         if not code:
             continue
         values = pd.to_numeric(raw.iloc[5:, value_col], errors="coerce")
@@ -91,8 +119,8 @@ def _parse_price_sheet(path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
         series[code] = s
         meta_rows.append({
             "code": code,
-            "country": _clean_label(raw.iloc[2, value_col]),
-            "ticker": _clean_label(raw.iloc[4, value_col]),
+            "country": _clean_label(raw.iloc[2, value_col]) or _CODE_COUNTRY_FALLBACK.get(code, ""),
+            "ticker": ticker,
             "price_field": "workbook value; ticker row identifies cash index",
             "frequency": "daily",
         })

@@ -1,13 +1,13 @@
 {
-  "latest_valid_date": "2026-07-27",
-  "data_hash": "c52641e7e2328a67",
+  "latest_valid_date": "2026-08-06",
+  "data_hash": "3f5db0f99d0a521d",
   "index": {
-    "level": 52.13,
+    "level": 53.48,
     "regime": "Neutral",
     "changes": {
-      "1w": -2.66,
-      "1m": 0.69,
-      "3m": 3.43
+      "1w": 4.46,
+      "1m": -0.29,
+      "3m": 0.49
     }
   },
   "pages": [
@@ -26,7 +26,7 @@
     {
       "section": "01b",
       "id": "policy_futures",
-      "title": "Policy Futures Generic Strip",
+      "title": "SOFR Futures Strip & Calendar Spreads",
       "status": "Live"
     },
     {
@@ -34,12 +34,6 @@
       "id": "decomposition",
       "title": "Rate Decomposition",
       "status": "Live"
-    },
-    {
-      "section": "02b",
-      "id": "rates_pca",
-      "title": "Rates Complex PCA",
-      "status": "Experimental"
     },
     {
       "section": "03",
@@ -72,12 +66,6 @@
       "status": "Live"
     },
     {
-      "section": "05c",
-      "id": "market_linkage_pca",
-      "title": "Market Linkage PCA",
-      "status": "Experimental"
-    },
-    {
       "section": "06",
       "id": "sector_rotation",
       "title": "Sector Rotation & Breadth",
@@ -102,12 +90,6 @@
       "status": "Live"
     },
     {
-      "section": "07b",
-      "id": "fx",
-      "title": "FX Complex PCA",
-      "status": "Experimental"
-    },
-    {
       "section": "08",
       "id": "data_quality",
       "title": "Data Quality & Methodology",
@@ -126,441 +108,493 @@
       "status": "Live"
     }
   ],
-  "policy_futures_generic_strip": {
-    "FF": {
-      "status": "Ready",
-      "display_name": "30-Day Federal Funds Futures",
-      "model_date": "2026-07-24",
-      "aligned_observations": 687,
-      "front_to_third_bp": 17.250061035159092,
-      "curve_shape": "Higher implied rates at rank 3",
-      "front_minus_spot_bp": 0.5002136230497278,
-      "generic_strip": [
-        {
-          "rank": 1,
-          "ticker": "FF1 COMB COMDTY",
-          "price": 96.3675003051758,
-          "implied_rate_pct": 3.6324996948242045,
-          "relative_to_front_bp": 0.0
-        },
-        {
-          "rank": 2,
-          "ticker": "FF2 COMB COMDTY",
-          "price": 96.2850036621094,
-          "implied_rate_pct": 3.7149963378905966,
-          "relative_to_front_bp": 8.249664306639204
-        },
-        {
-          "rank": 3,
-          "ticker": "FF3 COMB COMDTY",
-          "price": 96.1949996948242,
-          "implied_rate_pct": 3.8050003051757955,
-          "relative_to_front_bp": 17.250061035159092
-        }
-      ],
-      "fixed_expiry_mapping": false,
-      "fomc_meeting_path": false
+  "sofr_futures_strip": {
+    "status": "Ready",
+    "model_date": "2026-08-06",
+    "aligned_observations": 1379,
+    "effr_pct": 3.63,
+    "sofr_pct": 3.66,
+    "terminal": {
+      "direction": "Higher rates priced",
+      "terminal_rate_pct": 4.099998474121094,
+      "terminal_contract": "JUN 27",
+      "terminal_sequence": 4,
+      "terminal_gap_bp": 46.99984741210939
     },
-    "SER": {
-      "status": "Ready",
-      "display_name": "1-Month SOFR Futures",
-      "model_date": "2026-07-24",
-      "aligned_observations": 687,
-      "front_to_third_bp": 19.99969482422017,
-      "curve_shape": "Higher implied rates at rank 3",
-      "front_minus_spot_bp": -1.5000000000000124,
-      "generic_strip": [
-        {
-          "rank": 1,
-          "ticker": "SER1 COMB COMDTY",
-          "price": 96.375,
-          "implied_rate_pct": 3.625,
-          "relative_to_front_bp": 0.0
-        },
-        {
-          "rank": 2,
-          "ticker": "SER2 COMB COMDTY",
-          "price": 96.2649993896484,
-          "implied_rate_pct": 3.735000610351605,
-          "relative_to_front_bp": 11.000061035160513
-        },
-        {
-          "rank": 3,
-          "ticker": "SER3 COMB COMDTY",
-          "price": 96.1750030517578,
-          "implied_rate_pct": 3.8249969482422017,
-          "relative_to_front_bp": 19.99969482422017
-        }
-      ],
-      "fixed_expiry_mapping": false,
-      "fomc_meeting_path": false
+    "terminal_spreads": {
+      "terminal_to_3m_bp": -2.9998779296875,
+      "terminal_to_6m_bp": -8.00018310546875,
+      "terminal_to_12m_bp": -11.99951171875,
+      "contract_3m": "SEP 27",
+      "contract_6m": "DEC 27",
+      "contract_12m": "JUN 28"
     },
-    "SFR": {
-      "status": "Ready",
-      "display_name": "3-Month SOFR Futures",
-      "model_date": "2026-07-24",
-      "aligned_observations": 687,
-      "front_to_third_bp": 46.50039672850994,
-      "curve_shape": "Higher implied rates at rank 3",
-      "front_minus_spot_bp": 5.999694824220159,
-      "generic_strip": [
-        {
-          "rank": 1,
-          "ticker": "SFR1 COMB COMDTY",
-          "price": 96.3000030517578,
-          "implied_rate_pct": 3.6999969482422017,
-          "relative_to_front_bp": 0.0
-        },
-        {
-          "rank": 2,
-          "ticker": "SFR2 COMB COMDTY",
-          "price": 96.0100021362305,
-          "implied_rate_pct": 3.989997863769503,
-          "relative_to_front_bp": 29.00009155273011
-        },
-        {
-          "rank": 3,
-          "ticker": "SFR3 COMB COMDTY",
-          "price": 95.8349990844727,
-          "implied_rate_pct": 4.165000915527301,
-          "relative_to_front_bp": 46.50039672850994
-        }
-      ],
-      "fixed_expiry_mapping": false,
-      "fomc_meeting_path": false
-    }
+    "fixed_contract_strip": [
+      {
+        "sequence": 1,
+        "ticker": "SFRU6 COMB COMDTY",
+        "contract_label": "SEP 26",
+        "price": 96.1449966430664,
+        "implied_rate_pct": 3.8550033569335938,
+        "change_1d_bp": 1.0003356933594887,
+        "change_5d_bp": -1.4996643066410797,
+        "change_20d_bp": -1.999664306640625
+      },
+      {
+        "sequence": 2,
+        "ticker": "SFRZ6 COMB COMDTY",
+        "contract_label": "DEC 26",
+        "price": 95.9800033569336,
+        "implied_rate_pct": 4.019996643066406,
+        "change_1d_bp": 1.999664306640625,
+        "change_5d_bp": -1.0003356933594887,
+        "change_20d_bp": -0.00033569335897709607
+      },
+      {
+        "sequence": 3,
+        "ticker": "SFRH7 COMB COMDTY",
+        "contract_label": "MAR 27",
+        "price": 95.91000366210938,
+        "implied_rate_pct": 4.089996337890625,
+        "change_1d_bp": 1.9996337890631821,
+        "change_5d_bp": -3.0003662109379547,
+        "change_20d_bp": 0.4996337890631253
+      },
+      {
+        "sequence": 4,
+        "ticker": "SFRM7 COMB COMDTY",
+        "contract_label": "JUN 27",
+        "price": 95.9000015258789,
+        "implied_rate_pct": 4.099998474121094,
+        "change_1d_bp": 1.4998474121100003,
+        "change_5d_bp": -4.500152587890227,
+        "change_20d_bp": 2.999847412110057
+      },
+      {
+        "sequence": 5,
+        "ticker": "SFRU7 COMB COMDTY",
+        "contract_label": "SEP 27",
+        "price": 95.93000030517578,
+        "implied_rate_pct": 4.069999694824219,
+        "change_1d_bp": 1.9999694824221592,
+        "change_5d_bp": -4.500030517577613,
+        "change_20d_bp": 4.999969482422273
+      },
+      {
+        "sequence": 6,
+        "ticker": "SFRZ7 COMB COMDTY",
+        "contract_label": "DEC 27",
+        "price": 95.9800033569336,
+        "implied_rate_pct": 4.019996643066406,
+        "change_1d_bp": 1.999664306640625,
+        "change_5d_bp": -4.500335693359148,
+        "change_20d_bp": 6.4996643066407955
+      },
+      {
+        "sequence": 7,
+        "ticker": "SFRH8 COMB COMDTY",
+        "contract_label": "MAR 28",
+        "price": 96.01000213623047,
+        "implied_rate_pct": 3.9899978637695312,
+        "change_1d_bp": 1.9997863769532387,
+        "change_5d_bp": -4.500213623046534,
+        "change_20d_bp": 7.4997863769525
+      },
+      {
+        "sequence": 8,
+        "ticker": "SFRM8 COMB COMDTY",
+        "contract_label": "JUN 28",
+        "price": 96.0199966430664,
+        "implied_rate_pct": 3.9800033569335938,
+        "change_1d_bp": 1.500335693359034,
+        "change_5d_bp": -4.499664306641193,
+        "change_20d_bp": 8.500335693359773
+      }
+    ],
+    "calendar_spread_matrix": [
+      {
+        "Contract": "SEP 26",
+        "3M": 16.49932861328125,
+        "6M": 23.499298095703125,
+        "12M": 21.4996337890625
+      },
+      {
+        "Contract": "DEC 26",
+        "3M": 6.999969482421875,
+        "6M": 8.00018310546875,
+        "12M": 0.0
+      },
+      {
+        "Contract": "MAR 27",
+        "3M": 1.000213623046875,
+        "6M": -1.999664306640625,
+        "12M": -9.999847412109375
+      },
+      {
+        "Contract": "JUN 27",
+        "3M": -2.9998779296875,
+        "6M": -8.00018310546875,
+        "12M": -11.99951171875
+      },
+      {
+        "Contract": "SEP 27",
+        "3M": -5.00030517578125,
+        "6M": -8.00018310546875,
+        "12M": NaN
+      },
+      {
+        "Contract": "DEC 27",
+        "3M": -2.9998779296875,
+        "6M": -3.99932861328125,
+        "12M": NaN
+      },
+      {
+        "Contract": "MAR 28",
+        "3M": -0.99945068359375,
+        "6M": NaN,
+        "12M": NaN
+      },
+      {
+        "Contract": "JUN 28",
+        "3M": NaN,
+        "6M": NaN,
+        "12M": NaN
+      }
+    ],
+    "fixed_contract_months": true,
+    "fomc_meeting_path": false
   },
   "rate_decomposition": [
     {
       "tenor": "2Y",
-      "nominal": 4.294425964355469,
-      "real": 2.065157890319824,
-      "inflation": 2.2292680740356445,
-      "nominal_1m_change_bp": 20.229053535546893,
-      "real_1m_change_bp": -6.1034678680175425,
-      "inflation_1m_change_bp": 26.332521403564456,
+      "nominal": 4.193533897399902,
+      "real": 2.1071457862854004,
+      "inflation": 2.086388111114502,
+      "nominal_1m_change_bp": -2.460670460009773,
+      "real_1m_change_bp": -1.0871410714599516,
+      "inflation_1m_change_bp": -1.3735293885498212,
       "driver_1m": "Inflation",
-      "driver_share_1m": 0.8118303771494662,
-      "nominal_ago": 4.092135429,
-      "real_ago": 2.1261925689999996,
-      "inflation_ago": 1.96594286
+      "driver_share_1m": 0.5581931473035874,
+      "nominal_ago": 4.218140602,
+      "real_ago": 2.118017197,
+      "inflation_ago": 2.100123405
     },
     {
       "tenor": "5Y",
-      "nominal": 4.384418487548828,
-      "real": 2.126588821411133,
-      "inflation": 2.2578296661376953,
-      "nominal_1m_change_bp": 25.592803954882815,
-      "real_1m_change_bp": 22.257471041113284,
-      "inflation_1m_change_bp": 3.3353329137695287,
+      "nominal": 4.332551956176758,
+      "real": 2.1412339210510254,
+      "inflation": 2.1913180351257324,
+      "nominal_1m_change_bp": 0.5136490176758102,
+      "real_1m_change_bp": 15.164947505102555,
+      "inflation_1m_change_bp": -14.651298487426745,
       "driver_1m": "Real",
-      "driver_share_1m": 0.869676924824285,
-      "nominal_ago": 4.128490448,
-      "real_ago": 1.904014111,
-      "inflation_ago": 2.224476337
+      "driver_share_1m": 0.5086135762665177,
+      "nominal_ago": 4.327415466,
+      "real_ago": 1.9895844459999998,
+      "inflation_ago": 2.33783102
     },
     {
       "tenor": "10Y",
-      "nominal": 4.634493827819824,
-      "real": 2.3912129402160645,
-      "inflation": 2.2432808876037598,
-      "nominal_1m_change_bp": 26.593494381982463,
-      "real_1m_change_bp": 22.73645402160649,
-      "inflation_1m_change_bp": 3.857040360375974,
+      "nominal": 4.618813514709473,
+      "real": 2.401890754699707,
+      "inflation": 2.2169227600097656,
+      "nominal_1m_change_bp": 3.9651870709472625,
+      "real_1m_change_bp": 9.204483069970681,
+      "inflation_1m_change_bp": -5.239295999023419,
       "driver_1m": "Real",
-      "driver_share_1m": 0.8549630106907204,
-      "nominal_ago": 4.368558884,
-      "real_ago": 2.1638483999999996,
-      "inflation_ago": 2.204710484
+      "driver_share_1m": 0.6372627984686908,
+      "nominal_ago": 4.579161644,
+      "real_ago": 2.309845924,
+      "inflation_ago": 2.26931572
     },
     {
       "tenor": "30Y",
-      "nominal": 5.119757652282715,
-      "real": 2.9303488731384277,
-      "inflation": 2.189408779144287,
-      "nominal_1m_change_bp": 25.573825828271524,
-      "real_1m_change_bp": 22.999191313842804,
-      "inflation_1m_change_bp": 2.5746345144287197,
+      "nominal": 5.171151161193848,
+      "real": 2.965512275695801,
+      "inflation": 2.205638885498047,
+      "nominal_1m_change_bp": 9.904861419384758,
+      "real_1m_change_bp": 9.082508069580086,
+      "inflation_1m_change_bp": 0.822353349804672,
       "driver_1m": "Real",
-      "driver_share_1m": 0.8993254066983402,
-      "nominal_ago": 4.864019394,
-      "real_ago": 2.7003569599999997,
-      "inflation_ago": 2.163662434
+      "driver_share_1m": 0.916974774811564,
+      "nominal_ago": 5.072102547,
+      "real_ago": 2.874687195,
+      "inflation_ago": 2.197415352
     }
   ],
   "curve_regime_matrix": {
     "2s5s": {
-      "Nominal": "Neutral",
-      "Real": "Twist Steepener",
+      "Nominal": "Bull Steepener",
+      "Real": "Bull Steepener",
       "Inflation": "Twist Flattener"
     },
     "2s10s": {
-      "Nominal": "Neutral",
-      "Real": "Twist Steepener",
+      "Nominal": "Bull Steepener",
+      "Real": "Bull Steepener",
       "Inflation": "Twist Flattener"
     },
     "2s30s": {
-      "Nominal": "Neutral",
+      "Nominal": "Twist Steepener",
       "Real": "Twist Steepener",
-      "Inflation": "Twist Flattener"
+      "Inflation": "Bear Flattener"
     },
     "5s10s": {
-      "Nominal": "Neutral",
-      "Real": "Bear Flattener",
+      "Nominal": "Bull Steepener",
+      "Real": "Neutral",
       "Inflation": "Bull Steepener"
     },
     "5s30s": {
-      "Nominal": "Neutral",
-      "Real": "Bear Flattener",
-      "Inflation": "Bull Steepener"
+      "Nominal": "Twist Steepener",
+      "Real": "Twist Steepener",
+      "Inflation": "Twist Steepener"
     },
     "10s30s": {
-      "Nominal": "Neutral",
-      "Real": "Bear Flattener",
-      "Inflation": "Bull Steepener"
+      "Nominal": "Twist Steepener",
+      "Real": "Twist Steepener",
+      "Inflation": "Twist Steepener"
     }
   },
   "slope_ranking": [
     {
       "country": "JP",
       "label": "Japan",
-      "2Y": 1.5079994201660156,
-      "10Y": 2.7729997634887695,
-      "slope_bp": 126.50003433227539,
+      "2Y": 1.5739994049072266,
+      "10Y": 2.788999557495117,
+      "slope_bp": 121.50001525878906,
       "inverted": false
     },
     {
       "country": "CA",
       "label": "Canada",
-      "2Y": 2.907540321,
-      "10Y": 3.606085777,
-      "slope_bp": 69.85454560000002,
+      "2Y": 2.830719948,
+      "10Y": 3.559443474,
+      "slope_bp": 72.8723526,
       "inverted": false
     },
     {
       "country": "UK",
       "label": "United Kingdom",
-      "2Y": 4.41176796,
-      "10Y": 5.031811714,
-      "slope_bp": 62.004375400000015,
-      "inverted": false
-    },
-    {
-      "country": "AU",
-      "label": "Australia",
-      "2Y": 4.639499664306641,
-      "10Y": 5.00339937210083,
-      "slope_bp": 36.389970779418945,
-      "inverted": false
-    },
-    {
-      "country": "DE",
-      "label": "Germany",
-      "2Y": 2.829064369,
-      "10Y": 3.172224045,
-      "slope_bp": 34.31596759999999,
+      "2Y": 4.24794864654541,
+      "10Y": 4.894756317138672,
+      "slope_bp": 64.68076705932617,
       "inverted": false
     },
     {
       "country": "US",
       "label": "United States",
-      "2Y": 4.294425964355469,
-      "10Y": 4.634493827819824,
-      "slope_bp": 34.00678634643555,
+      "2Y": 4.193533897399902,
+      "10Y": 4.618813514709473,
+      "slope_bp": 42.52796173095703,
+      "inverted": false
+    },
+    {
+      "country": "AU",
+      "label": "Australia",
+      "2Y": 4.511999607086182,
+      "10Y": 4.922449588775635,
+      "slope_bp": 41.04499816894531,
+      "inverted": false
+    },
+    {
+      "country": "DE",
+      "label": "Germany",
+      "2Y": 2.735581398010254,
+      "10Y": 3.1165380477905273,
+      "slope_bp": 38.095664978027344,
       "inverted": false
     },
     {
       "country": "CH",
       "label": "Switzerland",
-      "2Y": 0.262148678,
-      "10Y": 0.53243196,
-      "slope_bp": 27.0283282,
+      "2Y": 0.08846479654312134,
+      "10Y": 0.37059974670410156,
+      "slope_bp": 28.213495016098022,
       "inverted": false
     }
   ],
   "country_1m_changes": [
     {
-      "country": "UK",
-      "label": "United Kingdom",
-      "yield_10y": 5.031811714,
-      "yield_10y_1m_ago": 4.699373245,
-      "change_1m_bp": 33.24384689999995
-    },
-    {
-      "country": "DE",
-      "label": "Germany",
-      "yield_10y": 3.172224045,
-      "yield_10y_1m_ago": 2.857242584,
-      "change_1m_bp": 31.498146099999992
+      "country": "CA",
+      "label": "Canada",
+      "yield_10y": 3.559443474,
+      "yield_10y_1m_ago": 3.494334221,
+      "change_1m_bp": 6.5109253000000145
     },
     {
       "country": "AU",
       "label": "Australia",
-      "yield_10y": 5.00339937210083,
-      "yield_10y_1m_ago": 4.718449593,
-      "change_1m_bp": 28.49497791008302
+      "yield_10y": 4.922449588775635,
+      "yield_10y_1m_ago": 4.880549908,
+      "change_1m_bp": 4.189968077563488
     },
     {
       "country": "US",
       "label": "United States",
-      "yield_10y": 4.634493827819824,
-      "yield_10y_1m_ago": 4.368558884,
-      "change_1m_bp": 26.593494381982463
+      "yield_10y": 4.618813514709473,
+      "yield_10y_1m_ago": 4.579161644,
+      "change_1m_bp": 3.9651870709472625
+    },
+    {
+      "country": "DE",
+      "label": "Germany",
+      "yield_10y": 3.1165380477905273,
+      "yield_10y_1m_ago": 3.091938972,
+      "change_1m_bp": 2.4599075790527447
     },
     {
       "country": "CH",
       "label": "Switzerland",
-      "yield_10y": 0.53243196,
-      "yield_10y_1m_ago": 0.291674972,
-      "change_1m_bp": 24.075698800000005
+      "yield_10y": 0.37059974670410156,
+      "yield_10y_1m_ago": 0.392796695,
+      "change_1m_bp": -2.219694829589841
     },
     {
-      "country": "CA",
-      "label": "Canada",
-      "yield_10y": 3.606085777,
-      "yield_10y_1m_ago": 3.383580208,
-      "change_1m_bp": 22.250556899999996
+      "country": "UK",
+      "label": "United Kingdom",
+      "yield_10y": 4.894756317138672,
+      "yield_10y_1m_ago": 4.97429657,
+      "change_1m_bp": -7.954025286132804
     },
     {
       "country": "JP",
       "label": "Japan",
-      "yield_10y": 2.7729997634887695,
-      "yield_10y_1m_ago": 2.620999,
-      "change_1m_bp": 15.200076348876967
+      "yield_10y": 2.788999557495117,
+      "yield_10y_1m_ago": 2.870999,
+      "change_1m_bp": -8.199944250488267
     }
   ],
   "country_rate_boards": {
-    "common_model_date": "2026-07-23",
-    "aligned_observations": 686,
+    "common_model_date": "2026-08-05",
+    "aligned_observations": 2406,
     "horizon": 20,
     "countries": [
       {
         "country": "US",
         "label": "United States",
-        "model_date": "2026-07-23",
-        "aligned_observations": 686,
-        "yield_2y_pct": 4.346959114,
-        "yield_10y_pct": 4.693152428,
-        "yield_30y_pct": 5.159507751,
-        "change_20d_2y_bp": 22.401332799999985,
-        "change_20d_10y_bp": 30.098819800000065,
-        "slope_2s10s_bp": 34.619331400000064,
-        "change_20d_2s10s_bp": 7.697487000000081,
+        "model_date": "2026-08-05",
+        "aligned_observations": 2406,
+        "yield_2y_pct": 4.181241989,
+        "yield_10y_pct": 4.612680435,
+        "yield_30y_pct": 5.167984009,
+        "change_20d_2y_bp": -3.689861299999997,
+        "change_20d_10y_bp": 3.351879099999966,
+        "slope_2s10s_bp": 43.14384459999996,
+        "change_20d_2s10s_bp": 7.041740399999959,
         "inverted": false,
         "status": "Ready"
       },
       {
         "country": "DE",
         "label": "Germany",
-        "model_date": "2026-07-23",
-        "aligned_observations": 686,
-        "yield_2y_pct": 2.884922981,
-        "yield_10y_pct": 3.202718735,
-        "yield_30y_pct": 3.664606094,
-        "change_20d_2y_bp": 35.71004859999998,
-        "change_20d_10y_bp": 34.54761509999997,
-        "slope_2s10s_bp": 31.779575400000006,
-        "change_20d_2s10s_bp": -1.1624334999999988,
+        "model_date": "2026-08-05",
+        "aligned_observations": 2406,
+        "yield_2y_pct": 2.731330872,
+        "yield_10y_pct": 3.110873222,
+        "yield_30y_pct": 3.62365818,
+        "change_20d_2y_bp": 2.266883900000005,
+        "change_20d_10y_bp": 1.8934250000000041,
+        "slope_2s10s_bp": 37.95423499999999,
+        "change_20d_2s10s_bp": -0.3734589000000028,
         "inverted": false,
         "status": "Ready"
       },
       {
         "country": "JP",
         "label": "Japan",
-        "model_date": "2026-07-23",
-        "aligned_observations": 686,
-        "yield_2y_pct": 1.502,
-        "yield_10y_pct": 2.79,
-        "yield_30y_pct": 3.943,
-        "change_20d_2y_bp": 8.499999999999996,
-        "change_20d_10y_bp": 15.700100000000017,
-        "slope_2s10s_bp": 128.8,
-        "change_20d_2s10s_bp": 7.200100000000035,
+        "model_date": "2026-08-05",
+        "aligned_observations": 2406,
+        "yield_2y_pct": 1.58,
+        "yield_10y_pct": 2.829,
+        "yield_30y_pct": 3.986,
+        "change_20d_2y_bp": 14.500100000000016,
+        "change_20d_10y_bp": -4.1998999999999675,
+        "slope_2s10s_bp": 124.9,
+        "change_20d_2s10s_bp": -18.69999999999999,
         "inverted": false,
         "status": "Ready"
       },
       {
         "country": "UK",
         "label": "United Kingdom",
-        "model_date": "2026-07-23",
-        "aligned_observations": 686,
-        "yield_2y_pct": 4.487699509,
-        "yield_10y_pct": 5.101998329,
-        "yield_30y_pct": 5.782269478,
-        "change_20d_2y_bp": 37.289619499999915,
-        "change_20d_10y_bp": 40.262508399999945,
-        "slope_2s10s_bp": 61.42988200000001,
-        "change_20d_2s10s_bp": 2.9728889000000223,
+        "model_date": "2026-08-05",
+        "aligned_observations": 2406,
+        "yield_2y_pct": 4.241850853,
+        "yield_10y_pct": 4.890462875,
+        "yield_30y_pct": 5.642026901,
+        "change_20d_2y_bp": -8.926773100000052,
+        "change_20d_10y_bp": -8.383369500000004,
+        "slope_2s10s_bp": 64.86120220000001,
+        "change_20d_2s10s_bp": 0.5434036000000617,
         "inverted": false,
         "status": "Ready"
       },
       {
         "country": "CA",
         "label": "Canada",
-        "model_date": "2026-07-23",
-        "aligned_observations": 686,
-        "yield_2y_pct": 2.954656601,
-        "yield_10y_pct": 3.642298698,
-        "yield_30y_pct": 4.016888618,
-        "change_20d_2y_bp": 20.328712500000012,
-        "change_20d_10y_bp": 25.87184899999997,
-        "slope_2s10s_bp": 68.7642097,
-        "change_20d_2s10s_bp": 5.54313649999996,
+        "model_date": "2026-08-05",
+        "aligned_observations": 2406,
+        "yield_2y_pct": 2.830719948,
+        "yield_10y_pct": 3.559443474,
+        "yield_30y_pct": 3.972364426,
+        "change_20d_2y_bp": -3.0410766000000145,
+        "change_20d_10y_bp": -0.7806777999999959,
+        "slope_2s10s_bp": 72.8723526,
+        "change_20d_2s10s_bp": 2.2603988000000186,
         "inverted": false,
         "status": "Ready"
       },
       {
         "country": "AU",
         "label": "Australia",
-        "model_date": "2026-07-23",
-        "aligned_observations": 686,
-        "yield_2y_pct": 4.612399578,
-        "yield_10y_pct": 4.991099834,
-        "yield_30y_pct": 5.488949776,
-        "change_20d_2y_bp": 19.09999849999995,
-        "change_20d_10y_bp": 26.27501480000003,
-        "slope_2s10s_bp": 37.87002560000001,
-        "change_20d_2s10s_bp": 7.175016300000081,
+        "model_date": "2026-08-05",
+        "aligned_observations": 2406,
+        "yield_2y_pct": 4.498699665,
+        "yield_10y_pct": 4.906999588,
+        "yield_30y_pct": 5.467649937,
+        "change_20d_2y_bp": 0.3699779000000625,
+        "change_20d_10y_bp": 2.644967999999981,
+        "slope_2s10s_bp": 40.82999229999995,
+        "change_20d_2s10s_bp": 2.2749900999999184,
         "inverted": false,
         "status": "Ready"
       },
       {
         "country": "CH",
         "label": "Switzerland",
-        "model_date": "2026-07-23",
-        "aligned_observations": 686,
-        "yield_2y_pct": 0.262148678,
-        "yield_10y_pct": 0.53243196,
-        "yield_30y_pct": 0.704555333,
-        "change_20d_2y_bp": 23.0165094,
-        "change_20d_10y_bp": 26.244241000000002,
-        "slope_2s10s_bp": 27.0283282,
-        "change_20d_2s10s_bp": 3.2277315999999985,
+        "model_date": "2026-08-05",
+        "aligned_observations": 2406,
+        "yield_2y_pct": 0.087750077,
+        "yield_10y_pct": 0.377278328,
+        "yield_30y_pct": 0.618788302,
+        "change_20d_2y_bp": -2.224361900000001,
+        "change_20d_10y_bp": -1.5518366999999977,
+        "slope_2s10s_bp": 28.952825100000002,
+        "change_20d_2s10s_bp": 0.6725252000000062,
         "inverted": false,
         "status": "Ready"
       }
     ]
   },
   "cross_asset": {
-    "regime": "R1",
-    "label": "SPX \u2191 Rates \u2191 DXY \u2191",
-    "days_in": 1,
-    "latest": "2026-07-24"
+    "regime": "R2",
+    "label": "SPX \u2191 Rates \u2191 DXY \u2193",
+    "days_in": 4,
+    "latest": "2026-08-05"
   },
   "market_linkage": {
     "status": "Ready",
-    "model_date": "2026-07-24",
+    "model_date": "2026-08-05",
     "correlation_window": 20,
-    "mean_abs_correlation": 0.29147063133433215,
+    "mean_abs_correlation": 0.3642704877833504,
     "strongest_positive": {
       "pair": "USGG10YR_vs_DXY",
       "label": "UST 10Y vs DXY",
-      "correlation": 0.5908959718721638
+      "correlation": 0.22550184317127644
     },
     "strongest_negative": {
-      "pair": "SPX_vs_LF98OAS",
-      "label": "SPX vs US HY OAS",
-      "correlation": -0.55369903375726
+      "pair": "SPX_vs_USGG10YR",
+      "label": "SPX vs UST 10Y",
+      "correlation": -0.5702146704407279
     },
     "causal_attribution": false,
     "forecast_model": false
@@ -568,61 +602,88 @@
   "sector_contribution_estimate": {
     "status": "Ready",
     "horizon": 20,
-    "start_date": "2026-06-24",
-    "end_date": "2026-07-23",
-    "weight_date": "2026-05-29",
-    "actual_spx_return_pct": 0.6805993840901747,
-    "estimated_spx_return_pct": 0.5947853657415689,
-    "residual_pp": 0.0858140183486058,
+    "start_date": "2026-07-08",
+    "end_date": "2026-08-05",
+    "weight_date": "2026-06-30",
+    "actual_spx_return_pct": 3.2186199919547853,
+    "estimated_spx_return_pct": 3.2411119579498453,
+    "residual_pp": -0.02249196599505998,
     "top_positive": [
       {
+        "sector": "Information Technology",
+        "estimated_contribution_pp": 1.6747398669860798
+      },
+      {
         "sector": "Financials",
-        "estimated_contribution_pp": 0.44045342191502057
+        "estimated_contribution_pp": 0.6407836534782259
       },
       {
-        "sector": "Health Care",
-        "estimated_contribution_pp": 0.42773654916512016
-      },
-      {
-        "sector": "Energy",
-        "estimated_contribution_pp": 0.3658198136636841
+        "sector": "Consumer Discretionary",
+        "estimated_contribution_pp": 0.3544654265104597
       }
     ],
     "top_negative": [
       {
-        "sector": "Consumer Discretionary",
-        "estimated_contribution_pp": -0.4635253190850162
-      },
-      {
-        "sector": "Communication Services",
-        "estimated_contribution_pp": -0.3757127222371139
-      },
-      {
-        "sector": "Consumer Staples",
-        "estimated_contribution_pp": -0.10029237593921121
+        "sector": "Utilities",
+        "estimated_contribution_pp": -0.08382952868674588
       }
     ],
     "official_attribution": false
   },
   "spx_earnings_valuation": {
     "status": "Ready",
-    "model_date": "2026-07-24",
-    "aligned_observations": 49,
+    "model_date": "2026-07-31",
+    "aligned_observations": 48,
     "eps_field": "BEST_EPS",
     "forecast_period_override": "1FY",
     "frequency": "weekly",
-    "spx_level": 7411.98,
-    "fy1_eps": 348.6555,
-    "implied_fy1_pe": 21.25874968270972,
+    "spx_level": 7489.72,
+    "fy1_eps": 355.0061,
+    "implied_fy1_pe": 21.097440297504747,
     "decomposition_horizon_weeks": 4,
-    "spx_return_pct": -0.2624730006451262,
-    "fy1_eps_growth_pct": 2.55155467645778,
-    "valuation_change_pct": -2.8140276771029162,
-    "identity_residual_pct": 1.021405182655144e-14,
-    "larger_component": "Valuation multiple",
-    "weekly_ols_beta": -0.04048658329500911,
-    "weekly_ols_r_squared": 0.005704549387159114,
+    "spx_return_pct": 1.8284311169031002,
+    "fy1_eps_growth_pct": 3.935172793495471,
+    "valuation_change_pct": -2.106741676592387,
+    "identity_residual_pct": 1.5987211554602254e-14,
+    "larger_component": "FY1 earnings revisions",
+    "weekly_ols_beta": -0.036130553700698655,
+    "weekly_ols_r_squared": 0.004570054113059283,
     "fair_value_model": false,
     "forecast_model": false
+  },
+  "requested_equity_earnings_rows": [
+    {
+      "code": "CSI_A500",
+      "index": "CSI A500",
+      "workbook_ticker": "CSIA500 Index",
+      "status": "Ready",
+      "model_date": "2026-07-31",
+      "index_level": 5629.73,
+      "fy1_eps": 329.9704,
+      "implied_fy1_pe": 17.061318227331906,
+      "price_return_13w_pct": -4.923388298685072,
+      "eps_growth_13w_pct": 25.596177355241196,
+      "valuation_change_13w_pct": -30.51956565392626
+    },
+    {
+      "code": "DJI",
+      "index": "Dow Jones Industrial Average",
+      "workbook_ticker": "DJI Index",
+      "status": "Ready",
+      "model_date": "2026-07-31",
+      "index_level": 52485.03,
+      "fy1_eps": 2449.8363,
+      "implied_fy1_pe": 21.423892690299347,
+      "price_return_13w_pct": 5.961790104990932,
+      "eps_growth_13w_pct": 6.2249715877747045,
+      "valuation_change_13w_pct": -0.2631814827837782
+    }
+  ],
+  "cboe_dspx": {
+    "status": "Ready",
+    "ticker": "DSPX INDEX",
+    "model_date": "2026-08-05",
+    "latest_value": 40.55,
+    "synthetic_substitution": false
   }
 }

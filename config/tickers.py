@@ -110,6 +110,7 @@ TICKERS: dict[str, str] = {
     "DXY":       "DXY CURNCY",         # Dollar index
     "BCOM":      "BCOM INDEX",         # Bloomberg commodity index
     "SPW":       "SPW INDEX",          # S&P 500 equal-weight
+    "DSPX":      "DSPX INDEX",         # Cboe S&P 500 Dispersion Index (optional; no proxy)
     "VIX":       "VIX INDEX",          # CBOE VIX
     "FXJPEMCS":  "FXJPEMCS INDEX",     # EM FX index
     "HG1":       "HG1 COMDTY",        # Copper front month
@@ -281,6 +282,21 @@ POLICY_FUTURES_CONFIG = {
         },
     },
 }
+
+# Fixed quarterly Three-Month SOFR contracts in DATA.xlsx / Policy_Futures.
+# Each contract is stored as its own Date + Price BQL block.  These are actual
+# contract months, not rolling generic ranks.
+SOFR_CONTRACT_CONFIG = {
+    "SFRU6 COMB COMDTY": {"contract_label": "SEP 26", "contract_month": "2026-09", "sequence": 1},
+    "SFRZ6 COMB COMDTY": {"contract_label": "DEC 26", "contract_month": "2026-12", "sequence": 2},
+    "SFRH7 COMB COMDTY": {"contract_label": "MAR 27", "contract_month": "2027-03", "sequence": 3},
+    "SFRM7 COMB COMDTY": {"contract_label": "JUN 27", "contract_month": "2027-06", "sequence": 4},
+    "SFRU7 COMB COMDTY": {"contract_label": "SEP 27", "contract_month": "2027-09", "sequence": 5},
+    "SFRZ7 COMB COMDTY": {"contract_label": "DEC 27", "contract_month": "2027-12", "sequence": 6},
+    "SFRH8 COMB COMDTY": {"contract_label": "MAR 28", "contract_month": "2028-03", "sequence": 7},
+    "SFRM8 COMB COMDTY": {"contract_label": "JUN 28", "contract_month": "2028-06", "sequence": 8},
+}
+
 
 # Countries with full 2/5/10/30 nominal coverage for regime classification
 REGIME_COUNTRIES = ("US", "DE", "JP", "UK", "CA", "AU", "CH")

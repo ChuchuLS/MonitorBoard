@@ -25,9 +25,14 @@ models until field meanings are verified from the Bloomberg description.
 ### Sector ETF proxies (XLC, XLY, etc.)
 NOT true SPX sector indices. If used, must be labelled as "ETF proxy".
 
-### Policy futures (FF1, SFR1, SER1, etc.)
-Data available but FOMC path / SOFR strip models are NOT implemented.
-Do not compute FOMC probabilities without contract metadata and methodology.
+### Policy futures
+The live SOFR strip uses eight actual quarterly SFR contracts from the
+`Policy_Futures` worksheet and converts price to implied rate with `100 - price`.
+It may show contract-month rates and calendar spreads. It must not be described
+as a meeting-by-meeting FOMC path or probability distribution because the FOMC
+calendar and day-weighted meeting-month methodology are not supplied. Legacy
+FF1/SFR1/SER1 generic ranks may remain in raw inventory but are not the
+production strip.
 
 ## Traceability
 

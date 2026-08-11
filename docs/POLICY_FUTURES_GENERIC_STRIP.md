@@ -1,3 +1,8 @@
+> **Superseded for production:** this document describes the earlier SFR1–SFR3
+> generic-rank monitor. The live 01b page now uses eight fixed quarterly
+> contracts from `DATA.xlsx / Policy_Futures`. See
+> `docs/POLICY_FUTURES_FIXED_STRIP.md`.
+
 # Policy Futures Generic Strip
 
 ## Scope

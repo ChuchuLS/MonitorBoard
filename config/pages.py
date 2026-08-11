@@ -46,7 +46,7 @@ PAGES: list[dict] = [
         "description": "Live confirmed policy and funding-plumbing monitor: "
                        "SOFR / EFFR / IORB, TGCR / BGCR / GCF / Tri-Party spreads, "
                        "funding-pressure diagnostics and weekly H.4.1 context. "
-                       "The generic futures strip is a separate live page; a "
+                       "The fixed-contract SOFR futures strip is a separate live page; a "
                        "meeting-by-meeting FOMC path remains unimplemented.",
         "builds_on": "liquidity",
         "next": "policy_futures",
@@ -54,15 +54,15 @@ PAGES: list[dict] = [
     {
         "id": "policy_futures",
         "label": "Futures Strip",
-        "title": "Policy Futures Generic Strip",
+        "title": "SOFR Futures Strip & Calendar Spreads",
         "section": "01b",
         "color_key": "policy",
         "status": "live",
-        "data_source": "sheet1_market",
-        "description": "Continuous-contract monitor for FF1–FF3, SER1–SER3 and "
-                       "SFR1–SFR3. Converts price to implied reference rate using "
-                       "100 − price, shows generic-rank curves and history, and "
-                       "explicitly avoids expiry or FOMC-meeting inference.",
+        "data_source": "policy_futures_sheet",
+        "description": "Eight fixed quarterly Three-Month SOFR contracts from SEP 26 "
+                       "through JUN 28. Shows implied rates, 1D/5D/1M changes, 3M/6M/12M "
+                       "calendar spreads, terminal-rate diagnostics and the strip curve. "
+                       "Contract-month specific, but not a meeting-by-meeting FOMC path.",
         "builds_on": "policy",
         "next": "decomposition",
     },
@@ -146,25 +146,10 @@ PAGES: list[dict] = [
         "color_key": "cross_asset",
         "status": "live",
         "data_source": "sheet1_market",
-        "description": "Live descriptive co-movement monitor for SPX / UST 10Y / "
-                       "DXY / BCOM / US HY OAS. Uses one fully aligned calendar, "
-                       "pairwise rolling correlations, a current matrix and mean "
-                       "absolute correlation. Not causal attribution or a forecast.",
+        "description": "PDF-aligned one-trade linkage gauge for SPX / UST 10Y / DXY. "
+                       "Shows rolling PC1 explained variance and the three underlying "
+                       "pairwise correlations. No regime label, causal attribution, or forecast.",
         "builds_on": "cross_asset",
-        "next": "market_linkage_pca",
-    },
-    {
-        "id": "market_linkage_pca",
-        "label": "Linkage PCA",
-        "title": "Market Linkage PCA",
-        "section": "05c",
-        "color_key": "cross_asset",
-        "status": "experimental",
-        "data_source": "sheet1_market",
-        "description": "Experimental rolling PCA on SPX / UST 10Y / DXY. "
-                       "PC1 loadings, explained variance and a four-regime relative "
-                       "classification. Separate from the live descriptive 05b monitor.",
-        "builds_on": "market_linkage",
         "next": "sector_rotation",
     },
     {
@@ -181,7 +166,7 @@ PAGES: list[dict] = [
                        "sector-weight context. Not causal attribution or "
                        "official SPX return attribution. ETF proxies are "
                        "excluded from the production model.",
-        "builds_on": "market_linkage_pca",
+        "builds_on": "market_linkage",
         "next": "sector_contribution",
     },
     {
@@ -219,26 +204,10 @@ PAGES: list[dict] = [
         "color_key": "fx",
         "status": "live",
         "data_source": "sheet1_market",
-        "description": "Descriptive FX rate-differential monitor for EURUSD, USDJPY, "
-                       "GBPUSD, AUDUSD against 2Y/10Y nominal and 10Y real yield "
-                       "differentials. Not causal attribution or fair value.",
+        "description": "Pair-specific FX monitor for EURUSD, USDJPY, GBPUSD and AUDUSD "
+                       "against 2Y/10Y nominal and 10Y real yield differentials, plus "
+                       "the full 3M/12M cross-currency basis dashboard. Not causal attribution or fair value.",
         "builds_on": "earnings_valuation",
-        "next": "fx",
-    },
-    {
-        "id": "fx",
-        "label": "FX PCA",
-        "title": "FX Complex PCA",
-        "section": "07b",
-        "color_key": "fx",
-        "status": "experimental",
-        "data_source": "sheet1_market",
-        "description": "Experimental PCA-based regime classification on DXY / "
-                       "EM FX / USDJPY 12M xccy basis, followed by the full "
-                       "EUR / JPY / AUD / GBP / CAD 3M and 12M cross-currency "
-                       "basis history dashboard. Separate from the live FX "
-                       "rate-differential monitor.",
-        "builds_on": "fx_rate_diff",
         "next": "data_quality",
     },
     {
@@ -253,7 +222,7 @@ PAGES: list[dict] = [
                        "sections, ticker coverage, scoring-sheet audit, "
                        "forward-fill audit, and Composite Liquidity Index "
                        "methodology.",
-        "builds_on": "fx",
+        "builds_on": "fx_rate_diff",
         "next": "scoring",
     },
     {
@@ -285,31 +254,6 @@ PAGES: list[dict] = [
         "next": None,
     },
 ]
-
-# Also add a "rates_pca" page for the within-rates PCA that was misnamed as
-# "decomposition" — it moves here as an experimental page.
-# Insert it after decomposition in the nav.
-_RATES_PCA = {
-    "id": "rates_pca",
-    "label": "Rates PCA",
-    "title": "Rates Complex PCA",
-    "section": "02b",
-    "color_key": "decomposition",
-    "status": "experimental",
-    "data_source": "sheet1_market",
-    "description": "Within-rates PCA on UST 10Y / 2s10s / 10Y breakeven / "
-                   "10Y real yield / MOVE. Experimental — this is a PCA "
-                   "regime model, NOT the PDF-style nominal = real + inflation "
-                   "decomposition.",
-    "builds_on": "decomposition",
-    "next": "regimes",
-}
-# Insert after decomposition
-_idx = next(i for i, p in enumerate(PAGES) if p["id"] == "decomposition")
-PAGES.insert(_idx + 1, _RATES_PCA)
-# Fix linkage: decomposition.next -> rates_pca, rates_pca.next -> regimes
-PAGES[_idx]["next"] = "rates_pca"
-
 
 # Convenience lookups
 PAGES_BY_ID: dict[str, dict] = {p["id"]: p for p in PAGES}
@@ -348,15 +292,21 @@ DATA_SOURCES = {
     "sheet1_market": {
         "file": "data/DATA.xlsx",
         "sheet": "Sheet1",
-        "role": "Main market data: liquidity, rates, credit, cross-asset, FICC, FX PCA inputs",
+        "role": "Main market data: liquidity, rates, credit, cross-asset, sectors, FX and XCCY inputs",
         "source_of_truth": True,
         "pages": [
-            "liquidity", "policy", "policy_futures", "decomposition", "regimes",
+            "liquidity", "policy", "decomposition", "regimes",
             "global_rates", "country_boards", "cross_asset", "market_linkage",
-            "market_linkage_pca",
-            "rates_pca", "sector_rotation", "sector_contribution",
-            "fx_rate_diff", "fx",
+            "sector_rotation", "sector_contribution",
+            "fx_rate_diff",
         ],
+    },
+    "policy_futures_sheet": {
+        "file": "data/DATA.xlsx",
+        "sheet": "Policy_Futures",
+        "role": "Eight fixed quarterly Three-Month SOFR contract Date + Price BQL blocks",
+        "source_of_truth": True,
+        "pages": ["policy_futures"],
     },
     "scoring_sheets": {
         "file": "data/DATA.xlsx",

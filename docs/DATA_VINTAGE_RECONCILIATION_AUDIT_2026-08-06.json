@@ -1,0 +1,16 @@
+{
+  "files": {
+    "user": "/mnt/data/DATA.xlsx",
+    "corrected": "/mnt/data/DATA-calendar-reconciled-2026-08-06.xlsx",
+    "prior_verified": "/tmp/v39/RatesMonitorEnhanced-main (39)/data/DATA.xlsx"
+  },
+  "core_A_to_ES_value_mismatch_rows": 0,
+  "corrected_ET_to_GF_vs_prior_verified_value_mismatch_rows": 0,
+  "prior_verified_populated_date_rows": 715,
+  "uploaded_same_date_exact_populated_matches": 0,
+  "uploaded_plus_10_calendar_days_exact_populated_matches": 715,
+  "uploaded_plus_10_calendar_days_populated_mismatches": 0,
+  "corrected_calendar_first_added_date": "2023-10-30",
+  "corrected_calendar_latest_FX_SFR_date": "2026-07-24",
+  "note": "A:ES from the user-updated workbook is preserved exactly by value. ET:GF was restored to the last verified exact-date mapping because all 715 populated prior rows were reproduced under labels exactly 10 calendar days later in the uploaded workbook. No new verified ET:GF observations were accepted."
+}
