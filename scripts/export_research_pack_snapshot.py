@@ -48,30 +48,33 @@ def build_snapshot() -> dict:
             "title": p["title"], "status": STATUS_LABELS[p["status"]],
         })
 
-    # Policy Futures Generic Strip — continuous ranks, not fixed expiries
+    # Fixed-contract SOFR Futures Strip & Calendar Spreads
     try:
-        from models.policy_futures_generic import build_policy_futures_family_snapshot
-        pf = {}
-        for family in ("FF", "SER", "SFR"):
-            ps = build_policy_futures_family_snapshot(df, family)
-            table = ps.get("strip_table")
-            pf[family] = {
-                "status": ps.get("status"),
-                "display_name": ps.get("family_config", {}).get("display_name"),
-                "model_date": str(ps.get("model_date")) if ps.get("model_date") else None,
-                "aligned_observations": ps.get("aligned_observations"),
-                "front_to_third_bp": ps.get("front_to_third_bp"),
-                "curve_shape": ps.get("curve_shape"),
-                "front_minus_spot_bp": ps.get("front_minus_spot_bp"),
-                "generic_strip": (
-                    table[["rank", "ticker", "price", "implied_rate_pct",
-                           "relative_to_front_bp"]].to_dict(orient="records")
-                    if hasattr(table, "empty") and not table.empty else []
-                ),
-                "fixed_expiry_mapping": False,
-                "fomc_meeting_path": False,
-            }
-        snap["policy_futures_generic_strip"] = pf
+        from data.policy_futures_loader import load_policy_futures
+        from models.policy_futures_strip import build_sofr_strip_snapshot
+        ps = build_sofr_strip_snapshot(load_policy_futures(), df)
+        table = ps.get("strip_table")
+        matrix = ps.get("calendar_spread_matrix")
+        snap["sofr_futures_strip"] = {
+            "status": ps.get("status"),
+            "model_date": str(ps.get("model_date")) if ps.get("model_date") else None,
+            "aligned_observations": ps.get("aligned_observations"),
+            "effr_pct": ps.get("effr_pct"),
+            "sofr_pct": ps.get("sofr_pct"),
+            "terminal": ps.get("terminal"),
+            "terminal_spreads": ps.get("terminal_spreads"),
+            "fixed_contract_strip": (
+                table[["sequence", "ticker", "contract_label", "price", "implied_rate_pct",
+                       "change_1d_bp", "change_5d_bp", "change_20d_bp"]].to_dict(orient="records")
+                if hasattr(table, "empty") and not table.empty else []
+            ),
+            "calendar_spread_matrix": (
+                matrix.to_dict(orient="records")
+                if hasattr(matrix, "empty") and not matrix.empty else []
+            ),
+            "fixed_contract_months": True,
+            "fomc_meeting_path": False,
+        }
     except Exception:
         pass
 
@@ -207,8 +210,11 @@ def build_snapshot() -> dict:
     # SPX FY1 Earnings & Valuation — exact weekly identity decomposition
     try:
         from data.equity_earnings_loader import load_equity_earnings_data
-        from models.earnings_valuation import build_earnings_current_reading
-        ev = build_earnings_current_reading(load_equity_earnings_data(), code="ES1")
+        from models.earnings_valuation import (
+            build_earnings_current_reading, build_global_earnings_overview,
+        )
+        _earnings_data = load_equity_earnings_data()
+        ev = build_earnings_current_reading(_earnings_data, code="ES1")
         snap["spx_earnings_valuation"] = {
             "status": ev.get("status"),
             "model_date": str(ev.get("model_date")) if ev.get("model_date") else None,
@@ -229,6 +235,37 @@ def build_snapshot() -> dict:
             "weekly_ols_r_squared": ev.get("regression_r_squared"),
             "fair_value_model": False,
             "forecast_model": False,
+        }
+        requested = build_global_earnings_overview(_earnings_data, horizon=13)
+        requested = requested.loc[requested["code"].isin(["CSI_A500", "DJI"])]
+        snap["requested_equity_earnings_rows"] = [
+            {
+                "code": row["code"],
+                "index": row["index"],
+                "workbook_ticker": row.get("workbook_ticker"),
+                "status": row["status"],
+                "model_date": str(row["model_date"]) if row["model_date"] else None,
+                "index_level": row["price"],
+                "fy1_eps": row["eps_fy1"],
+                "implied_fy1_pe": row["fy1_pe"],
+                "price_return_13w_pct": row["price_return_13w_pct"],
+                "eps_growth_13w_pct": row["eps_growth_13w_pct"],
+                "valuation_change_13w_pct": row["valuation_change_13w_pct"],
+            }
+            for _, row in requested.iterrows()
+        ]
+    except Exception:
+        pass
+
+    try:
+        from models.sector_rotation import build_spx_dispersion_index
+        dspx = build_spx_dispersion_index(df)
+        snap["cboe_dspx"] = {
+            "status": "Ready" if len(dspx) else "Missing data",
+            "ticker": "DSPX INDEX",
+            "model_date": str(dspx.index[-1].date()) if len(dspx) else None,
+            "latest_value": float(dspx.iloc[-1]) if len(dspx) else None,
+            "synthetic_substitution": False,
         }
     except Exception:
         pass

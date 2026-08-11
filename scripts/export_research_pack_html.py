@@ -241,57 +241,57 @@ def _build_liquidity(r):
 
 
 def _build_policy_futures(df):
-    """Static table for the live generic policy-futures monitor."""
-    from models.policy_futures_generic import build_policy_futures_overview
+    """Static fixed-contract SOFR strip and calendar-spread tables."""
+    from data.policy_futures_loader import load_policy_futures
+    from models.policy_futures_strip import build_sofr_strip_snapshot
 
-    overview = build_policy_futures_overview(df, horizons=(20,))
+    snap = build_sofr_strip_snapshot(load_policy_futures(), df)
     html = ("<div class='page'>"
-            + _section_header("01b", "Policy Futures Generic Strip", "#35bdf4",
-                              "Continuous FF / 1-Month SOFR / 3-Month SOFR ranks; not a FOMC path."))
-    if overview.empty or overview["implied_rate_pct"].dropna().empty:
-        html += "<p class='sub'>No aligned generic futures data.</p></div>"
+            + _section_header("01b", "SOFR Futures Strip & Calendar Spreads", "#35bdf4",
+                              "Eight fixed quarterly SFR contracts; not a meeting-by-meeting FOMC path."))
+    table = snap.get("strip_table")
+    if snap.get("status") != "Ready" or table is None or table.empty:
+        html += "<p class='sub'>No fully aligned fixed-contract SOFR strip.</p></div>"
         return html
 
-    ready = overview[overview["status"] == "Ready"].copy()
-    family_rows = []
-    for family, grp in ready.groupby("family", sort=False):
-        front = grp.loc[grp["rank"] == 1]
-        third = grp.loc[grp["rank"] == 3]
-        if front.empty or third.empty:
-            continue
-        family_rows.append({
-            "Family": family,
-            "Contract": front.iloc[0]["family_name"],
-            "Front implied rate": f"{front.iloc[0]['implied_rate_pct']:.3f}%",
-            "Third implied rate": f"{third.iloc[0]['implied_rate_pct']:.3f}%",
-            "Rank 3 − Rank 1": f"{front.iloc[0]['front_to_third_bp']:+.1f} bp",
-            "Curve description": front.iloc[0]["curve_shape"],
-            "Common date": str(front.iloc[0]["model_date"]),
-        })
-    if family_rows:
-        html += _df_table(pd.DataFrame(family_rows))
-
-    detail = ready[["family_name", "rank_label", "ticker", "price",
-                    "implied_rate_pct", "change_20d_bp", "relative_to_front_bp",
-                    "model_date"]].copy()
-    detail.columns = ["Family", "Generic rank", "Ticker", "Price", "Implied rate (%)",
-                      "20D rate change (bp)", "Vs front (bp)", "Common date"]
+    terminal = snap["terminal"]
+    html += _reading_box("Current strip", [
+        ("EFFR", "—" if snap.get("effr_pct") is None else f"{snap['effr_pct']:.3f}%"),
+        ("SOFR", "—" if snap.get("sofr_pct") is None else f"{snap['sofr_pct']:.3f}%"),
+        ("Terminal", f"{terminal['terminal_rate_pct']:.3f}% · {terminal['terminal_contract']}"),
+        ("EFFR to terminal", f"{terminal['terminal_gap_bp']:+.1f} bp"),
+    ])
+    detail = table[["contract_label", "price", "implied_rate_pct", "change_1d_bp",
+                    "change_5d_bp", "change_20d_bp", "model_date"]].copy()
+    detail.columns = ["Contract", "Price", "Implied rate (%)", "1D change (bp)",
+                      "5D change (bp)", "1M change (bp)", "Common date"]
     for col in ["Price", "Implied rate (%)"]:
-        detail[col] = detail[col].map(lambda v: "—" if pd.isna(v) else f"{v:.4f}")
-    for col in ["20D rate change (bp)", "Vs front (bp)"]:
+        detail[col] = detail[col].map(lambda v: "—" if pd.isna(v) else f"{v:.3f}")
+    for col in ["1D change (bp)", "5D change (bp)", "1M change (bp)"]:
         detail[col] = detail[col].map(lambda v: "—" if pd.isna(v) else f"{v:+.1f}")
-    html += "<h3>Generic ranks</h3>" + _df_table(detail, max_rows=20)
+    html += "<h3>SOFR futures strip</h3>" + _df_table(detail, max_rows=12)
+
+    matrix = snap["calendar_spread_matrix"].copy()
+    for col in ["3M", "6M", "12M"]:
+        matrix[col] = matrix[col].map(lambda v: "—" if pd.isna(v) else f"{v:+.1f}")
+    html += "<h3>Calendar spread matrix (bp)</h3>" + _df_table(matrix, max_rows=12)
+
+    spreads = snap["terminal_spreads"]
+    html += _reading_box("Standard STIR spreads", [
+        ("EFFR to terminal", f"{terminal['terminal_gap_bp']:+.1f} bp"),
+        ("Terminal to +3M", "—" if spreads.get("terminal_to_3m_bp") is None else f"{spreads['terminal_to_3m_bp']:+.1f} bp"),
+        ("Terminal to +6M", "—" if spreads.get("terminal_to_6m_bp") is None else f"{spreads['terminal_to_6m_bp']:+.1f} bp"),
+        ("Terminal to +12M", "—" if spreads.get("terminal_to_12m_bp") is None else f"{spreads['terminal_to_12m_bp']:+.1f} bp"),
+    ])
     html += _method_box(
         "Methodology and limitation",
-        "Implied reference rate = 100 − futures price. FF reflects a monthly average "
-        "EFFR contract, SER a monthly average SOFR contract, and SFR a compounded "
-        "three-month SOFR reference-quarter contract. Generic ranks roll across "
-        "underlying contracts and are not fixed expiries; no FOMC meeting path or "
-        "probability is inferred."
+        "Actual fixed quarterly Three-Month SOFR contracts from SEP 26 through JUN 28. "
+        "Implied rate = 100 − price. Every contract keeps its own source Date column and "
+        "is joined by Date. This is not a meeting-by-meeting FOMC probability model, and "
+        "the fixed contract list must be rolled when contracts expire."
     )
     html += "</div>"
     return html
-
 
 def _build_decomposition(df):
     snap = build_us_curve_snapshot(df)
@@ -523,16 +523,45 @@ def _build_data_quality(df, lvd, sig):
     ]
     html += _reading_box("Phase 2 Model Readiness", readiness)
 
+    requested_inputs = []
+    try:
+        from models.sector_rotation import build_spx_dispersion_index
+        dspx = build_spx_dispersion_index(df)
+        requested_inputs.append((
+            "Cboe DSPX",
+            (f"Ready — {float(dspx.iloc[-1]):.2f} on {dspx.index[-1].date()}"
+             if len(dspx) else "Missing data — no synthetic substitute"),
+        ))
+    except Exception as exc:
+        requested_inputs.append(("Cboe DSPX", f"Audit unavailable — {type(exc).__name__}"))
+    try:
+        from data.equity_earnings_loader import load_equity_earnings_data
+        from models.earnings_valuation import build_global_earnings_overview
+        overview = build_global_earnings_overview(load_equity_earnings_data(), horizon=13)
+        for code, label in (("CSI_A500", "CSI A500"), ("DJI", "Dow Jones Industrial Average")):
+            row = overview.loc[overview["code"] == code]
+            if row.empty or row.iloc[0]["status"] != "Ready":
+                requested_inputs.append((label, "Missing data — no proxy used"))
+            else:
+                item = row.iloc[0]
+                requested_inputs.append((
+                    label,
+                    f"Ready — {item['workbook_ticker']} · P/E {item['fy1_pe']:.2f}x · {item['model_date']}",
+                ))
+    except Exception as exc:
+        requested_inputs.append(("CSI A500 / DJI", f"Audit unavailable — {type(exc).__name__}"))
+    html += _reading_box("Requested Reference-Pack Inputs", requested_inputs)
+
     # Streamlit coverage and future models
     future = [
-        ("Policy Futures Generic Strip", "Live — FF / SER / SFR continuous ranks; included in this HTML"),
+        ("SOFR Futures Strip & Calendar Spreads", "Live — eight fixed quarterly SFR contracts; included in this HTML"),
         ("FOMC path", "Not implemented — actual contract months and meeting methodology required"),
         ("Market Linkage & Correlations", "Live in Streamlit; not currently included as a full static HTML page"),
-        ("Sector Rotation & Breadth", "Live in Streamlit; not currently included in the static HTML export"),
+        ("Sector Rotation & Breadth", "Live in Streamlit; DSPX source availability is audited in this HTML; full chart remains Streamlit-only"),
         ("Sector Contribution Estimate", "Live in Streamlit; approximation with explicit residual; not official attribution; not currently included in the static HTML export"),
         ("FX Rate Differential Monitor", "Live in Streamlit; not currently included in the static HTML export"),
         ("Official SPX sector attribution", "Not implemented — daily-weight or official contribution methodology required"),
-        ("SPX FY1 Earnings & Valuation", "Live in Streamlit; BEST_EPS with 1FY override; exact weekly decomposition; not currently included as a full static HTML page"),
+        ("SPX FY1 Earnings & Valuation", "Live in Streamlit; CSI A500 and DJI source rows are audited in this HTML; full page remains Streamlit-only"),
         ("Forward estimate vs realized EPS", "Not implemented — realized/trailing EPS field and period definition not supplied"),
     ]
     html += "<h3>Streamlit Coverage & Future Models</h3>"

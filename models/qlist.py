@@ -434,18 +434,20 @@ def build_qlist(df: pd.DataFrame, index_result, cli_index: pd.Series) -> list[QA
             answers.append(QAnswer(
                 question="Which cross-asset relationships are strongest right now?",
                 answer=(
-                    f"Strongest positive 20-observation relationship: "
-                    f"{_pos.get('label', '—')} ({_pos.get('correlation', float('nan')):+.2f}). "
-                    f"Strongest negative: {_neg.get('label', '—')} "
+                    f"The one-trade linkage gauge is "
+                    f"{_linkage.get('pc1_explained_variance', float('nan')):.1%} "
+                    f"of total standardized variance (2Y percentile "
+                    f"{_linkage.get('linkage_percentile_2y', float('nan')):.0f}/100). "
+                    f"Strongest positive 20-observation pair: "
+                    f"{_pos.get('label', '—')} ({_pos.get('correlation', float('nan')):+.2f}); "
+                    f"strongest negative: {_neg.get('label', '—')} "
                     f"({_neg.get('correlation', float('nan')):+.2f}). "
-                    f"Mean absolute pair correlation: "
-                    f"{_linkage.get('mean_abs_correlation', float('nan')):.2f}. "
                     f"Model date {_linkage.get('model_date')}."
                 ),
                 evidence="models.market_linkage.build_market_linkage_current_reading()",
                 data_status="real_data",
                 details=[
-                    "Universe: SPX, UST 10Y, DXY, BCOM and US HY OAS.",
+                    "Universe: SPX, UST 10Y and DXY, aligned before daily transformations.",
                     "All level series are aligned before daily transformations.",
                     "Correlation describes co-movement; it is not causal attribution or a forecast.",
                 ],
@@ -463,49 +465,42 @@ def build_qlist(df: pd.DataFrame, index_result, cli_index: pd.Series) -> list[QA
             "Which cross-asset relationships are strongest right now?",
             "Model error", "—", "data_missing", []))
 
-    # ── Q14: What does the generic policy-futures strip imply? ──
+    # ── Q14: What does the fixed-contract SOFR strip imply? ──
     try:
-        from models.policy_futures_generic import build_policy_futures_family_snapshot
-        _pf_details = []
-        _pf_ready = []
-        for _family in ("FF", "SER", "SFR"):
-            _snap = build_policy_futures_family_snapshot(df, _family)
-            if _snap.get("status") != "Ready" or _snap.get("strip_table").empty:
-                _pf_details.append(f"{_family}: {_snap.get('status', 'Missing data')}")
-                continue
-            _tbl = _snap["strip_table"]
-            _front = _tbl.loc[_tbl["rank"] == 1].iloc[0]
-            _third = _tbl.loc[_tbl["rank"] == 3].iloc[0]
-            _pf_ready.append((_family, _snap, _front, _third))
-            _pf_details.append(
-                f"{_family}: front {_front['implied_rate_pct']:.3f}%, "
-                f"third {_third['implied_rate_pct']:.3f}%, "
-                f"3−1 {_snap['front_to_third_bp']:+.1f}bp, date {_snap['model_date']}"
-            )
-        if _pf_ready:
-            _lead = _pf_ready[0]
+        from data.policy_futures_loader import load_policy_futures
+        from models.policy_futures_strip import build_sofr_strip_snapshot
+        _fixed = load_policy_futures()
+        _snap = build_sofr_strip_snapshot(_fixed, df)
+        _tbl = _snap.get("strip_table")
+        if _snap.get("status") == "Ready" and hasattr(_tbl, "empty") and not _tbl.empty:
+            _terminal = _snap["terminal"]
+            _spreads = _snap["terminal_spreads"]
             answers.append(QAnswer(
-                question="What does the generic policy-futures strip imply?",
+                question="What does the fixed-contract SOFR futures strip imply?",
                 answer=(
-                    "Continuous-rank implied rates are available for FF, 1-Month SOFR "
-                    "and 3-Month SOFR. " + " · ".join(_pf_details) + "."
+                    f"The strip peaks at {_terminal['terminal_rate_pct']:.3f}% in "
+                    f"{_terminal['terminal_contract']}, {_terminal['terminal_gap_bp']:+.1f}bp "
+                    f"versus EFFR. Terminal to +12 months is "
+                    f"{_spreads.get('terminal_to_12m_bp'):+.1f}bp as of {_snap['model_date']}."
                 ),
-                evidence="models.policy_futures_generic.build_policy_futures_family_snapshot()",
-                data_status="real_data" if len(_pf_ready) == 3 else "partial",
+                evidence="models.policy_futures_strip.build_sofr_strip_snapshot()",
+                data_status="real_data",
                 details=[
+                    "Eight actual quarterly SFR contracts: SEP 26 through JUN 28.",
                     "Implied reference rate = 100 − futures price.",
-                    "Generic ranks roll across underlying contracts and are not fixed expiries.",
-                    "This does not infer a meeting-by-meeting FOMC path or probability.",
+                    "Each contract uses its own Bloomberg Date output and is joined by Date.",
+                    "This is not a meeting-by-meeting FOMC path or probability distribution.",
                 ],
             ))
         else:
             answers.append(QAnswer(
-                "What does the generic policy-futures strip imply?",
-                "Data Missing", "—", "data_missing", _pf_details,
+                "What does the fixed-contract SOFR futures strip imply?",
+                f"Data Missing ({_snap.get('status', 'unknown')})", "—",
+                "data_missing", _snap.get("missing", []),
             ))
     except Exception:
         answers.append(QAnswer(
-            "What does the generic policy-futures strip imply?",
+            "What does the fixed-contract SOFR futures strip imply?",
             "Model error", "—", "data_missing", [],
         ))
 

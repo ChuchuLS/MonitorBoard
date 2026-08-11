@@ -188,9 +188,14 @@ def reconciliation(current: IndexResult, legacy: IndexResult,
 # 3 & 4. Component contributions + status/reason
 # ---------------------------------------------------------------------------
 def _component_status(comp_id: str, result: IndexResult, raw: dict[str, pd.Series],
-                      df: pd.DataFrame) -> tuple[bool, str]:
-    """(is_live_on_latest, reason). Reason explains exclusion when not live."""
-    latest = df.index.max()
+                      df: pd.DataFrame, asof=None) -> tuple[bool, str]:
+    """(is_live_on_latest, reason). Reason explains exclusion when not live.
+
+    ``asof`` defaults to the latest raw workbook row for freshness audits.  A
+    published-index caller should pass the latest published date explicitly so
+    contribution rows reconcile to the same date as the displayed index.
+    """
+    latest = pd.Timestamp(asof) if asof is not None else df.index.max()
     if comp_id not in raw or raw[comp_id].dropna().empty:
         return False, "Missing data"
 
@@ -235,14 +240,15 @@ def component_contribution_table(result: IndexResult, df: pd.DataFrame) -> pd.Da
     """One row per DEFINED component with its latest contribution + change terms
     and a live/excluded reason. Live components' contributions sum to index-50."""
     raw, _ = build_components(df)
-    latest = df.index.max()
+    published = result.index.dropna()
+    latest = published.index[-1] if len(published) else df.index.max()
 
     level = result.component_level_contributions()
     chg = {h: result.component_change_contributions(h) for h in HORIZONS}
 
     rows = []
     for comp_id, label, bucket, direction, spec in COMPONENTS:
-        live, reason = _component_status(comp_id, result, raw, df)
+        live, reason = _component_status(comp_id, result, raw, df, asof=latest)
         rseries = raw.get(comp_id, pd.Series(dtype=float)).dropna()
         raw_latest = float(rseries.iloc[-1]) if not rseries.empty else np.nan
         z = result.z_scores[comp_id] if comp_id in result.z_scores.columns else pd.Series(dtype=float)

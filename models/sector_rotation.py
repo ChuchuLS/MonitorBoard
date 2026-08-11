@@ -22,7 +22,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from config.tickers import SPX_SECTOR_CONFIG
+from config.tickers import SPX_SECTOR_CONFIG, TICKERS
 
 SPX_BENCHMARK_TICKER = "SPX INDEX"
 DEFAULT_HORIZONS = (1, 5, 20, 63)
@@ -54,6 +54,26 @@ def _spx_series(df: pd.DataFrame):
         return None
     series = pd.to_numeric(df[col], errors="coerce").dropna()
     return series if len(series) else None
+
+
+def build_spx_dispersion_index(df: pd.DataFrame, asof=None) -> pd.Series:
+    """Return the optional Cboe S&P 500 Dispersion Index (DSPX).
+
+    DSPX is a separate, forward-looking implied-dispersion index.  It is never
+    replaced by the realised cross-sector dispersion calculated by this model,
+    and the realised series is never relabelled as DSPX.  Missing source data
+    therefore returns an empty series.
+    """
+    ticker = TICKERS.get("DSPX", "DSPX INDEX")
+    col = _resolve_col(df, ticker)
+    if col is None:
+        return pd.Series(dtype=float, name="dspx")
+    series = pd.to_numeric(df[col], errors="coerce").dropna().sort_index()
+    if asof is not None:
+        series = series.loc[series.index <= pd.Timestamp(asof)]
+    series = series[~series.index.duplicated(keep="last")]
+    series.name = "dspx"
+    return series
 
 
 def _available_sector_series(df: pd.DataFrame, asof=None) -> dict[str, pd.Series]:
@@ -365,6 +385,55 @@ def build_sector_breadth_history(df: pd.DataFrame, horizon: int = 20, asof=None)
         "relative_breadth_pct": 100 * outperf_count / denominator.replace(0, np.nan),
         "dispersion_pct": 100 * sector_returns.std(axis=1, ddof=0),
     }).dropna(how="all")
+
+
+def build_reference_breadth_dispersion_history(
+    df: pd.DataFrame,
+    ma_window: int = 50,
+    return_window: int = 21,
+    asof=None,
+) -> pd.DataFrame:
+    """Reference-pack breadth and dispersion definitions.
+
+    The Capital Flows reference pack defines sector breadth as the share of
+    the 11 S&P 500 sector indices above their own 50-session moving average,
+    and dispersion as the cross-sectional population standard deviation of
+    trailing 21-session sector *simple* returns.  This function reproduces
+    those definitions on the common S5-sector observation calendar.
+
+    Missing sectors are not replaced with ETF proxies or zeros.  The breadth
+    denominator is therefore the actual number of sectors with a valid price
+    and moving average on each date.
+    """
+    if ma_window < 2 or return_window < 1:
+        raise ValueError("ma_window must be >= 2 and return_window must be >= 1")
+    prices = build_sector_price_frame(df, asof=asof)
+    if prices.empty or len(prices) <= max(ma_window, return_window):
+        return pd.DataFrame()
+
+    moving_average = prices.rolling(ma_window, min_periods=ma_window).mean()
+    valid_breadth = prices.notna() & moving_average.notna()
+    above_ma = prices.gt(moving_average) & valid_breadth
+    denominator = valid_breadth.sum(axis=1)
+    above_count = above_ma.sum(axis=1)
+
+    simple_returns_pct = 100 * (prices / prices.shift(return_window) - 1)
+    valid_return_count = simple_returns_pct.notna().sum(axis=1)
+    dispersion_pct = simple_returns_pct.std(axis=1, ddof=0)
+
+    result = pd.DataFrame({
+        "above_ma_count": above_count,
+        "breadth_denominator": denominator,
+        "above_ma_breadth_pct": (
+            100 * above_count / denominator.replace(0, np.nan)
+        ),
+        "dispersion_valid_count": valid_return_count,
+        "return_dispersion_pct": dispersion_pct,
+    })
+    return result.loc[
+        (result["breadth_denominator"] > 0)
+        | (result["dispersion_valid_count"] > 0)
+    ].dropna(how="all")
 
 
 def available_sector_inputs(df: pd.DataFrame, weights_df=None) -> dict:

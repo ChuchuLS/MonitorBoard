@@ -38,9 +38,30 @@ EPS_FIELD_METADATA = {
                '"BEST_FPERIOD_OVERRIDE=1FY","Per=W","Dir=V","Dt")',
 }
 
-INDEX_META = {
-    code: {"display_name": name, "region": region}
+# The global earnings table has its own explicit cash-index universe.  China is
+# intentionally represented by CSI A500 rather than relabelling the existing
+# FTSE China A50 (XU1) history.  DJI is an additional requested US index.  The
+# The workbook now contains both requested series. Their short-code row may be
+# blank, so data/equity_earnings_loader.py resolves them from the Bloomberg
+# ticker row without relabelling the existing FTSE China A50 (XU1) series.
+EARNINGS_OVERVIEW_UNIVERSE = [
+    {"code": code, "display_name": name, "region": region, "ticker": None}
     for code, name, region in EQUITY_UNIVERSE
+    if code != "XU1"
+] + [
+    {"code": "CSI_A500", "display_name": "CSI A500", "region": "China",
+     "ticker": "CSIA500 INDEX"},
+    {"code": "DJI", "display_name": "Dow Jones Industrial Average", "region": "USA",
+     "ticker": "DJI INDEX"},
+]
+
+INDEX_META = {
+    item["code"]: {
+        "display_name": item["display_name"],
+        "region": item["region"],
+        "ticker": item.get("ticker"),
+    }
+    for item in EARNINGS_OVERVIEW_UNIVERSE
 }
 
 
@@ -312,13 +333,23 @@ def build_global_earnings_overview(
     asof=None,
 ) -> pd.DataFrame:
     rows = []
+    metadata = data.get("metadata") if isinstance(data, dict) else None
     for code, meta in INDEX_META.items():
         frame = build_equity_earnings_frame(data, code=code, asof=asof)
         readiness = assess_earnings_readiness(data, code=code, asof=asof)
+        workbook_ticker = None
+        if isinstance(metadata, pd.DataFrame) and code in metadata.index:
+            meta_row = metadata.loc[code]
+            for field in ("ticker_price", "ticker_eps", "ticker"):
+                if field in meta_row.index and pd.notna(meta_row[field]) and str(meta_row[field]).strip():
+                    workbook_ticker = str(meta_row[field]).strip()
+                    break
         row = {
             "code": code,
             "index": meta["display_name"],
             "region": meta["region"],
+            "requested_ticker": meta.get("ticker"),
+            "workbook_ticker": workbook_ticker,
             "status": readiness["status"],
             "aligned_observations": readiness["aligned_observations"],
             "model_date": readiness["model_date"],
