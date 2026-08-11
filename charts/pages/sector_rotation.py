@@ -5,6 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import streamlit as st
 
 from config.pages import get_page
@@ -20,7 +21,8 @@ from data.external_loaders import load_spx_sector_weights
 from models.sector_rotation import (
     build_sector_snapshot, build_sector_breadth_history,
     build_sector_current_reading, available_sector_inputs,
-    DEFAULT_FLAT_THRESHOLD_PCT,
+    build_reference_breadth_dispersion_history,
+    build_spx_dispersion_index, DEFAULT_FLAT_THRESHOLD_PCT,
 )
 from ._context import PageContext
 
@@ -34,6 +36,14 @@ def _fmt(v, fmt="+.2f", suffix="%"):
     if v is None or (isinstance(v, float) and np.isnan(v)):
         return "—"
     return f"{v:{fmt}}{suffix}"
+
+
+def _trailing_percentile(series: pd.Series, window: int = 252):
+    clean = pd.to_numeric(series, errors="coerce").dropna()
+    if clean.empty:
+        return np.nan
+    trailing = clean.tail(window)
+    return float(100 * (trailing <= clean.iloc[-1]).mean())
 
 
 def render(ctx: PageContext) -> None:
@@ -62,6 +72,28 @@ def render(ctx: PageContext) -> None:
     sector_only_date = reading["sector_only_date"]
     relative_model_date = reading["relative_model_date"]
     weight_date = reading["weight_date"]
+    reference_history = build_reference_breadth_dispersion_history(ctx.df)
+    if reference_history.empty:
+        ref_breadth = ref_dispersion = np.nan
+        ref_breadth_pctile = ref_dispersion_pctile = np.nan
+        ref_denominator = ref_dispersion_count = 0
+    else:
+        latest_reference = reference_history.iloc[-1]
+        ref_breadth = latest_reference.get("above_ma_breadth_pct", np.nan)
+        ref_dispersion = latest_reference.get("return_dispersion_pct", np.nan)
+        ref_denominator = int(latest_reference.get("breadth_denominator", 0) or 0)
+        ref_dispersion_count = int(latest_reference.get("dispersion_valid_count", 0) or 0)
+        ref_breadth_pctile = _trailing_percentile(
+            reference_history["above_ma_breadth_pct"]
+        )
+        ref_dispersion_pctile = _trailing_percentile(
+            reference_history["return_dispersion_pct"]
+        )
+
+    dspx = build_spx_dispersion_index(ctx.df, asof=relative_model_date)
+    dspx_latest = float(dspx.iloc[-1]) if not dspx.empty else np.nan
+    dspx_date = dspx.index[-1].date() if not dspx.empty else None
+    dspx_pctile = _trailing_percentile(dspx) if not dspx.empty else np.nan
 
     render_page_header(page,
         latest_date=str(relative_model_date).upper(),
@@ -81,14 +113,16 @@ def render(ctx: PageContext) -> None:
         {"label": "Relative model date", "value": str(relative_model_date),
          "sub": f"{reading['relative_obs']} aligned obs",
          "accent": section_color(page["color_key"])},
-        {"label": f"{reading['short_window']}D positive breadth",
-         "value": _fmt(reading.get("positive_breadth_pct"), ".0f"),
-         "sub": f"{reading['positive_count']}/{reading['positive_denom']} sectors"},
-        {"label": f"{reading['short_window']}D SPX-outperform breadth",
-         "value": _fmt(reading.get("relative_breadth_pct"), ".0f"),
-         "sub": f"{reading['outperf_count']}/{reading['positive_denom']} sectors"},
-        {"label": f"{reading['short_window']}D dispersion",
-         "value": _fmt(reading.get("dispersion_pct"), ".2f")},
+        {"label": "Above own 50D average",
+         "value": _fmt(ref_breadth, ".0f"),
+         "sub": f"{ref_denominator}/11 valid · 1Y pctile {_fmt(ref_breadth_pctile, '.0f', '')}"},
+        {"label": "21D sector dispersion",
+         "value": _fmt(ref_dispersion, ".2f", "pp"),
+         "sub": f"{ref_dispersion_count}/11 valid · 1Y pctile {_fmt(ref_dispersion_pctile, '.0f', '')}"},
+        {"label": "Cboe DSPX",
+         "value": _fmt(dspx_latest, ".2f", ""),
+         "sub": (f"{dspx_date} · 1Y pctile {_fmt(dspx_pctile, '.0f', '')}"
+                 if dspx_date else "Missing data")},
         {"label": "Weight date", "value": str(weight_date or "—"),
          "sub": f"previous: {reading.get('previous_weight_date') or '—'}"},
         {"label": "Weight sum", "value": _fmt(reading.get("weight_sum_pct"), ".2f"),
@@ -172,54 +206,132 @@ def render(ctx: PageContext) -> None:
     st.caption(f"Bubble size = latest sector weight ({weight_date}). "
                f"Threshold: ±{thr}pp. Weight, not return contribution.")
 
-    # Breadth history
-    horizon_choice = st.selectbox("Breadth horizon", [5, 20, 63], index=1, key="sector_bh_horizon")
-    bh = build_sector_breadth_history(ctx.df, horizon=horizon_choice)
-    if not bh.empty:
+    # Breadth & dispersion using the exact definitions on reference-pack page 23.
+    if not reference_history.empty:
         st.markdown("<div style='margin:0.8rem 0 0.3rem;font-size:11px;color:#888;"
                     "letter-spacing:0.1em;text-transform:uppercase;'>"
-                    f"Breadth history — {horizon_choice}D window</div>",
+                    "SPX sector breadth · share above own 50D average</div>",
                     unsafe_allow_html=True)
         fig_b = go.Figure()
-        fig_b.add_trace(go.Scatter(x=bh.index, y=bh["positive_breadth_pct"],
+        fig_b.add_trace(go.Scatter(
+            x=reference_history.index,
+            y=reference_history["above_ma_breadth_pct"],
             mode="lines", line=dict(color="#22c55e", width=1.4),
-            name=f"% positive"))
-        fig_b.add_trace(go.Scatter(x=bh.index, y=bh["relative_breadth_pct"],
-            mode="lines", line=dict(color="#06b6d4", width=1.4),
-            name=f"% outperforming SPX"))
+            name="Share above own 50D average",
+            hovertemplate=(
+                "%{x|%Y-%m-%d}<br>Above 50D average: %{y:.0f}%"
+                "<extra></extra>"
+            ),
+        ))
         fig_b.add_hline(y=50, line=dict(color="#444", width=0.5, dash="dot"))
         fig_b.update_layout(template="plotly_dark", paper_bgcolor=BG, plot_bgcolor=BG,
             font=dict(family="Inter, system-ui, sans-serif", size=10, color=TEXT_DIM),
-            height=260, showlegend=True,
-            legend=dict(orientation="h", y=1.08, x=0, font=dict(size=10)),
+            height=260, showlegend=False,
             margin=dict(l=50, r=20, t=25, b=25),
             yaxis=dict(title="% of sectors", gridcolor=GRID, range=[0, 100]),
             xaxis=dict(showgrid=False))
-        st.plotly_chart(fig_b, use_container_width=True, key="sector_bh",
-                        config={"displayModeBar": False})
-
-        # Dispersion chart
-        st.markdown("<div style='margin:0.8rem 0 0.3rem;font-size:11px;color:#888;"
-                    "letter-spacing:0.1em;text-transform:uppercase;'>"
-                    f"Dispersion history — {horizon_choice}D window</div>",
-                    unsafe_allow_html=True)
-        fig_d = go.Figure()
-        fig_d.add_trace(go.Scatter(x=bh.index, y=bh["dispersion_pct"],
-            mode="lines", line=dict(color="#a855f7", width=1.2),
-            name="Sector return dispersion"))
-        fig_d.update_layout(template="plotly_dark", paper_bgcolor=BG, plot_bgcolor=BG,
-            font=dict(family="Inter, system-ui, sans-serif", size=10, color=TEXT_DIM),
-            height=240, showlegend=False,
-            margin=dict(l=50, r=20, t=25, b=25),
-            yaxis=dict(title="Cross-sectional std (%)", gridcolor=GRID),
-            xaxis=dict(showgrid=False))
-        st.plotly_chart(fig_d, use_container_width=True, key="sector_disp",
+        st.plotly_chart(fig_b, use_container_width=True, key="sector_reference_breadth",
                         config={"displayModeBar": False})
         st.caption(
-            "Only one cross-sectional dispersion series is shown. Subtracting "
-            "the same SPX return from every sector does not change the "
-            "cross-sectional standard deviation."
+            "Reference-pack definition: number of valid S&P 500 sector indices "
+            "above their own 50-observation moving average divided by the actual "
+            "valid-sector denominator."
         )
+
+        st.markdown("<div style='margin:0.8rem 0 0.3rem;font-size:11px;color:#888;"
+                    "letter-spacing:0.1em;text-transform:uppercase;'>"
+                    "Cross-sector return dispersion · trailing 21 observations</div>",
+                    unsafe_allow_html=True)
+        has_dspx = not dspx.empty
+        fig_d = make_subplots(specs=[[{"secondary_y": has_dspx}]])
+        fig_d.add_trace(go.Scatter(
+            x=reference_history.index,
+            y=reference_history["return_dispersion_pct"], mode="lines",
+            line=dict(color="#a855f7", width=1.2),
+            name="Realised 21D cross-sector dispersion",
+            hovertemplate=(
+                "%{x|%Y-%m-%d}<br>Realised dispersion: %{y:.2f} pp"
+                "<extra></extra>"
+            ),
+        ), secondary_y=False)
+        if has_dspx:
+            fig_d.add_trace(go.Scatter(
+                x=dspx.index, y=dspx, mode="lines",
+                line=dict(color="#f97316", width=1.2),
+                name="Cboe DSPX implied 30D dispersion",
+                hovertemplate=(
+                    "%{x|%Y-%m-%d}<br>Cboe DSPX: %{y:.2f}"
+                    "<extra></extra>"
+                ),
+            ), secondary_y=True)
+        fig_d.update_layout(
+            template="plotly_dark", paper_bgcolor=BG, plot_bgcolor=BG,
+            font=dict(family="Inter, system-ui, sans-serif", size=10, color=TEXT_DIM),
+            height=270, showlegend=True,
+            legend=dict(orientation="h", y=1.12, x=0, font=dict(size=9)),
+            margin=dict(l=50, r=55 if has_dspx else 20, t=35, b=25),
+            xaxis=dict(showgrid=False),
+        )
+        fig_d.update_yaxes(
+            title_text="Realised cross-sectional std (pp)", gridcolor=GRID,
+            secondary_y=False,
+        )
+        if has_dspx:
+            fig_d.update_yaxes(
+                title_text="Cboe DSPX index level", showgrid=False,
+                secondary_y=True,
+            )
+        st.plotly_chart(fig_d, use_container_width=True, key="sector_disp",
+                        config={"displayModeBar": False})
+        if has_dspx:
+            st.caption(
+                "Purple = realised cross-sectional dispersion of sector returns. "
+                "Orange = Cboe DSPX, a separate forward-looking 30-calendar-day "
+                "implied-dispersion index. Separate axes are used; the two series "
+                "are not interchangeable."
+            )
+        else:
+            st.caption(
+                "Cboe DSPX overlay requested, but DSPX INDEX is not present in "
+                "DATA.xlsx. No substitute or synthetic series is used. The chart "
+                "therefore shows only realised cross-sectional sector-return "
+                "dispersion."
+            )
+
+    with st.expander("Additional return-breadth diagnostics", expanded=False):
+        horizon_choice = st.selectbox(
+            "Return horizon", [5, 20, 63], index=1, key="sector_bh_horizon"
+        )
+        bh = build_sector_breadth_history(ctx.df, horizon=horizon_choice)
+        if bh.empty:
+            st.caption("Return-breadth history is unavailable for this horizon.")
+        else:
+            fig_extra = go.Figure()
+            fig_extra.add_trace(go.Scatter(
+                x=bh.index, y=bh["positive_breadth_pct"], mode="lines",
+                line=dict(color="#22c55e", width=1.2), name="Positive return breadth",
+            ))
+            fig_extra.add_trace(go.Scatter(
+                x=bh.index, y=bh["relative_breadth_pct"], mode="lines",
+                line=dict(color="#06b6d4", width=1.2), name="Outperforming SPX",
+            ))
+            fig_extra.add_hline(y=50, line=dict(color="#444", width=0.5, dash="dot"))
+            fig_extra.update_layout(
+                template="plotly_dark", paper_bgcolor=BG, plot_bgcolor=BG,
+                font=dict(family="Inter, system-ui, sans-serif", size=10, color=TEXT_DIM),
+                height=260, legend=dict(orientation="h", y=1.08, x=0),
+                margin=dict(l=50, r=20, t=25, b=25),
+                yaxis=dict(title="% of valid sectors", gridcolor=GRID, range=[0, 100]),
+                xaxis=dict(showgrid=False),
+            )
+            st.plotly_chart(
+                fig_extra, use_container_width=True, key="sector_return_breadth",
+                config={"displayModeBar": False},
+            )
+            st.caption(
+                "Supplementary diagnostics only. The primary breadth and "
+                "dispersion panels above follow the reference-pack definitions."
+            )
 
     # Sector weight table
     st.markdown("<div style='margin:0.8rem 0 0.3rem;font-size:11px;color:#888;"
@@ -258,6 +370,13 @@ def render(ctx: PageContext) -> None:
          f"({_fmt(reading.get('relative_breadth_pct'), '.0f')})"),
         (f"{reading['short_window']}D dispersion",
          _fmt(reading.get('dispersion_pct'), '.2f')),
+        ("Above own 50D average",
+         f"{_fmt(ref_breadth, '.0f')} · 1Y percentile {_fmt(ref_breadth_pctile, '.0f', '')}"),
+        ("21D cross-sector dispersion",
+         f"{_fmt(ref_dispersion, '.2f', 'pp')} · 1Y percentile {_fmt(ref_dispersion_pctile, '.0f', '')}"),
+        ("Cboe DSPX implied dispersion",
+         (f"{_fmt(dspx_latest, '.2f', '')} · {dspx_date} · 1Y percentile "
+          f"{_fmt(dspx_pctile, '.0f', '')}" if dspx_date else "Missing data")),
     ]
     if reading.get("top_rel"):
         top_str = "; ".join(f"{n} ({v:+.2f}pp)" for n, v in reading["top_rel"])
@@ -284,8 +403,11 @@ def render(ctx: PageContext) -> None:
         "flat threshold (diagnostic, not industry-standard). "
         "<b>Weights:</b> periodic SPX_Sector_Weights (not daily). "
         "Weight changes are NOT investor flows. "
-        "<b>Dispersion:</b> one cross-sectional standard-deviation series is shown; "
-        "subtracting the common SPX return would produce the identical dispersion. "
+        "<b>Reference-pack breadth:</b> share of sectors above their own 50-observation moving average. "
+        "<b>Reference-pack dispersion:</b> cross-sectional population standard deviation of trailing 21-observation simple sector returns. "
+        "When DSPX INDEX is present it is overlaid on a separate axis as Cboe's "
+        "forward-looking implied-dispersion index; it is never synthesised. "
+        "Subtracting the common SPX return would produce the identical realised dispersion. "
         "ETF proxies (XLC/XLY/XLP/XLE/XLV/XLI/XLB/XLRE/XLU) are excluded from "
         "the production model. "
         "<b>Descriptive only</b> — no causal attribution, official attribution, "

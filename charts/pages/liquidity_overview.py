@@ -24,6 +24,8 @@ from charts.common import (
 )
 from charts.liquidity import render_summary_panel, render_index_page
 from charts.funding import render_xccy_summary
+from data.loader import source_signature
+from index.methodology import INDEX_METHODOLOGY
 
 from ._context import PageContext
 
@@ -35,12 +37,19 @@ def render(ctx: PageContext) -> None:
     color = section_color(page["color_key"])
 
     render_top_tabs(page["id"])
-    latest = ctx.df.index.max().strftime("%b %d, %Y").upper()
-    viewing = (f"{ctx.start_date.strftime('%b %Y').upper()} → "
-               f"{ctx.end_date.strftime('%b %Y').upper()}")
+    r = ctx.index_result
+    published = r.index.dropna()
+    published_date = published.index[-1] if len(published) else None
+    raw_latest_date = ctx.df.index.max() if len(ctx.df) else None
+    latest = (published_date.strftime("%b %d, %Y").upper()
+              if published_date is not None else "—")
+    viewing = (
+        f"{ctx.start_date.strftime('%b %Y').upper()} → "
+        f"{ctx.end_date.strftime('%b %Y').upper()} · "
+        f"raw workbook latest {raw_latest_date.date() if raw_latest_date is not None else '—'}"
+    )
     render_page_header(page, latest_date=latest, viewing=viewing)
 
-    r = ctx.index_result
     regime = getattr(r, "latest_regime", "—")
     regime_color = REGIME_COLORS.get(regime, "#9aa0a6")
 
@@ -67,6 +76,36 @@ def render(ctx: PageContext) -> None:
     ]
     render_kpi_strip(kpi_cards)
 
+    contribution_sum = None
+    if getattr(r, "bucket_terms", None) is not None and published_date is not None:
+        try:
+            contribution_sum = float(r.bucket_terms.loc[published_date].sum())
+        except Exception:
+            contribution_sum = None
+    reconciliation_gap = (
+        contribution_sum - (float(r.latest) - 50.0)
+        if contribution_sum is not None and pd.notna(r.latest) else None
+    )
+    reconciliation_text = (
+        f"{reconciliation_gap:+.8f} index points"
+        if reconciliation_gap is not None
+        else "unavailable"
+    )
+    render_explanation_box(
+        "Version and data-update reconciliation",
+        f"<b>Methodology:</b> {INDEX_METHODOLOGY['version']} — unchanged in this update. "
+        f"<b>Published model date:</b> {published_date.date() if published_date is not None else '—'}. "
+        f"<b>Raw workbook latest row:</b> {raw_latest_date.date() if raw_latest_date is not None else '—'}. "
+        f"<b>Source hash:</b> <code>{source_signature()[:12]}</code>. "
+        f"<b>Bucket reconciliation gap:</b> {reconciliation_text}."
+    )
+    st.caption(
+        "The calculation formula and methodology version are unchanged. Updating or "
+        "revising Bloomberg source observations can change recent index values and can "
+        "advance the latest published model date; this is a data-vintage effect, not a "
+        "silent formula change."
+    )
+
     render_explanation_box(
         "What this section shows",
         "A raw-indicator liquidity gauge, z-scored across five buckets "
@@ -92,7 +131,7 @@ def render(ctx: PageContext) -> None:
         export_name=ctx.export_name,
     )
 
-    # ── Compact XCCY basis summary; full 5×2 history remains on FX 07b. ──
+    # ── Compact XCCY basis summary; full 5×2 history is on FX 07. ──
     try:
         render_xccy_summary(ctx.dff)
     except Exception as exc:

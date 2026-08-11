@@ -8,17 +8,14 @@ from . import liquidity_overview as _liquidity
 from . import policy as _policy
 from . import policy_futures as _policy_futures
 from . import decomposition as _decomposition
-from . import rates_pca as _rates_pca
 from . import regimes as _regimes
 from . import global_rates as _global_rates
 from . import country_boards as _country_boards
 from . import cross_asset as _cross_asset
 from . import market_linkage as _market_linkage
-from . import market_linkage_pca as _market_linkage_pca
 from . import sector_rotation as _sector_rotation
 from . import sector_contribution as _sector_contribution
 from . import earnings_valuation as _earnings_valuation
-from . import fx as _fx
 from . import fx_rate_diff as _fx_rate_diff
 from . import data_quality as _data_quality
 from . import scoring as _scoring
@@ -31,14 +28,11 @@ RENDERERS = {
     "policy":         _policy.render,
     "policy_futures": _policy_futures.render,
     "decomposition":  _decomposition.render,
-    "rates_pca":      _rates_pca.render,
     "regimes":        _regimes.render,
     "global_rates":   _global_rates.render,
     "country_boards": _country_boards.render,
     "cross_asset":    _cross_asset.render,
     "market_linkage": _market_linkage.render,
-    "market_linkage_pca": _market_linkage_pca.render,
-    "fx":             _fx.render,
     "fx_rate_diff":   _fx_rate_diff.render,
     "sector_rotation": _sector_rotation.render,
     "sector_contribution": _sector_contribution.render,

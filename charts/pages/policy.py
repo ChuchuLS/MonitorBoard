@@ -194,9 +194,9 @@ def render(ctx: PageContext) -> None:
     # G. Scope warnings
     render_missing_data_warning(
         message="<b>Meeting-by-meeting FOMC path</b> is not live. The separate "
-                "01b Policy Futures Generic Strip uses FF / SER / SFR continuous "
-                "rank series, but generic ranks do not identify fixed expiries or "
-                "meeting probabilities.",
+                "01b SOFR Futures Strip uses eight fixed quarterly SFR contracts, but a "
+                "meeting-by-meeting path still requires the FOMC calendar, day-weighted "
+                "meeting-month methodology and probability framework.",
     )
 
     render_model_note("Methodology",

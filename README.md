@@ -24,7 +24,7 @@ global yields, cross-asset regimes, and macro scoring.
 > rebuilt by exact joins to each Bloomberg output block's own Date column. No
 > inferred day shift or row-position merge is used. See
 > `docs/CALENDAR_CORRECTION_2026-08-03.md`.
-
+>
 ---
 
 ## Quick start (run on your own computer)
@@ -83,21 +83,18 @@ page mirrors the front matter of an institutional chart pack.
 | No. | Section                         | Status               | Data source | What it shows |
 |----:|:--------------------------------|:---------------------|:------------|:--------------|
 | 00  | Liquidity Overview              | **Live**             | DATA.xlsx | Composite Liquidity Index (v0.3) with bucket & component contributions, benchmark validation, methodology audit, one-click Excel export, and a compact latest-value XCCY basis summary. |
-| 01  | Policy & Short Rates            | **Live**             | DATA.xlsx | Confirmed SOFR / EFFR / IORB and repo-rate spreads, funding-pressure diagnostics, and weekly H.4.1 context. The generic futures strip is a separate live page; the meeting-by-meeting FOMC path remains unimplemented. |
-| 01b | Policy Futures Generic Strip     | **Live**             | DATA.xlsx / Sheet1 | FF1–FF3, SER1–SER3 and SFR1–SFR3 continuous ranks converted to implied reference rates using 100 − price. Generic ranks roll and are not fixed expiries; no FOMC meeting path or probability is inferred. |
+| 01  | Policy & Short Rates            | **Live**             | DATA.xlsx | Confirmed SOFR / EFFR / IORB and repo-rate spreads, funding-pressure diagnostics, and weekly H.4.1 context. The fixed-contract SOFR strip is a separate live page; the meeting-by-meeting FOMC path remains unimplemented. |
+| 01b | SOFR Futures Strip & Calendar Spreads | **Live** | DATA.xlsx / Policy_Futures | Eight fixed quarterly SFR contracts from Sep 2026 through Jun 2028. Shows implied rates, 1D/5D/1M changes, 3M/6M/12M calendar spreads and terminal diagnostics. Not a meeting-by-meeting FOMC probability model. |
 | 02  | Rate Decomposition              | **Live**             | DATA.xlsx / Sheet1 | US curve complex, selectable-tenor rolling rate attribution, and 2s10s curve decomposition using breakeven identity. |
-| 02b | Rates Complex PCA               | Experimental         | DATA.xlsx / Sheet1 FICC columns | Within-rates PCA on 10Y / 2s10s / BE / real / MOVE. NOT the PDF-style decomposition. |
 | 03  | Curve Regimes                   | **Live**             | DATA.xlsx / Sheet1 | 7-regime classification across nominal / real / inflation curves and six tenor pairs. |
 | 04  | Global Rates                    | **Live**             | DATA.xlsx / Sheet1 | Normalized global 10Y overlay, global curve snapshots, 2s10s slope ranking (US/DE/JP/UK/CA/AU/CH). |
 | 04b | Country Rate Boards             | **Live**             | DATA.xlsx / Sheet1 | Fully aligned 2Y/5Y/10Y/30Y nominal boards for seven countries, with common-calendar changes, curve slopes, percentiles and descriptive curve-move readings. |
 | 05  | Cross-Asset Regime Timeline     | **Live**             | DATA.xlsx / Sheet1 cross-asset columns | 8-regime directional classification using vol-scaled signals (20D change ÷ 21D vol). |
-| 05b | Market Linkage & Correlations   | **Live**             | DATA.xlsx / Sheet1 | Fully aligned SPX / UST 10Y / DXY / BCOM / US HY OAS co-movement monitor: current matrix, rolling pair correlations and mean absolute correlation. Descriptive, not causal. |
-| 05c | Market Linkage PCA              | Experimental         | DATA.xlsx / Sheet1 cross-asset columns | PCA-based 4-regime relative classification on SPX / UST 10Y / DXY. Separate from the live 05b monitor. |
-| 06  | Sector Rotation & Breadth       | **Live**             | DATA.xlsx / Sheet1 + SPX_Sector_Weights | 11 S&P 500 sector indices + SPX. Absolute + SPX-relative performance, breadth, cross-sectional dispersion, rotation quadrants, sector-weight context. Descriptive, not causal attribution or official SPX return attribution. ETF proxies excluded from production. |
+| 05b | Market Linkage & Correlations   | **Live**             | DATA.xlsx / Sheet1 | Reference-pack-style one-trade gauge: 63D PC1 explained variance across SPX / UST 10Y / DXY, plus the three 20D pairwise correlations. Descriptive, not causal. |
+| 06  | Sector Rotation & Breadth       | **Live**             | DATA.xlsx / Sheet1 + SPX_Sector_Weights | 11 S&P 500 sector indices + SPX. Main breadth and dispersion panels reproduce the reference-pack definitions: share above each sector's own 50-observation average and cross-sectional standard deviation of trailing 21-observation returns. Also includes relative performance, rotation quadrants and sector-weight context. Optional Cboe DSPX overlay activates only when DSPX INDEX is present. |
 | 06b | Sector Contribution Estimate     | **Live**             | DATA.xlsx / Sheet1 + SPX_Sector_Weights | Start-period periodic weight × sector simple return, with an explicit residual versus actual SPX. Transparent approximation only; not official index-provider attribution. |
 | 06c | SPX FY1 Earnings & Valuation     | **Live**             | DATA.xlsx / Equity_EPS + Equity_Prices | Confirmed BEST_EPS with 1FY override, implied FY1 P/E, exact log-return split into EPS growth and multiple change, plus a clearly labelled weekly OLS diagnostic. Not fair value or forecast. |
-| 07  | FX Rate Differential Monitor    | **Live**             | DATA.xlsx / Sheet1 | EURUSD / USDJPY / GBPUSD / AUDUSD — fully aligned spot, 2Y nominal, 10Y nominal, and 10Y real differentials. Descriptive, not causal attribution or fair value. |
-| 07b | FX Complex PCA                  | Experimental         | DATA.xlsx / Sheet1 FX/FICC columns | DXY / EM FX / USDJPY basis PCA plus the full EUR / JPY / AUD / GBP / CAD 3M and 12M XCCY basis history dashboard. PCA remains experimental; XCCY charts are descriptive source series. |
+| 07  | FX Rate Differential Monitor    | **Live**             | DATA.xlsx / Sheet1 | EURUSD / USDJPY / GBPUSD / AUDUSD rate-differential monitor plus the full EUR / JPY / AUD / GBP / CAD 3M and 12M cross-currency basis dashboard. Descriptive, not causal attribution or fair value. |
 | 08  | Data Quality & Methodology      | **Live**             | DATA.xlsx (all sections) | Source-of-truth trust chain, ticker coverage, scoring-sheet audit, methodology. |
 | A1  | Global Scoring (Appendix)       | **Live**             | DATA.xlsx / scoring sheets | Cross-sectional macro + market scoring: 10 rates, 17 equities. Standalone appendix. |
 | 09  | Model Roadmap & Content Gap     | **Live**             | DATA.xlsx (all sections) | Content gap analysis vs reference PDF — what is implemented, missing, and next. |
@@ -109,18 +106,22 @@ page mirrors the front matter of an institutional chart pack.
 - PDF-style 8-regime directional Cross-Asset Timeline (SPX / UST 10Y / DXY,
   vol-scaled 20D/21D signals by default).
 - Market Linkage & Correlations monitor using one fully aligned calendar for
-  SPX / UST 10Y / DXY / BCOM / US HY OAS, with ten pairwise rolling
-  correlations and transparent cross-asset co-movement diagnostics.
+  SPX / UST 10Y / DXY. The main line is the rolling 63D share of standardized
+  variance explained by PC1, with the three 20D pairwise correlations below.
+  This matches the reference chart pack's one-trade gauge structure.
   Methodology: `docs/MARKET_LINKAGE.md`.
-- Policy Futures Generic Strip using FF1–FF3, SER1–SER3 and SFR1–SFR3. The monitor converts price to implied reference rate with `100 - price`, preserves each family’s common observation calendar, and labels every point by generic rank rather than expiry. It is not a meeting-by-meeting FOMC path.
+- SOFR Futures Strip & Calendar Spreads using eight fixed quarterly contracts (`SFRU6` through `SFRM8`). Each contract keeps its own Bloomberg Date output; the model joins by Date, converts price with `100 - price`, and calculates 3M/6M/12M forward calendar spreads. It is not a meeting-by-meeting FOMC path.
 - Global Scoring appendix (rates + equity cross-sectional ranking).
 - DATA.xlsx workbook-section audit across Sheet1 and scoring sheets.
 - Country Rate Boards for US / DE / JP / UK / CA / AU / CH using fully aligned
   2Y / 5Y / 10Y / 30Y nominal observations, with yield changes, curve slopes
   and empirical percentiles.
 - Sector Rotation & Breadth monitor using 11 S&P 500 sector indices, SPX and
-  periodic sector weights, with common-calendar returns and dynamic breadth
-  denominators.
+  periodic sector weights. Its primary panels follow the reference chart pack:
+  share above each sector's own 50-observation moving average and
+  cross-sectional standard deviation of trailing 21-observation sector
+  returns. Supplementary return breadth and rotation diagnostics remain
+  separately labelled.
 - Sector Contribution Estimate using the latest periodic weight available on or
   before each return-window start date multiplied by sector simple returns, with
   the residual versus actual SPX shown explicitly. This is not official attribution.
@@ -133,12 +134,6 @@ page mirrors the front matter of an institutional chart pack.
 - PDF-style research-pack shell with per-section colours, page registry, and
   honest status classification.
 
-### Experimental (from market-reading integration)
-- **Rates Complex PCA** (02b) — within-rates PCA regime, NOT the decomposition.
-- **Market Linkage PCA** (05c) — PCA-based 4-regime model, separate from the
-  live descriptive 05b monitor and the directional 8-regime timeline.
-- **FX Complex PCA** (07b) — DXY / EM FX / basis PCA, plus the full 5×2 3M/12M XCCY basis history dashboard. The PCA is experimental; the basis charts are descriptive source-series views.
-
 ### Previously scaffold — now implemented
 - **Rate Decomposition** (02) — now live with US curve complex + attribution.
 - **Curve Regimes** (03) — now live with 6-pair regime matrix.
@@ -148,7 +143,7 @@ page mirrors the front matter of an institutional chart pack.
 ### Data files
 | File | Contents | Source of truth |
 |:-----|:---------|:---------------|
-| `data/DATA.xlsx` | Single workbook: Sheet1 = daily market data (188 cols); scoring sheets = Macro_GDP, Macro_CPI, Macro_Fiscal, Rates_10Y, Equity_ToT, Equity_FCI, Equity_EPS, Equity_Prices | Yes — the only file you manually update |
+| `data/DATA.xlsx` | Single workbook: Sheet1 = daily market data (189 cols, including DSPX); scoring sheets = Macro_GDP, Macro_CPI, Macro_Fiscal, Rates_10Y, Equity_ToT, Equity_FCI, Equity_EPS, Equity_Prices | Yes — the only file you manually update |
 | `data/latest.parquet` | Derived cache of Sheet1 | No — auto-rebuilt, not committed |
 
 
@@ -158,33 +153,32 @@ The added FX, sector, policy-futures and Switzerland-yield blocks are joined to
 `Sheet1` by the Date column emitted by their own Bloomberg spill. Sector weights
 use the Date column in `SPX_Sector_Weights`. The application does not shift
 weekend labels or merge these blocks by row position. Calendar profiles and the
-SPX parent/sector range test are shown on **Data Quality & Methodology**. Full
-correction details are recorded in
-`docs/CALENDAR_CORRECTION_2026-08-03.md` and the workbook's `Merge_Log` sheet.
+SPX parent/sector range test are shown on **Data Quality & Methodology**.
+
+For the 2026-08-06 refresh, the core A:ES block was accepted as the new vintage,
+The current workbook refresh restores normal Monday–Friday calendars for the
+expanded Sheet1 series and adds an independently dated `Policy_Futures` worksheet.
+The fixed-contract loader joins every SFR contract by its own source Date column;
+no row-position merge or inferred calendar shift is used. See
+`docs/POLICY_FUTURES_FIXED_STRIP.md`.
 
 ### Research pack structure
 
 **Core live pages** — fully implemented on real data, tested:
 - 00 Liquidity Overview (Composite Liquidity Index v0.3)
 - 01 Policy & Short Rates (spot rates + funding plumbing)
-- 01b Policy Futures Generic Strip (FF / 1-Month SOFR / 3-Month SOFR continuous ranks; not an FOMC path)
+- 01b SOFR Futures Strip & Calendar Spreads (eight fixed quarterly contracts; not an FOMC probability path)
 - 02 Rate Decomposition (breakeven identity: nominal = real + inflation)
 - 03 Curve Regimes (7-regime classification, 6 tenor pairs)
 - 04 Global Rates (7-country overlay (incl. Switzerland) + slope ranking)
 - 04b Country Rate Boards (fully aligned 2Y/5Y/10Y/30Y nominal boards)
 - 05 Cross-Asset Regime Timeline (8-regime vol-scaled directional)
-- 05b Market Linkage & Correlations (five-asset fully aligned descriptive monitor)
+- 05b Market Linkage & Correlations (SPX / UST 10Y / DXY one-trade gauge + pairwise correlations)
 - 06 Sector Rotation & Breadth (11 S&P 500 sectors + SPX — descriptive, not attribution)
 - 06b Sector Contribution Estimate (periodic start weights × sector simple returns, explicit residual; not official attribution)
 - 06c SPX FY1 Earnings & Valuation (BEST_EPS 1FY, implied P/E, exact weekly decomposition)
-- 07 FX Rate Differential Monitor (EURUSD / USDJPY / GBPUSD / AUDUSD — descriptive, not causal)
+- 07 FX Rate Differential Monitor (EURUSD / USDJPY / GBPUSD / AUDUSD + full 3M/12M XCCY basis dashboard)
 - 08 Data Quality & Methodology (workbook audit + dependency map)
-
-**Experimental pages** — working models from market-reading integration,
-labelled as experimental, not part of the PDF-style core:
-- 02b Rates Complex PCA (within-rates PCA regime)
-- 05c Market Linkage PCA (experimental 4-regime, 63D/20D)
-- 07b FX Complex PCA + full 3M/12M Cross-Currency Basis dashboard
 
 **Appendix:**
 - A1 Global Scoring (cross-sectional macro + market ranking)
@@ -193,7 +187,12 @@ labelled as experimental, not part of the PDF-style core:
 NOT fake these. Future analytical modules may require additional methodology,
 metadata, testing, or data.
 
-- FOMC implied policy path (actual contract codes/months, meeting calendar and methodology needed; the generic strip is already Live)
+**Requested reference-pack inputs now available in DATA.xlsx:**
+- `DSPX INDEX` — Cboe S&P 500 Dispersion Index in `Sheet1`; overlaid on a separate axis from realised 21-observation sector-return dispersion.
+- `CSIA500 INDEX` — CSI A500 cash-index price and BEST_EPS/1FY history in `Equity_Prices` and `Equity_EPS`. Existing XIN9I / FTSE China A50 data remain separate and are not relabelled.
+- `DJI INDEX` — Dow Jones Industrial Average cash-index price and BEST_EPS/1FY history in `Equity_Prices` and `Equity_EPS`.
+
+- FOMC implied policy path (fixed contract months are now available; the FOMC calendar, day-weighted meeting-month method and probability framework are still needed)
 - FX regression attribution (descriptive monitor is live; regression methodology not designed)
 - FX fair-value / forecast model (equilibrium framework not designed)
 - Official SPX sector attribution (daily-weight methodology or official contribution data required)

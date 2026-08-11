@@ -198,7 +198,7 @@ def render_xccy_summary(dff: pd.DataFrame) -> None:
 
     section_header(
         "Dollar Funding / XCCY Basis",
-        "Latest 3M and 12M observations · full history on 07b FX Complex PCA",
+        "Latest 3M and 12M observations · full history on 07 FX Rate Differential Monitor",
     )
     snapshot = build_xccy_snapshot(dff)
     if snapshot.empty or (snapshot["Status"] == "Missing data").all():

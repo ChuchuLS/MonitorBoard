@@ -319,7 +319,7 @@ def render(ctx: PageContext) -> None:
     from models.rate_decomposition import US_NOMINAL, US_BREAKEVEN
     dep_req_decomp = list(US_NOMINAL.values()) + list(US_BREAKEVEN.values())
     dep_req_ca = ["SPX INDEX", "USGG10YR INDEX", "DXY CURNCY"]
-    dep_req_linkage = ["SPX INDEX", "USGG10YR INDEX", "DXY CURNCY", "BCOM INDEX", "LF98OAS INDEX"]
+    dep_req_linkage = ["SPX INDEX", "USGG10YR INDEX", "DXY CURNCY"]
     dep_req_ficc = ["USGG10YR INDEX", "USYC2Y10 INDEX", "USGGBE10 INDEX",
                     "USGGT10Y INDEX", "MOVE INDEX", "FXJPEMCS INDEX", "JYBSS12M CURNCY"]
 
@@ -438,17 +438,14 @@ def render(ctx: PageContext) -> None:
         ("00 Liquidity", "Composite Liquidity Index", None, False),
         ("01 Policy", "Funding pressure model", dep_req_policy, False),
         ("02 Rate Decomp", "Breakeven identity", dep_req_decomp, False),
-        ("02b Rates PCA", "Within-rates PCA", dep_req_ficc, True),
         ("03 Curve Regimes", "7-regime classifier", dep_req_decomp, False),
         ("04 Global Rates", "Cross-country curves", None, False),
         ("04b Country Boards", "Country rate boards", None, False),
         ("05 Cross-Asset", "8-regime directional", dep_req_ca, False),
         ("05b Linkage", "Market linkage & correlations", dep_req_linkage, False),
-        ("05c Linkage PCA", "PCA 4-regime", dep_req_ca, True),
         ("06 Sectors", "Sector rotation & breadth", None, False),
         ("06c Earnings", "SPX FY1 earnings & valuation", None, False),
         ("07 FX Rates", "FX rate-differential monitor", None, False),
-        ("07b FX PCA", "FX complex PCA", dep_req_ficc, True),
         ("A1 Scoring", "Macro + market scoring", None, False),
     ]:
         if model in special_dependencies:
@@ -573,8 +570,8 @@ def render(ctx: PageContext) -> None:
             ),
             audit_ticker_group_calendar(
                 ctx.df,
-                ["FF1 COMB COMDTY", "SFR1 COMB COMDTY", "SER1 COMB COMDTY"],
-                "Policy futures",
+                ["SFR1 COMB COMDTY", "SFR2 COMB COMDTY", "SFR3 COMB COMDTY"],
+                "Legacy SFR1–SFR3 generic ranks (not production)",
             ),
             audit_ticker_group_calendar(
                 ctx.df,
@@ -608,10 +605,11 @@ def render(ctx: PageContext) -> None:
             use_container_width=True,
         )
         st.caption(
-            "The 39 added series were rebuilt from DATA-NEW(1).xlsx by exact "
-            "joins to each Bloomberg spill's own Date column. No blanket date "
-            "shift, row-position merge, interpolation, or zero substitution was "
-            "applied. See docs/CALENDAR_CORRECTION_2026-08-03.md and Merge_Log."
+            "The current workbook refresh contains normal weekday calendars for the "
+            "expanded Sheet1 series. The fixed-contract SFR worksheet is audited "
+            "separately because each contract has its own Bloomberg Date output. "
+            "No interpolation, forward fill, zero substitution, row-position merge, "
+            "or inferred day shift is used."
         )
 
         parent_audit = audit_parent_sector_return_range(ctx.df)
@@ -656,7 +654,7 @@ def render(ctx: PageContext) -> None:
             f"({type(exc).__name__}: {str(exc)[:120]})"
         )
 
-    # ── Five-asset Market Linkage audit ──
+    # ── Three-asset Market Linkage audit ──
     try:
         from data.external_loaders import load_ficc as _load_ml_ficc
         from models.market_linkage import (
@@ -686,8 +684,9 @@ def render(ctx: PageContext) -> None:
             f"Common observations: {_ml_snap.get('aligned_observations', 0)} · "
             f"Common first date: {_ml_snap.get('common_first_date', '—')} · "
             f"Common latest date: {_ml_snap.get('common_latest_date', '—')}. "
-            "All five level series are intersected before daily transformations. "
-            "Correlation is descriptive and not causal attribution."
+            "SPX, UST 10Y and DXY are intersected before daily transformations. "
+            "The live gauge is 63D PC1 explained variance, supported by the three "
+            "20D pairwise correlations. It is descriptive and not causal attribution."
         )
     except Exception as exc:
         st.warning(
@@ -695,53 +694,57 @@ def render(ctx: PageContext) -> None:
             f"({type(exc).__name__}: {str(exc)[:120]})"
         )
 
-    # ── Policy Futures Generic Strip audit ──
+    # ── Fixed-contract SOFR Futures Strip audit ──
     try:
-        from config.tickers import POLICY_FUTURES_CONFIG as _PF_CONFIG
-        from models.policy_futures_generic import (
-            available_policy_futures_families as _available_pf,
-            build_policy_futures_family_snapshot as _build_pf_snapshot,
-        )
-        _pf_ready = _available_pf(ctx.df)
-        _pf_rows = []
-        for _family, _cfg in _PF_CONFIG.items():
-            _r = _pf_ready[_family]
-            _snap = _build_pf_snapshot(ctx.df, _family)
-            _pf_rows.append({
-                "Family": _family,
-                "Contract": _cfg["display_name"],
-                "Generic tickers": " / ".join(_cfg["generic_tickers"].values()),
-                "Reference rate": _cfg["reference_rate_label"],
-                "Source documentation": _cfg["source_documentation"],
-                "Common observations": _r.get("aligned_observations", 0),
-                "First common date": str(_r.get("common_first_date") or "—"),
-                "Latest common date": str(_r.get("model_date") or "—"),
-                "Rank 3 − Rank 1 (bp)": _snap.get("front_to_third_bp"),
-                "Status": _r.get("status", "Missing data"),
+        from config.tickers import SOFR_CONTRACT_CONFIG as _SFR_CONTRACTS
+        from data.policy_futures_loader import load_policy_futures as _load_fixed_sfr
+        from models.policy_futures_strip import build_sofr_strip_snapshot as _build_sfr_strip
+        _sfr_raw = _load_fixed_sfr(include_future=True)
+        _sfr_prod = _load_fixed_sfr()
+        _sfr_snap = _build_sfr_strip(_sfr_prod, ctx.df)
+        _sfr_rows = []
+        _table = _sfr_snap.get("strip_table")
+        for _code, _cfg in _SFR_CONTRACTS.items():
+            _series = pd.to_numeric(_sfr_raw.get(_code), errors="coerce").dropna() if _code in _sfr_raw else pd.Series(dtype=float)
+            _latest_rate = None
+            if isinstance(_table, pd.DataFrame) and not _table.empty:
+                _match = _table.loc[_table["ticker"] == _code]
+                if not _match.empty:
+                    _latest_rate = _match.iloc[0]["implied_rate_pct"]
+            _sfr_rows.append({
+                "Contract": _cfg["contract_label"],
+                "Bloomberg ticker": _code,
+                "Source observations": int(len(_series)),
+                "First source date": str(_series.index.min().date()) if len(_series) else "—",
+                "Latest source date": str(_series.index.max().date()) if len(_series) else "—",
+                "Latest implied rate (%)": _latest_rate,
+                "Status": "Ready" if len(_series) else "Missing data",
             })
         st.markdown(
             "<div style='margin:1rem 0 0.4rem;font-size:11px;color:#888;"
             "letter-spacing:0.1em;text-transform:uppercase;'>"
-            "Policy Futures Generic Strip — source and alignment audit</div>",
+            "SOFR Futures Strip &amp; Calendar Spreads — source and alignment audit</div>",
             unsafe_allow_html=True,
         )
         st.dataframe(
-            pd.DataFrame(_pf_rows).style.format({
-                "Rank 3 − Rank 1 (bp)": "{:+.1f}",
+            pd.DataFrame(_sfr_rows).style.format({
+                "Latest implied rate (%)": "{:.3f}",
             }, na_rep="—").map(_status_color, subset=["Status"]),
             hide_index=True,
             use_container_width=True,
         )
         st.caption(
-            "FF = 30-Day Federal Funds futures; SER = 1-Month SOFR futures; "
-            "SFR = 3-Month SOFR futures. Prices are converted to implied "
-            "reference rates using 100 − price. Generic ranks roll and are not "
-            "fixed expiries, so this audit does not validate a meeting-by-meeting "
-            "FOMC path or probabilities."
+            f"Model status: {_sfr_snap.get('status', 'Missing data')} · common observations: "
+            f"{_sfr_snap.get('aligned_observations', 0)} · common first date: "
+            f"{_sfr_snap.get('common_first_date', '—')} · model date: "
+            f"{_sfr_snap.get('model_date', '—')}. Each contract is loaded from its own "
+            "Date + Price BQL pair in DATA.xlsx / Policy_Futures and joined by Date. "
+            "No row-position merge, forward fill, interpolation or zero substitution. "
+            "The fixed contract list must be rolled manually when the front contract expires."
         )
     except Exception as exc:
         st.warning(
-            "Policy-futures readiness is unavailable because the audit failed. "
+            "Fixed-contract SOFR futures readiness is unavailable because the audit failed. "
             f"({type(exc).__name__}: {str(exc)[:120]})"
         )
 
@@ -761,17 +764,18 @@ def render(ctx: PageContext) -> None:
          "Notes": "Live spot-rate, spread and funding-pressure monitor. The generic "
                   "policy-futures strip is a separate live module; the meeting-by-meeting "
                   "FOMC path remains unimplemented."},
-        {"Model": "Policy Futures Generic Strip",
-         "Required": "FF1–FF3 + SER1–SER3 + SFR1–SFR3 on common family calendars",
+        {"Model": "SOFR Futures Strip & Calendar Spreads",
+         "Required": "Eight fixed quarterly SFR contracts in Policy_Futures",
          "Status": "Live",
-         "Notes": "Continuous-contract implied-rate monitor using 100 − price. Generic "
-                  "ranks are not fixed expiries; no meeting path or probability is inferred."},
+         "Notes": "Actual SEP 26 through JUN 28 contract strip using 100 − price, "
+                  "1D/5D/1M changes, calendar spreads and terminal diagnostics. "
+                  "Not a meeting-by-meeting FOMC probability model."},
         {"Model": "Market Linkage & Correlations",
-         "Required": "SPX + UST 10Y + DXY + BCOM + US HY OAS (fully aligned)",
+         "Required": "SPX + UST 10Y + DXY (fully aligned)",
          "Status": "Live",
-         "Notes": "Ten pairwise rolling correlations, current matrix and mean absolute "
-                  "correlation. Descriptive co-movement only; not causal attribution, "
-                  "fair value or forecast."},
+         "Notes": "Reference-pack-style 63D PC1 explained-variance gauge plus three "
+                  "20D pairwise correlations. Descriptive co-movement only; not causal "
+                  "attribution, fair value or forecast."},
         {"Model": "Sector Rotation & Breadth Monitor",
          "Required": "11 S&P 500 sector indices + SPX + SPX_Sector_Weights (all available)",
          "Status": "Live",
@@ -812,8 +816,8 @@ def render(ctx: PageContext) -> None:
         {"Model": "FOMC implied policy path",
          "Required": "Actual contract codes/months, FOMC calendar and meeting-path methodology",
          "Status": "Not implemented",
-         "Notes": "The generic strip is Live, but continuous ranks cannot identify fixed "
-                  "expiry months or meeting probabilities."},
+         "Notes": "The fixed quarterly contract strip is Live, but meeting probabilities still require "
+                  "the FOMC calendar and a day-weighted meeting-month methodology."},
         {"Model": "FX regression attribution",
          "Required": "Regression methodology, coefficient stability tests, residual diagnostics",
          "Status": "Not implemented",
@@ -1069,10 +1073,71 @@ def render(ctx: PageContext) -> None:
             if not _earn_global.empty else []
         )
         st.caption(
-            f"Global exact-date overview: {_ready_count}/17 indices Ready. "
+            f"Global exact-date overview: {_ready_count}/{len(_earn_global)} requested indices Ready. "
             f"Non-Ready: {', '.join(_missing_names) or 'none'}. "
+            "China is explicitly requested as CSIA500 Index (CSI A500) and the additional "
+            "US index as DJI Index. The existing XIN9I / FTSE China A50 series is not relabelled. "
             "No EPS or price values are forward-filled. The implied FY1 P/E is calculated "
             "as index level ÷ FY1 EPS; it is not a Bloomberg-supplied P/E field."
+        )
+
+        from models.sector_rotation import build_spx_dispersion_index
+        _requested_rows = []
+        _dspx_series = build_spx_dispersion_index(ctx.df)
+        _dspx_present = not _dspx_series.empty
+        _dspx_latest = float(_dspx_series.iloc[-1]) if _dspx_present else None
+        _dspx_date = _dspx_series.index[-1].date() if _dspx_present else None
+
+        def _earnings_requested_row(code, label, requested_ticker):
+            row = _earn_global.loc[_earn_global["code"] == code]
+            if row.empty:
+                return {
+                    "Requested series": label, "Bloomberg ticker": requested_ticker,
+                    "Workbook ticker": "—", "Required workbook location": "Equity_Prices + Equity_EPS",
+                    "Latest common date": "—", "Latest value": "—",
+                    "Status": "Missing data", "Substitution used": "No",
+                }
+            item = row.iloc[0]
+            return {
+                "Requested series": label,
+                "Bloomberg ticker": requested_ticker,
+                "Workbook ticker": item.get("workbook_ticker") or "—",
+                "Required workbook location": "Equity_Prices + Equity_EPS",
+                "Latest common date": str(item.get("model_date") or "—"),
+                "Latest value": (
+                    f"Index {item.get('price'):,.2f} · FY1 EPS {item.get('eps_fy1'):,.2f} · "
+                    f"P/E {item.get('fy1_pe'):.2f}x"
+                    if item.get("status") == "Ready" else "—"
+                ),
+                "Status": "Available" if item.get("status") == "Ready" else item.get("status", "Missing data"),
+                "Substitution used": "No",
+            }
+
+        _requested_rows.append({
+            "Requested series": "Cboe S&P 500 Dispersion Index",
+            "Bloomberg ticker": "DSPX INDEX",
+            "Workbook ticker": "DSPX Index" if _dspx_present else "—",
+            "Required workbook location": "Sheet1",
+            "Latest common date": str(_dspx_date or "—"),
+            "Latest value": f"{_dspx_latest:.2f}" if _dspx_present else "—",
+            "Status": "Available" if _dspx_present else "Missing data",
+            "Substitution used": "No",
+        })
+        _requested_rows.append(_earnings_requested_row(
+            "CSI_A500", "CSI A500 cash index + FY1 EPS", "CSIA500 INDEX"
+        ))
+        _requested_rows.append(_earnings_requested_row(
+            "DJI", "Dow Jones Industrial Average + FY1 EPS", "DJI INDEX"
+        ))
+        st.markdown(
+            "<div style='margin:0.8rem 0 0.4rem;font-size:11px;color:#888;"
+            "letter-spacing:0.1em;text-transform:uppercase;'>"
+            "Requested reference-pack additions</div>",
+            unsafe_allow_html=True,
+        )
+        st.dataframe(
+            pd.DataFrame(_requested_rows).style.map(_status_color, subset=["Status"]),
+            hide_index=True, use_container_width=True,
         )
     except Exception as exc:
         st.warning(

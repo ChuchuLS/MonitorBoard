@@ -1,12 +1,14 @@
 """charts/pages/fx_rate_diff.py — 06 · FX Rate Differential Monitor
 No zero fallbacks. Partial pairs show diagnostic info only."""
 from __future__ import annotations
+import logging
 import pandas as pd, numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
 from config.pages import get_page
 from config.theme import section_color, BG, GRID, TEXT_DIM
+from charts.funding import render_xccy
 from charts.common import (
     render_page_header, render_top_tabs, render_kpi_strip,
     render_explanation_box, render_current_reading_list,
@@ -21,11 +23,32 @@ from models.fx_rate_differential import (
     build_fx_current_reading, build_all_fx_snapshots,
 )
 from ._context import PageContext
+logger = logging.getLogger(__name__)
+
 PAIR_COLORS = {"EURUSD": "#06b6d4", "USDJPY": "#ef4444", "GBPUSD": "#22c55e", "AUDUSD": "#f97316"}
 
 def _fmt(v, fmt="+.2f", suffix="", missing="—"):
     if v is None or (isinstance(v, float) and np.isnan(v)): return missing
     return f"{v:{fmt}}{suffix}"
+
+
+
+def _render_xccy_dashboard(ctx: PageContext) -> None:
+    st.markdown("<div style='height:0.8rem;'></div>", unsafe_allow_html=True)
+    st.markdown("#### Cross-Currency Basis Swaps")
+    st.caption(
+        "EUR / JPY / AUD / GBP / CAD 3M and 12M basis history. "
+        "Negative values indicate a USD funding premium; source series are shown descriptively."
+    )
+    try:
+        render_xccy(ctx.dff, key_prefix="fx_rates_xccy")
+    except Exception as exc:
+        logger.exception("Failed to render the FX XCCY basis dashboard")
+        st.warning(
+            "Cross-Currency Basis charts are unavailable because rendering failed "
+            f"({type(exc).__name__}). The underlying data are not treated as zero."
+        )
+
 
 def render(ctx: PageContext) -> None:
     page = get_page("fx_rate_diff")
@@ -62,6 +85,7 @@ def render(ctx: PageContext) -> None:
                     f"Aligned observations: {readiness.get('aligned_obs', 0)}<br>"
                     f"Raw dates: {readiness.get('raw_dates', {})}"
                     f"</div>", unsafe_allow_html=True)
+        _render_xccy_dashboard(ctx)
         render_section_footer(page); return
 
     aligned = build_fx_pair_data(ctx.df, sel)
@@ -163,4 +187,5 @@ def render(ctx: PageContext) -> None:
         f"Flat thresholds: |FX| < {FLAT_FX_THRESHOLD}%, |diff Δ| < {FLAT_DIFF_THRESHOLD} bp. "
         "<b>Descriptive only.</b>")
     render_data_source_note("DATA.xlsx / Sheet1", pair_date)
+    _render_xccy_dashboard(ctx)
     render_section_footer(page)

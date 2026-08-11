@@ -8,7 +8,8 @@ in SPX / UST 10Y yield / DXY divided by 21-day trailing realized volatility.
 The sign of each vol-scaled signal determines UP/DOWN. 2^3 = 8 regimes.
 
 A simplified "raw sign" mode is available as a toggle but is NOT the
-PDF-reference methodology. The PCA-based model lives in market_linkage.py.
+PDF-reference methodology. The next page shows the reference-style rolling
+one-trade linkage gauge and pairwise correlations.
 """
 
 from __future__ import annotations
@@ -162,8 +163,10 @@ def render(ctx: PageContext) -> None:
         "the PDF-reference methodology.<br>"
         "<b>Raw sign (simplified):</b> sign of the raw 20-day change with no "
         "vol normalization. NOT the PDF-reference model.<br>"
-        "The PCA-based dominant-theme model (4 relative regimes) is on the "
-        "next page: <b>05b · Market Linkage & Correlations</b>.",
+        "The next page, <b>05b · Market Linkage & Correlations</b>, shows the "
+        "rolling share of SPX / UST 10Y / DXY variance explained by one common "
+        "factor, plus the underlying pairwise correlations. It does not assign "
+        "Mixed regime labels.",
     )
 
     from charts.common import render_data_source_note

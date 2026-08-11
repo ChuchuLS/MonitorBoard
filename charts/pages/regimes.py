@@ -46,9 +46,14 @@ def _regime_ribbon(hist: pd.DataFrame, title: str, height: int = 200):
         s = h.loc[mask]
         fig.add_trace(go.Bar(
             x=s.index, y=[y_max - y_min] * len(s), base=[y_min] * len(s),
+            customdata=spread_bp.reindex(s.index).to_numpy(),
             marker=dict(color=REGIME_COLORS.get(regime, "#525252"), opacity=0.25,
                         line_width=0),
-            name=regime, showlegend=False, hoverinfo="skip",
+            name=regime, showlegend=False,
+            hovertemplate=(
+                f"%{{x|%Y-%m-%d}}<br>Current state: <b>{regime}</b>"
+                "<br>Spread: %{customdata:+.1f} bp<extra></extra>"
+            ),
         ))
 
     # Spread line on top

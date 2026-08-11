@@ -185,7 +185,8 @@ def render(ctx: PageContext) -> None:
     overview = build_global_earnings_overview(data, horizon=13)
     if not overview.empty:
         display = overview.rename(columns={
-            "index": "Index", "region": "Region", "model_date": "Model date",
+            "index": "Index", "region": "Region", "requested_ticker": "Requested ticker",
+            "workbook_ticker": "Workbook ticker", "model_date": "Model date",
             "aligned_observations": "Common obs", "price": "Index level",
             "eps_fy1": "FY1 EPS", "fy1_pe": "FY1 P/E (x)",
             "price_return_13w_pct": "13W index return (%)",
@@ -193,7 +194,7 @@ def render(ctx: PageContext) -> None:
             "valuation_change_13w_pct": "13W P/E change (%)",
             "status": "Status",
         })[[
-            "Index", "Region", "Model date", "Common obs", "Index level",
+            "Index", "Region", "Requested ticker", "Workbook ticker", "Model date", "Common obs", "Index level",
             "FY1 EPS", "FY1 P/E (x)", "13W index return (%)",
             "13W EPS growth (%)", "13W P/E change (%)", "Status",
         ]]
@@ -205,9 +206,19 @@ def render(ctx: PageContext) -> None:
             }, na_rep="—"),
             hide_index=True, use_container_width=True,
         )
+        requested_status = {
+            row["code"]: row["status"]
+            for _, row in overview.loc[overview["code"].isin(["CSI_A500", "DJI"])].iterrows()
+        }
         st.caption(
-            "Each index uses its own exact common EPS/price dates. A missing status is not replaced by "
-            "another market, a futures proxy, or zero."
+            "Each index uses its own exact common EPS/price dates. CSI A500 is read from "
+            "the workbook ticker CSIA500 Index and DJI from DJI Index; both require their "
+            "own cash-index price and BEST_EPS/1FY history. Current status — "
+            f"CSI A500: {requested_status.get('CSI_A500', 'Missing data')}; "
+            f"DJI: {requested_status.get('DJI', 'Missing data')}. "
+            "The existing XIN9I / FTSE China A50 history is not relabelled or used as a "
+            "proxy. Missing data are never replaced by another market, a futures proxy, "
+            "or zero."
         )
 
     render_data_source_note(
