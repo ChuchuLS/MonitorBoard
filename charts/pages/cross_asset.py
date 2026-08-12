@@ -1,0 +1,174 @@
+"""
+charts/pages/cross_asset.py
+===========================
+Section 05 — Cross-Asset Regime Timeline.
+
+8-regime directional classification using vol-scaled signals: 20-day change
+in SPX / UST 10Y yield / DXY divided by 21-day trailing realized volatility.
+The sign of each vol-scaled signal determines UP/DOWN. 2^3 = 8 regimes.
+
+A simplified "raw sign" mode is available as a toggle but is NOT the
+PDF-reference methodology. The next page shows the reference-style rolling
+one-trade linkage gauge and pairwise correlations.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
+
+from config.pages import get_page
+from config.theme import section_color, BG, GRID, TEXT_DIM, DARK_LAYOUT
+
+from charts.common import (
+    render_page_header, render_top_tabs, render_kpi_strip,
+    render_explanation_box, render_model_note,
+    render_missing_data_warning, render_section_footer,
+)
+from data.external_loaders import load_crossasset
+from models.cross_asset.directional import (
+    REQUIRED_COLUMNS, REGIMES_8, classify_8regime,
+    days_in_current_regime as _days_in_current, regime_stats as _regime_stats,
+)
+
+from ._context import PageContext
+
+
+def render(ctx: PageContext) -> None:
+    page = get_page("cross_asset")
+    color = section_color(page["color_key"])
+
+    render_top_tabs(page["id"])
+
+    prices = load_crossasset()
+
+    # Column check — all three required
+    if prices is None:
+        render_page_header(page, latest_date="—")
+        render_missing_data_warning(
+            required=REQUIRED_COLUMNS,
+            missing=["Required cross-asset columns not found in DATA.xlsx"],
+        )
+        render_section_footer(page)
+        return
+
+    missing_cols = [c for c in REQUIRED_COLUMNS if c not in prices.columns]
+    if missing_cols:
+        render_page_header(page, latest_date="—")
+        render_missing_data_warning(
+            required=REQUIRED_COLUMNS,
+            available=[c for c in REQUIRED_COLUMNS if c in prices.columns],
+            missing=missing_cols,
+            message="DATA.xlsx Sheet1 is missing required cross-asset columns.",
+        )
+        render_section_footer(page)
+        return
+
+    # Build model first, then use the model's latest date for the header
+    c1, c2 = st.columns([1, 3])
+    with c1:
+        mode = st.radio("Signal mode", ["Vol-scaled (PDF ref)", "Raw sign (simplified)"],
+                        index=0, key="ca8_mode", horizontal=False)
+    mode_key = "vol_scaled" if "Vol-scaled" in mode else "raw_sign"
+
+    result = classify_8regime(prices, mode=mode_key)
+    if result.empty:
+        render_page_header(page, latest_date="—")
+        st.warning("Insufficient data for regime classification.")
+        render_section_footer(page)
+        return
+
+    model_latest = result.index.max().strftime("%b %d, %Y").upper()
+    render_page_header(page, latest_date=model_latest,
+                       viewing=f"Data source: DATA.xlsx / Sheet1 cross-asset columns")
+
+    render_explanation_box(
+        "8-regime vol-scaled directional classification",
+        "Each trading day is classified by the <b>sign of a vol-scaled signal</b> "
+        "in three assets: <b>SPX</b>, <b>UST 10Y yield</b>, <b>DXY</b>. "
+        "Default: <b>20-day change ÷ 21-day trailing realized volatility</b>. "
+        "This produces 2³ = 8 directional regimes. A 'raw sign' mode (unscaled "
+        "N-day change) is available as a simplified toggle but is NOT the "
+        "PDF-reference methodology.",
+    )
+
+    current = result["regime"].iloc[-1]
+    cur_info = REGIMES_8[current]
+    days_in = _days_in_current(result["regime"])
+    last_row = result.iloc[-1]
+
+    render_kpi_strip([
+        {"label": "Current regime", "value": cur_info["label"],
+         "sub": f"{current} · {days_in} days in regime · {result.index[-1].date()}",
+         "accent": cur_info["color"]},
+        {"label": "SPX signal", "value": f"{last_row.get('spx_signal', 0):+.2f}",
+         "sub": "vol-scaled" if mode_key == "vol_scaled" else "raw"},
+        {"label": "Rates signal", "value": f"{last_row.get('rates_signal', 0):+.2f}"},
+        {"label": "DXY signal", "value": f"{last_row.get('dxy_signal', 0):+.2f}"},
+    ])
+
+    # Regime timeline
+    st.markdown("<div style='margin:0.8rem 0 0.3rem;font-size:11px;color:#888;"
+                "letter-spacing:0.1em;text-transform:uppercase;'>"
+                "Regime timeline</div>", unsafe_allow_html=True)
+
+    legend_bits = " &nbsp; ".join(
+        f"<span style='display:inline-block;width:8px;height:8px;"
+        f"background:{REGIMES_8[f'R{i}']['color']};vertical-align:middle;"
+        f"margin-right:3px;border-radius:1px;'></span>"
+        f"<span style='color:#aaa;font-size:9px;'>{REGIMES_8[f'R{i}']['label']}</span>"
+        for i in range(1, 9)
+    )
+    st.markdown(f"<div style='margin-bottom:6px;line-height:2;'>{legend_bits}</div>",
+                unsafe_allow_html=True)
+
+    regime_series = result["regime"]
+    changes = regime_series != regime_series.shift()
+    run_ids = changes.cumsum()
+    runs = []
+    for _, grp in result.groupby(run_ids):
+        runs.append({"regime": grp["regime"].iloc[0],
+                      "start": grp.index[0], "end": grp.index[-1],
+                      "duration": len(grp)})
+    runs_df = pd.DataFrame(runs)
+
+    fig = go.Figure()
+    for _, row in runs_df.iterrows():
+        c = REGIMES_8[row["regime"]]["color"]
+        fig.add_trace(go.Scatter(
+            x=[row["start"], row["end"]], y=[0.5, 0.5],
+            mode="lines", line=dict(color=c, width=24),
+            hovertext=f"{REGIMES_8[row['regime']]['label']}<br>"
+                      f"{row['start'].date()} → {row['end'].date()}<br>{row['duration']}d",
+            hoverinfo="text", showlegend=False))
+    fig.update_layout(**DARK_LAYOUT, height=100,
+                      margin=dict(l=10, r=10, t=5, b=20),
+                      yaxis=dict(visible=False, range=[0, 1]),
+                      xaxis=dict(showgrid=False, tickfont=dict(size=10)))
+    st.plotly_chart(fig, use_container_width=True, key="ca8_timeline",
+                    config={"displayModeBar": False})
+
+    # Regime frequency table (2Y window)
+    with st.expander("Regime frequency (trailing 2 years)", expanded=False):
+        stats = _regime_stats(regime_series, window_years=2)
+        st.dataframe(stats, hide_index=True, use_container_width=True)
+
+    render_model_note(
+        "Methodology",
+        "<b>Default (vol-scaled):</b> 20-day log return (SPX, DXY) or yield "
+        "change (UST 10Y) divided by 21-day trailing realized volatility. "
+        "The sign of each vol-scaled signal determines UP/DOWN. This matches "
+        "the PDF-reference methodology.<br>"
+        "<b>Raw sign (simplified):</b> sign of the raw 20-day change with no "
+        "vol normalization. NOT the PDF-reference model.<br>"
+        "The next page, <b>05b · Market Linkage & Correlations</b>, shows the "
+        "rolling share of SPX / UST 10Y / DXY variance explained by one common "
+        "factor, plus the underlying pairwise correlations. It does not assign "
+        "Mixed regime labels.",
+    )
+
+    from charts.common import render_data_source_note
+    render_data_source_note("DATA.xlsx / Sheet1", model_latest)
+    render_section_footer(page)
