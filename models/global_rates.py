@@ -50,27 +50,27 @@ def _yield(df: pd.DataFrame, country: str, tenor: str) -> pd.Series:
 
 def build_10y_overlay(df: pd.DataFrame, lookback_days: int = 252) -> pd.DataFrame:
     """Normalized 10Y yield overlay: each country scaled to own lookback min/max.
-    Forward-fills weekend/holiday gaps so lines are continuous."""
+    Each country uses its latest ``lookback_days`` genuine observations. Missing
+    sessions remain missing; no forward-fill or interpolation is applied."""
     countries = available_country_curves(df)
-    out = pd.DataFrame(index=df.index)
+    series_map = {}
     for c, tenors in countries.items():
         if "10Y" not in tenors:
             continue
-        s = _yield(df, c, "10Y")
-        # Forward-fill weekend/holiday gaps, then drop leading NaNs
-        s = s.ffill().dropna()
+        s = pd.to_numeric(_yield(df, c, "10Y"), errors="coerce").dropna().sort_index()
+        s = s[~s.index.duplicated(keep="last")]
         if len(s) < lookback_days // 2:
             continue
         tail = s.iloc[-lookback_days:] if len(s) >= lookback_days else s
         lo, hi = tail.min(), tail.max()
         rng = hi - lo
         if rng > 0:
-            out[c] = (s - lo) / rng
+            series_map[c] = (tail - lo) / rng
         else:
-            out[c] = 0.5
-    # Forward-fill any remaining gaps in the output too
-    out = out.ffill()
-    return out.iloc[-lookback_days:] if len(out) >= lookback_days else out
+            series_map[c] = pd.Series(0.5, index=tail.index, dtype=float)
+    if not series_map:
+        return pd.DataFrame()
+    return pd.concat(series_map, axis=1).sort_index()
 
 
 def build_curve_snapshots(df: pd.DataFrame, asof=None) -> pd.DataFrame:

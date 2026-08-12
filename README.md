@@ -87,8 +87,8 @@ page mirrors the front matter of an institutional chart pack.
 | 01b | SOFR Futures Strip & Calendar Spreads | **Live** | DATA.xlsx / Policy_Futures | Eight fixed quarterly SFR contracts from Sep 2026 through Jun 2028. Shows implied rates, 1D/5D/1M changes, 3M/6M/12M calendar spreads and terminal diagnostics. Not a meeting-by-meeting FOMC probability model. |
 | 02  | Rate Decomposition              | **Live**             | DATA.xlsx / Sheet1 | US curve complex, selectable-tenor rolling rate attribution, and 2s10s curve decomposition using breakeven identity. |
 | 03  | Curve Regimes                   | **Live**             | DATA.xlsx / Sheet1 | 7-regime classification across nominal / real / inflation curves and six tenor pairs. |
-| 04  | Global Rates                    | **Live**             | DATA.xlsx / Sheet1 | Normalized global 10Y overlay, global curve snapshots, 2s10s slope ranking (US/DE/JP/UK/CA/AU/CH). |
-| 04b | Country Rate Boards             | **Live**             | DATA.xlsx / Sheet1 | Fully aligned 2Y/5Y/10Y/30Y nominal boards for seven countries, with common-calendar changes, curve slopes, percentiles and descriptive curve-move readings. |
+| 04  | Global Rates                    | **Live**             | DATA.xlsx / Sheet1 | Normalized global 10Y overlay using genuine observations only, global curve snapshots, and 2s10s slope ranking (US/DE/JP/UK/CA/AU/CH). |
+| 04b | Country Rate Boards             | **Live / partial real-rate coverage** | DATA.xlsx / Sheet1 | Fully aligned 2Y/5Y/10Y/30Y nominal boards for seven countries, plus exact-tenor nominal/real/inflation-compensation attribution for US/DE/JP/UK/CA/AU. Switzerland is explicitly unavailable because no confirmed real-yield input is present. |
 | 05  | Cross-Asset Regime Timeline     | **Live**             | DATA.xlsx / Sheet1 cross-asset columns | 8-regime directional classification using vol-scaled signals (20D change ÷ 21D vol). |
 | 05b | Market Linkage & Correlations   | **Live**             | DATA.xlsx / Sheet1 | Reference-pack-style one-trade gauge: 63D PC1 explained variance across SPX / UST 10Y / DXY, plus the three 20D pairwise correlations. Descriptive, not causal. |
 | 06  | Sector Rotation & Breadth       | **Live**             | DATA.xlsx / Sheet1 + SPX_Sector_Weights | 11 S&P 500 sector indices + SPX. Main breadth and dispersion panels reproduce the reference-pack definitions: share above each sector's own 50-observation average and cross-sectional standard deviation of trailing 21-observation returns. Also includes relative performance, rotation quadrants and sector-weight context. Optional Cboe DSPX overlay activates only when DSPX INDEX is present. |
@@ -115,7 +115,10 @@ page mirrors the front matter of an institutional chart pack.
 - DATA.xlsx workbook-section audit across Sheet1 and scoring sheets.
 - Country Rate Boards for US / DE / JP / UK / CA / AU / CH using fully aligned
   2Y / 5Y / 10Y / 30Y nominal observations, with yield changes, curve slopes
-  and empirical percentiles.
+  and empirical percentiles. The same page adds exact-date real-rate and
+  inflation-compensation attribution for US / DE / JP / UK / CA / AU using
+  same-tenor government yields. Switzerland remains unavailable; no euro-area
+  or other-market proxy is substituted.
 - Sector Rotation & Breadth monitor using 11 S&P 500 sector indices, SPX and
   periodic sector weights. Its primary panels follow the reference chart pack:
   share above each sector's own 50-observation moving average and
@@ -137,8 +140,8 @@ page mirrors the front matter of an institutional chart pack.
 ### Previously scaffold — now implemented
 - **Rate Decomposition** (02) — now live with US curve complex + attribution.
 - **Curve Regimes** (03) — now live with 6-pair regime matrix.
-- **Global Rates** (04) — now live with 7-country overlay (incl. Switzerland) + slope ranking.
-- **Country Rate Boards** (04b) — live fully aligned four-tenor nominal boards for all seven countries.
+- **Global Rates** (04) — now live with a no-fill 7-country overlay (incl. Switzerland) + slope ranking.
+- **Country Rate Boards** (04b) — live fully aligned four-tenor nominal boards for all seven countries, with partial exact-tenor real/inflation coverage for six countries.
 
 ### Data files
 | File | Contents | Source of truth |
@@ -170,8 +173,8 @@ no row-position merge or inferred calendar shift is used. See
 - 01b SOFR Futures Strip & Calendar Spreads (eight fixed quarterly contracts; not an FOMC probability path)
 - 02 Rate Decomposition (breakeven identity: nominal = real + inflation)
 - 03 Curve Regimes (7-regime classification, 6 tenor pairs)
-- 04 Global Rates (7-country overlay (incl. Switzerland) + slope ranking)
-- 04b Country Rate Boards (fully aligned 2Y/5Y/10Y/30Y nominal boards)
+- 04 Global Rates (no-fill 7-country overlay (incl. Switzerland) + slope ranking)
+- 04b Country Rate Boards (fully aligned nominal boards + exact-tenor real/inflation attribution where available)
 - 05 Cross-Asset Regime Timeline (8-regime vol-scaled directional)
 - 05b Market Linkage & Correlations (SPX / UST 10Y / DXY one-trade gauge + pairwise correlations)
 - 06 Sector Rotation & Breadth (11 S&P 500 sectors + SPX — descriptive, not attribution)

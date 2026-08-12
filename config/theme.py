@@ -44,6 +44,7 @@ SECTION_COLORS = {
     "regimes":       "#f0c000",   # gold  — curve regime classification
     "global_rates":  "#00d07a",   # emerald — cross-country rates
     "cross_asset":   "#b184ff",   # violet — cross-asset regime blocks
+    "equities":      "#ff745c",   # coral  — equities, breadth and earnings
     "fx":            "#ff2f7d",   # magenta — FX section
     "data_quality":  "#9aa0a6",   # grey  — utility / infrastructure
     "scoring":       "#e8b931",   # gold  — global scoring / CTA model

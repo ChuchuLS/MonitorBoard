@@ -167,7 +167,11 @@ def ofr_chart(series: pd.Series, top_note: str | None,
 import html as _html
 
 from config.theme import section_color as _section_color
-from config.pages import PAGES as _PAGES, PAGES_BY_ID as _PAGES_BY_ID
+from config.pages import (
+    PAGES as _PAGES,
+    PAGES_BY_ID as _PAGES_BY_ID,
+    TOP_NAV_GROUPS as _TOP_NAV_GROUPS,
+)
 
 
 def _esc(x) -> str:
@@ -211,19 +215,28 @@ def render_page_header(page: dict, latest_date: str | None = None,
 
 
 def render_top_tabs(current_id: str) -> None:
-    """Horizontal strip of section chips at the top of every page, current
-    section highlighted. Purely visual — the sidebar radio remains the
-    primary nav — so the strip stays orientation without adding click
-    complexity mid-render."""
+    """Reference-style top-level section strip.
+
+    Individual subpages remain in the sidebar. Grouping the orientation strip
+    mirrors the reference pack and keeps it readable as the app grows.
+    """
     chips = []
-    for p in _PAGES:
-        color = _section_color(p["color_key"])
-        active = (p["id"] == current_id)
+    home_active = current_id == "contents"
+    chips.append(
+        f"<span class='rp-tab {'rp-tab-active' if home_active else ''}' "
+        f"style='color:{'#fff' if home_active else '#888'};"
+        f"background:{'rgba(255,255,255,0.03)' if home_active else 'transparent'};"
+        f"border-color:{'#666' if home_active else 'transparent'};'>"
+        f"<span class='rp-tab-num'>⌂</span>Contents</span>"
+    )
+    for group in _TOP_NAV_GROUPS:
+        color = _section_color(group["color_key"])
+        active = current_id in group["page_ids"]
         border = color if active else "transparent"
         text_color = "#fff" if active else "#888"
         bg = "rgba(255,255,255,0.03)" if active else "transparent"
-        label = _esc(p["label"])
-        num = _esc(p["section"])
+        label = _esc(group["label"])
+        num = _esc(group["section"])
         chips.append(
             f"<span class='rp-tab {'rp-tab-active' if active else ''}' "
             f"style='color:{text_color};background:{bg};"

@@ -81,8 +81,7 @@ def render(ctx: PageContext) -> None:
 
     overlay = build_10y_overlay(ctx.df)
     if not overlay.dropna(how="all").empty:
-        # Forward-fill small gaps (weekends, holidays) so lines aren't broken
-        overlay_plot = overlay.ffill().dropna(how="all")
+        overlay_plot = overlay.dropna(how="all")
         fig_ov = go.Figure()
         for c in overlay_plot.columns:
             fig_ov.add_trace(go.Scatter(
@@ -97,6 +96,11 @@ def render(ctx: PageContext) -> None:
             yaxis=dict(title="Normalized (0=1Y low, 1=1Y high)", gridcolor=GRID, range=[-0.05, 1.05]),
             xaxis=dict(showgrid=False))
         st.plotly_chart(fig_ov, use_container_width=True, key="gr_overlay", config={"displayModeBar": False})
+        st.caption(
+            "Each market is normalized on its latest 252 genuine observations. "
+            "Missing sessions remain NaN; chart segments connect observed points "
+            "without forward-filling values."
+        )
 
         # Side table
         if not changes.empty:

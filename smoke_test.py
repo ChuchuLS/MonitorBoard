@@ -14,7 +14,9 @@ from data.date_integrity import current_production_date, split_market_data_by_as
 from data.quality import validate_data, quality_summary
 from data.transforms import rolling_zscore
 from config.tickers import TICKERS
-from config.pages import PAGES, PAGES_BY_ID, get_page, nav_label, STATUS_LABELS
+from config.pages import (
+    PAGES, PAGES_BY_ID, TOP_NAV_GROUPS, get_page, nav_label, STATUS_LABELS,
+)
 from config.theme import SECTION_COLORS, section_color, page_css
 from index.components import build_components, BUCKETS
 from index.composite import compute_index, regime_label
@@ -226,6 +228,15 @@ missing_colors = [p["id"] for p in PAGES if p["color_key"] not in SECTION_COLORS
 assert not missing_colors, f"pages missing colours: {missing_colors}"
 print(f"    SECTION_COLORS covers all {len(PAGES)} sections")
 
+_grouped_ids = [pid for group in TOP_NAV_GROUPS for pid in group["page_ids"]]
+assert len(TOP_NAV_GROUPS) == 9
+assert len(_grouped_ids) == len(set(_grouped_ids))
+assert set(_grouped_ids) == {p["id"] for p in PAGES}
+assert next(g for g in TOP_NAV_GROUPS if g["id"] == "equities")["page_ids"] == (
+    "sector_rotation", "sector_contribution", "earnings_valuation"
+)
+print("    top strip: 9 grouped sections cover all 16 sidebar pages ✓")
+
 # Phase 2: DATA.xlsx workbook-section loaders + model modules
 from data.external_loaders import load_crossasset, load_ficc, load_pulsar
 ca = load_crossasset()
@@ -344,7 +355,11 @@ print(f"    global rates: {len(countries)} countries: {list(countries.keys())}")
 
 overlay = build_10y_overlay(df)
 assert not overlay.dropna(how="all").empty, "10Y overlay must have data"
-print(f"    10Y overlay: {overlay.shape}")
+_gr_src = open("models/global_rates.py").read()
+_gr_page_src = open("charts/pages/global_rates.py").read()
+assert ".ffill(" not in _gr_src and ".ffill(" not in _gr_page_src
+assert all(126 <= int(overlay[c].notna().sum()) <= 252 for c in overlay.columns)
+print(f"    10Y overlay: {overlay.shape}, genuine observations only")
 
 curves = build_curve_snapshots(df)
 assert not curves.empty, "curve snapshots must have data"
@@ -1572,6 +1587,52 @@ assert len(_cb_snapshot["country_rate_boards"]["countries"]) == 7
 _cb_html_src = open("scripts/export_research_pack_html.py").read()
 assert "04b Country Rate Boards" in _cb_html_src
 print("    G. Registry, Roadmap, README, Data Quality, snapshot and HTML are consistent ✓")
+
+# H. Exact-tenor country real-rate / inflation-compensation attribution.
+import ast as _ast_grd
+_grd_src = open("models/global_rate_decomposition.py").read()
+_grd_tree = _ast_grd.parse(_grd_src)
+for _node in _ast_grd.walk(_grd_tree):
+    if isinstance(_node, (_ast_grd.Import, _ast_grd.ImportFrom)):
+        _mod = getattr(_node, "module", None) or ""
+        for _name in _node.names:
+            assert "streamlit" not in _mod.lower() and "streamlit" not in _name.name.lower()
+assert ".ffill(" not in _grd_src and ".interpolate(" not in _grd_src
+
+from models.global_rate_decomposition import (
+    available_global_decomposition_tenors,
+    build_global_decomposition_snapshot,
+    build_global_rate_frame,
+    global_decomposition_readiness,
+    rolling_global_rate_attribution,
+)
+_grd_ready = global_decomposition_readiness(df, _CB_COUNTRIES)
+_grd_status = _grd_ready.set_index("country")["status"].to_dict()
+assert sum(v == "Ready" for v in _grd_status.values()) == 6
+assert _grd_status["CH"] == "Unavailable"
+for _country in ("US", "DE", "JP", "UK", "CA", "AU"):
+    _tenors = available_global_decomposition_tenors(df, _country)
+    assert "10Y" in _tenors, (_country, _tenors)
+    _frame = build_global_rate_frame(df, _country, "10Y")
+    assert not _frame.empty and not _frame.isna().any().any()
+    assert (_frame["nominal"] - _frame["real"] - _frame["inflation"]).abs().max() < 1e-12
+    _attr = rolling_global_rate_attribution(df, _country, "10Y", window=10).dropna()
+    assert not _attr.empty and _attr["residual_bp"].abs().max() < 1e-10
+    _snap = build_global_decomposition_snapshot(df, _country, horizons=(5, 20))
+    assert not _snap.empty and "10Y" in set(_snap["tenor"])
+assert build_global_rate_frame(df, "CH", "10Y").empty
+
+_grd_rm = next(
+    r for r in _CB_ROADMAP
+    if r["module_id"] == "global_real_inflation_attribution"
+)
+assert _grd_rm["current_status"] == "Partial" and _grd_rm["app_section"] == "04b"
+assert "country_rate_decomposition" in _cb_snapshot
+assert len(_cb_snapshot["country_rate_decomposition"]["countries"]) == 6
+assert "Switzerland" in _cb_snapshot["country_rate_decomposition"]["unavailable"]
+assert "Country Rate Attribution" in _cb_html_src
+assert "global_decomposition_readiness" in _cb_dq
+print("    H. Six-country exact-tenor real/inflation attribution; Switzerland unavailable ✓")
 
 for _, _row in _cb_overview.iterrows():
     print(

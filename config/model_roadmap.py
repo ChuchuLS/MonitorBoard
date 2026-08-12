@@ -102,6 +102,19 @@ ROADMAP: list[dict] = [
      "missing_data": [], "recommended_priority": 0,
      "build_notes": "Fully aligned nominal country boards with yield changes, slopes, "
                     "percentiles and descriptive curve-move readings. No forward-fill."},
+    {"section": "04", "module_id": "global_real_inflation_attribution",
+     "title": "Country real-rate / inflation-compensation attribution",
+     "app_section": "04b", "reference_section": "04 · Global Rates",
+     "current_status": "Partial", "do_not_fake": False,
+     "implemented_in": "models/global_rate_decomposition.py",
+     "evidence_basis": "DATA.xlsx exact-tenor nominal and real government yields",
+     "data_source_status": "partial",
+     "can_render_real_chart": True,
+     "required_data": ["Same-tenor nominal yield", "Same-market inflation-linked real yield"],
+     "missing_data": ["Switzerland has no confirmed real-yield series in DATA.xlsx"],
+     "recommended_priority": 0,
+     "build_notes": "Live for US/DE/JP/UK/CA/AU on exact common dates. Switzerland is "
+                    "shown as unavailable; no euro-area or other-country proxy is used."},
 
     # ── 05 · Cross-Asset ──
     {"section": "05", "module_id": "ca_8regime", "title": "Cross-Asset 8-regime timeline",
@@ -186,7 +199,7 @@ ROADMAP: list[dict] = [
      "build_notes": "The live FY1 monitor does not compare forecasts with realized EPS because no confirmed realized/trailing EPS series is present."},
 
     # ── 07 · FX ──
-    {"section": "06", "module_id": "fx_eurusd", "title": "EURUSD rate differential",
+    {"section": "07", "module_id": "fx_eurusd", "title": "EURUSD rate differential",
      "app_section": "07", "reference_section": "07 · FX",
      "current_status": "Live", "do_not_fake": False,
      "implemented_in": "models/fx_rate_differential.py",
@@ -195,7 +208,7 @@ ROADMAP: list[dict] = [
      "required_data": ['EURUSD spot', 'DE 2Y nom', 'US 2Y nom', 'DE 10Y nom', 'US 10Y nom', 'DE 10Y real', 'US 10Y real'],
      "missing_data": [], "recommended_priority": 0,
      "build_notes": "Live descriptive rate-differential monitor. Uses fully aligned spot, 2Y nom, 10Y nom, 10Y real."},
-    {"section": "06", "module_id": "fx_usdjpy", "title": "USDJPY rate differential",
+    {"section": "07", "module_id": "fx_usdjpy", "title": "USDJPY rate differential",
      "app_section": "07", "reference_section": "07 · FX",
      "current_status": "Live", "do_not_fake": False,
      "implemented_in": "models/fx_rate_differential.py",
@@ -204,7 +217,7 @@ ROADMAP: list[dict] = [
      "required_data": ['USDJPY spot', 'US 2Y nom', 'JP 2Y nom', 'US 10Y nom', 'JP 10Y nom', 'US 10Y real', 'JP 10Y real'],
      "missing_data": [], "recommended_priority": 0,
      "build_notes": "Live descriptive rate-differential monitor. Uses fully aligned spot, 2Y nom, 10Y nom, 10Y real."},
-    {"section": "06", "module_id": "fx_gbpusd", "title": "GBPUSD rate differential",
+    {"section": "07", "module_id": "fx_gbpusd", "title": "GBPUSD rate differential",
      "app_section": "07", "reference_section": "07 · FX",
      "current_status": "Live", "do_not_fake": False,
      "implemented_in": "models/fx_rate_differential.py",
@@ -213,7 +226,7 @@ ROADMAP: list[dict] = [
      "required_data": ['GBPUSD spot', 'UK 2Y nom', 'US 2Y nom', 'UK 10Y nom', 'US 10Y nom', 'UK 10Y real', 'US 10Y real'],
      "missing_data": [], "recommended_priority": 0,
      "build_notes": "Live descriptive rate-differential monitor. Uses fully aligned spot, 2Y nom, 10Y nom, 10Y real."},
-    {"section": "06", "module_id": "fx_audusd", "title": "AUDUSD rate differential",
+    {"section": "07", "module_id": "fx_audusd", "title": "AUDUSD rate differential",
      "app_section": "07", "reference_section": "07 · FX",
      "current_status": "Live", "do_not_fake": False,
      "implemented_in": "models/fx_rate_differential.py",

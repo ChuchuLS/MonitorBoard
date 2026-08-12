@@ -139,6 +139,50 @@ def build_snapshot() -> dict:
     except Exception:
         pass
 
+    # Country real-rate / inflation-compensation extension. Only exact-tenor,
+    # same-market inputs are exported; unsupported countries remain explicit.
+    try:
+        from config.tickers import REGIME_COUNTRIES
+        from models.global_rate_decomposition import (
+            build_global_decomposition_snapshot,
+            global_decomposition_readiness,
+        )
+        readiness = global_decomposition_readiness(df, REGIME_COUNTRIES)
+        records = []
+        for country in REGIME_COUNTRIES:
+            table = build_global_decomposition_snapshot(
+                df, country, horizons=(5, 20)
+            )
+            if table.empty:
+                continue
+            selected = table[table["tenor"] == "10Y"]
+            row = (selected.iloc[0] if not selected.empty else table.iloc[0])
+            records.append({
+                "country": str(row["country"]),
+                "label": str(row["label"]),
+                "tenor": str(row["tenor"]),
+                "model_date": str(row["model_date"]),
+                "aligned_observations": int(row["aligned_observations"]),
+                "nominal_pct": float(row["nominal_pct"]),
+                "real_pct": float(row["real_pct"]),
+                "inflation_compensation_pct": float(row["inflation_pct"]),
+                "nominal_change_20d_bp": float(row["nominal_change_20d_bp"]),
+                "real_change_20d_bp": float(row["real_change_20d_bp"]),
+                "inflation_change_20d_bp": float(row["inflation_change_20d_bp"]),
+            })
+        unavailable = readiness.loc[
+            readiness["status"] != "Ready", "label"
+        ].astype(str).tolist()
+        snap["country_rate_decomposition"] = {
+            "method": "inflation compensation = nominal minus same-tenor real yield",
+            "no_forward_fill": True,
+            "no_cross_country_proxy": True,
+            "countries": records,
+            "unavailable": unavailable,
+        }
+    except Exception:
+        pass
+
     # Cross-Asset
     try:
         from data.external_loaders import load_crossasset

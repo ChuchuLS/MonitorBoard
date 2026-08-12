@@ -300,6 +300,42 @@ def render(ctx: PageContext) -> None:
                 f"common observations: {_cb_overview['aligned_observations'].iloc[0]}. "
                 "No forward-fill is used in country-board calculations."
             )
+
+        from models.global_rate_decomposition import global_decomposition_readiness
+        _decomp_ready = global_decomposition_readiness(
+            ctx.df,
+            _cb_ready.keys(),
+            min_observations=21,
+        )
+        if not _decomp_ready.empty:
+            st.markdown(
+                "<div style='margin:0.8rem 0 0.4rem;font-size:11px;color:#888;"
+                "letter-spacing:0.1em;text-transform:uppercase;'>"
+                "Country real-rate / inflation-compensation readiness</div>",
+                unsafe_allow_html=True,
+            )
+            _dr = _decomp_ready.copy()
+            _dr["available_tenors"] = _dr["available_tenors"].map(
+                lambda x: ", ".join(x) if x else "—"
+            )
+            _dr = _dr[[
+                "label", "status", "available_tenors", "latest_model_date",
+                "minimum_aligned_observations", "note",
+            ]]
+            _dr.columns = [
+                "Country", "Status", "Exact tenors", "Latest model date",
+                "Minimum aligned observations", "Notes",
+            ]
+            st.dataframe(
+                _dr.style.map(_status_color, subset=["Status"]),
+                hide_index=True,
+                use_container_width=True,
+            )
+            st.caption(
+                "Inflation compensation is nominal minus the same-tenor, same-market "
+                "real government yield. Switzerland remains unavailable because no "
+                "confirmed real-yield series is present; no proxy is substituted."
+            )
     except Exception as exc:
         st.warning(
             "Country Rate Boards readiness is unavailable because the audit failed. "

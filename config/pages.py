@@ -104,7 +104,8 @@ PAGES: list[dict] = [
         "data_source": "sheet1_market",
         "description": "Global 10Y normalized overlay, yield curve snapshots, and "
                        "2s10s slope ranking across seven markets: US, DE, JP, UK, "
-                       "CA, AU and CH.",
+                       "CA, AU and CH. The overlay uses genuine observations only; "
+                       "missing sessions are not forward-filled.",
         "builds_on": "regimes",
         "next": "country_boards",
     },
@@ -119,7 +120,10 @@ PAGES: list[dict] = [
         "description": "Fully aligned 2Y / 5Y / 10Y / 30Y nominal sovereign curve "
                        "boards for US, DE, JP, UK, CA, AU and CH. Shows yield levels, "
                        "common-calendar changes, curve slopes, percentiles and a "
-                       "descriptive curve-move reading. No forward-fill or forecast claim.",
+                       "descriptive curve-move reading. Adds exact-tenor nominal / real / "
+                       "inflation-compensation attribution where confirmed real-yield "
+                       "series exist; Switzerland stays explicitly unavailable. No "
+                       "forward-fill, proxy substitution or forecast claim.",
         "builds_on": "global_rates",
         "next": "cross_asset",
     },
@@ -157,7 +161,7 @@ PAGES: list[dict] = [
         "label": "Sectors",
         "title": "Sector Rotation & Breadth",
         "section": "06",
-        "color_key": "cross_asset",
+        "color_key": "equities",
         "status": "live",
         "data_source": "sheet1_market",
         "description": "Descriptive monitor for the 11 S&P 500 sector indices: "
@@ -174,7 +178,7 @@ PAGES: list[dict] = [
         "label": "Sector Est.",
         "title": "Sector Contribution Estimate",
         "section": "06b",
-        "color_key": "cross_asset",
+        "color_key": "equities",
         "status": "live",
         "data_source": "sheet1_market",
         "description": "Approximate SPX sector return contribution using the latest "
@@ -189,7 +193,7 @@ PAGES: list[dict] = [
         "label": "Earnings",
         "title": "SPX FY1 Earnings & Valuation",
         "section": "06c",
-        "color_key": "cross_asset",
+        "color_key": "equities",
         "status": "live",
         "data_source": "scoring_sheets",
         "description": "SPX Index level, confirmed weekly FY1 consensus EPS (BEST_EPS with 1FY override), implied FY1 P/E, exact log-return decomposition into earnings growth and multiple change, plus a clearly labelled weekly OLS diagnostic. Not fair value or a forecast.",
@@ -258,6 +262,76 @@ PAGES: list[dict] = [
 # Convenience lookups
 PAGES_BY_ID: dict[str, dict] = {p["id"]: p for p in PAGES}
 PAGE_IDS: list[str] = [p["id"] for p in PAGES]
+
+
+# The reference chart pack keeps the top strip at section level. Streamlit's
+# sidebar still exposes every individual page, while this grouped registry
+# prevents the orientation strip from expanding to 16 separate chips.
+TOP_NAV_GROUPS: list[dict] = [
+    {
+        "id": "liquidity",
+        "section": "00",
+        "label": "Liquidity",
+        "color_key": "liquidity",
+        "page_ids": ("liquidity",),
+    },
+    {
+        "id": "policy",
+        "section": "01",
+        "label": "Policy",
+        "color_key": "policy",
+        "page_ids": ("policy", "policy_futures"),
+    },
+    {
+        "id": "decomposition",
+        "section": "02",
+        "label": "Decomp",
+        "color_key": "decomposition",
+        "page_ids": ("decomposition",),
+    },
+    {
+        "id": "regimes",
+        "section": "03",
+        "label": "Regimes",
+        "color_key": "regimes",
+        "page_ids": ("regimes",),
+    },
+    {
+        "id": "global_rates",
+        "section": "04",
+        "label": "Global",
+        "color_key": "global_rates",
+        "page_ids": ("global_rates", "country_boards"),
+    },
+    {
+        "id": "cross_asset",
+        "section": "05",
+        "label": "Cross-Asset",
+        "color_key": "cross_asset",
+        "page_ids": ("cross_asset", "market_linkage"),
+    },
+    {
+        "id": "equities",
+        "section": "06",
+        "label": "Equities",
+        "color_key": "equities",
+        "page_ids": ("sector_rotation", "sector_contribution", "earnings_valuation"),
+    },
+    {
+        "id": "fx",
+        "section": "07",
+        "label": "FX",
+        "color_key": "fx",
+        "page_ids": ("fx_rate_diff",),
+    },
+    {
+        "id": "appendix",
+        "section": "A",
+        "label": "Appendix",
+        "color_key": "data_quality",
+        "page_ids": ("data_quality", "scoring", "model_roadmap"),
+    },
+]
 
 
 def get_page(page_id: str) -> dict:

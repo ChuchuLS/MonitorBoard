@@ -19,6 +19,7 @@ from charts.common import (
     render_data_source_note,
     render_explanation_box,
     render_kpi_strip,
+    render_missing_data_warning,
     render_model_note,
     render_page_header,
     render_section_footer,
@@ -35,6 +36,11 @@ from models.country_rate_boards import (
     build_global_country_board_overview,
 )
 from models.global_rates import COUNTRY_LABELS, STANDARD_TENORS
+from models.global_rate_decomposition import (
+    available_global_decomposition_tenors,
+    build_global_decomposition_snapshot,
+    rolling_global_rate_attribution,
+)
 from ._context import PageContext
 
 COUNTRY_COLORS = {
@@ -51,6 +57,11 @@ TENOR_COLORS = {
     "5Y": "#22c55e",
     "10Y": "#f59e0b",
     "30Y": "#ef4444",
+}
+DECOMP_COLORS = {
+    "nominal": "#ffffff",
+    "real": "#06b6d4",
+    "inflation": "#f59e0b",
 }
 
 
@@ -72,6 +83,140 @@ def _filter_history(frame: pd.DataFrame, ctx: PageContext) -> pd.DataFrame:
     if frame is None or frame.empty:
         return pd.DataFrame()
     return frame.loc[pd.Timestamp(ctx.start_date):pd.Timestamp(ctx.end_date)]
+
+
+def _render_country_decomposition(ctx: PageContext, country: str) -> None:
+    """Render the reference-style real/inflation attribution when supported."""
+    st.markdown(
+        "<div style='margin:1rem 0 0.35rem;font-size:11px;color:#888;"
+        "letter-spacing:0.1em;text-transform:uppercase;'>"
+        "Nominal / real / inflation decomposition</div>",
+        unsafe_allow_html=True,
+    )
+
+    tenors = available_global_decomposition_tenors(
+        ctx.df,
+        country,
+        min_observations=21,
+        asof=ctx.end_date,
+    )
+    if not tenors:
+        render_missing_data_warning(
+            required=["Same-tenor nominal government yield", "Same-market real government yield"],
+            available=["Nominal 2Y / 5Y / 10Y / 30Y curve"],
+            missing=["Confirmed same-market real-yield series"],
+            message=(
+                "This country has no confirmed exact-tenor real-yield input in "
+                "DATA.xlsx. The reference pack uses a proxy for some markets, but "
+                "this board does not substitute another country's inflation or real-rate series."
+            ),
+        )
+        return
+
+    default_tenor = "10Y" if "10Y" in tenors else tenors[0]
+    tenor = st.selectbox(
+        "Attribution tenor",
+        tenors,
+        index=tenors.index(default_tenor),
+        key=f"country_decomposition_tenor_{country}",
+    )
+    snapshot = build_global_decomposition_snapshot(
+        ctx.df,
+        country,
+        horizons=(5, 20),
+        asof=ctx.end_date,
+    )
+    selected = snapshot[snapshot["tenor"] == tenor]
+    if selected.empty:
+        st.warning("The selected exact-tenor decomposition is unavailable.")
+        return
+    row = selected.iloc[0]
+
+    render_kpi_strip([
+        {
+            "label": f"{tenor} nominal",
+            "value": f"{row['nominal_pct']:.2f}%",
+            "sub": f"20 common obs {row['nominal_change_20d_bp']:+.0f} bp",
+        },
+        {
+            "label": f"{tenor} real",
+            "value": f"{row['real_pct']:.2f}%",
+            "sub": f"20 common obs {row['real_change_20d_bp']:+.0f} bp",
+            "accent": DECOMP_COLORS["real"],
+        },
+        {
+            "label": f"{tenor} inflation compensation",
+            "value": f"{row['inflation_pct']:.2f}%",
+            "sub": f"20 common obs {row['inflation_change_20d_bp']:+.0f} bp",
+            "accent": DECOMP_COLORS["inflation"],
+        },
+        {
+            "label": "Decomposition date",
+            "value": str(row["model_date"]),
+            "sub": f"{int(row['aligned_observations']):,} exact-date observations",
+        },
+    ])
+
+    attribution = rolling_global_rate_attribution(
+        ctx.df,
+        country,
+        tenor=tenor,
+        window=10,
+        asof=ctx.end_date,
+    ).dropna()
+    if attribution.empty:
+        st.warning("Insufficient common observations for rolling 10D attribution.")
+        return
+
+    plot = attribution.iloc[-252:]
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=plot.index,
+        y=plot["real_contribution_bp"],
+        name="Real",
+        marker_color=DECOMP_COLORS["real"],
+        hovertemplate="%{x|%Y-%m-%d}: %{y:+.1f} bp<extra>Real</extra>",
+    ))
+    fig.add_trace(go.Bar(
+        x=plot.index,
+        y=plot["inflation_contribution_bp"],
+        name="Inflation compensation",
+        marker_color=DECOMP_COLORS["inflation"],
+        hovertemplate="%{x|%Y-%m-%d}: %{y:+.1f} bp<extra>Inflation compensation</extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=plot.index,
+        y=plot["nominal_change_bp"],
+        mode="lines",
+        name="Nominal 10D change",
+        line=dict(color=DECOMP_COLORS["nominal"], width=1.4),
+        hovertemplate="%{x|%Y-%m-%d}: %{y:+.1f} bp<extra>Nominal</extra>",
+    ))
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor=BG,
+        plot_bgcolor=BG,
+        barmode="relative",
+        height=340,
+        margin=dict(l=50, r=20, t=24, b=32),
+        font=dict(family="Inter, system-ui, sans-serif", size=10, color=TEXT_DIM),
+        legend=dict(orientation="h", y=1.04, x=0),
+        yaxis=dict(title="Rolling 10-observation change (bp)", gridcolor=GRID),
+        xaxis=dict(showgrid=False),
+    )
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        key=f"country_rate_decomposition_{country}_{tenor}",
+        config={"displayModeBar": False},
+    )
+    max_residual = float(attribution["residual_bp"].abs().max())
+    st.caption(
+        "Inflation compensation = nominal government yield minus same-tenor "
+        "inflation-linked government yield. Inputs are joined on exact dates; "
+        "no forward-fill, interpolation, or cross-country proxy is used. "
+        f"Maximum absolute identity residual: {max_residual:.2e} bp."
+    )
 
 
 def render(ctx: PageContext) -> None:
@@ -295,6 +440,8 @@ def render(ctx: PageContext) -> None:
     st.plotly_chart(fig_slopes, use_container_width=True, key="country_board_slopes",
                     config={"displayModeBar": False})
 
+    _render_country_decomposition(ctx, country)
+
     move = reading.get("move", {})
     render_current_reading_box(
         "Current reading",
@@ -313,7 +460,9 @@ def render(ctx: PageContext) -> None:
         "rank within up to 252 common observations. The curve-move description "
         "uses a disclosed ±5 bp diagnostic threshold for both level and 2s10s "
         "shape changes. It is descriptive, not a forecast, policy view or trade "
-        "recommendation.",
+        "recommendation. Where the real-yield extension is available, implied "
+        "inflation compensation is an arithmetic nominal-minus-real residual; it "
+        "is not a pure forecast of expected inflation.",
     )
 
     with st.expander("Country board readiness", expanded=False):

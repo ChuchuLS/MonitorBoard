@@ -45,6 +45,10 @@ from models.global_rates import (
     country_1m_changes, build_curve_snapshots, COUNTRY_LABELS,
 )
 from models.country_rate_boards import build_global_country_board_overview
+from models.global_rate_decomposition import (
+    build_global_decomposition_snapshot,
+    global_decomposition_readiness,
+)
 from models.cross_asset.directional import (
     classify_8regime, REGIMES_8,
     days_in_current_regime as ca_days_in,
@@ -448,6 +452,43 @@ def _build_global(df):
             "All seven countries are compared on one shared 2Y/5Y/10Y/30Y "
             "observation calendar. No forward-fill is used. The full selectable "
             "country board is available in Streamlit section 04b.",
+        )
+
+    # Exact-tenor real/inflation extension. One preferred tenor per country
+    # keeps the static export compact; Streamlit exposes all available tenors.
+    from config.tickers import REGIME_COUNTRIES
+    decomp_rows = []
+    for country in REGIME_COUNTRIES:
+        table = build_global_decomposition_snapshot(df, country, horizons=(5, 20))
+        if table.empty:
+            continue
+        selected = table[table["tenor"] == "10Y"]
+        row = selected.iloc[0] if not selected.empty else table.iloc[0]
+        decomp_rows.append({
+            "Country": row["label"],
+            "Tenor": row["tenor"],
+            "Nominal": f"{row['nominal_pct']:.2f}%",
+            "Real": f"{row['real_pct']:.2f}%",
+            "Inflation compensation": f"{row['inflation_pct']:.2f}%",
+            "20-observation nominal": f"{row['nominal_change_20d_bp']:+.0f} bp",
+            "20-observation real": f"{row['real_change_20d_bp']:+.0f} bp",
+            "20-observation inflation": f"{row['inflation_change_20d_bp']:+.0f} bp",
+            "Date": row["model_date"],
+        })
+    if decomp_rows:
+        html += "<h3>04b Country Rate Attribution — Exact-Tenor Inputs</h3>"
+        html += _df_table(pd.DataFrame(decomp_rows))
+        readiness = global_decomposition_readiness(df, REGIME_COUNTRIES)
+        unavailable = readiness.loc[
+            readiness["status"] != "Ready", "label"
+        ].astype(str).tolist()
+        unavailable_text = ", ".join(unavailable) if unavailable else "None"
+        html += _method_box(
+            "Country attribution methodology",
+            "Inflation compensation equals the nominal government yield minus "
+            "the same-tenor, same-market inflation-linked government yield. "
+            "Inputs use exact common dates with no forward-fill, interpolation, "
+            "or cross-country proxy. Unavailable: " + unavailable_text + ".",
         )
 
     html += "</div>"
