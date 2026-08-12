@@ -201,6 +201,11 @@ metadata, testing, or data.
 - Official SPX sector attribution (daily-weight methodology or official contribution data required)
 - Forward estimate vs realized EPS (realized/trailing EPS field and period definition not supplied)
 
+**Deferred methodology research memo:** Section 09 records four questions for a
+later empirical review: bucket-weight calibration, regime-threshold calibration,
+missing-bucket weight treatment, and historical-event validation. They are
+research reminders only; recording them does not change the live model.
+
 ---
 
 ## One-click PDF and static research-pack export

@@ -3,8 +3,9 @@ charts/liquidity.py
 ===================
 All rendering for the Composite Liquidity Index (requirements #9-#12):
 
-  * render_summary_panel()  -> the homepage KPI strip (level, regime,
-    1w/1m/3m change, main easing + tightening contributor).
+  * render_summary_panel()  -> the legacy combined KPI + driver summary.
+  * render_driver_cards()   -> main easing + tightening contributors only,
+    used when the research-pack shell already renders the KPI strip.
   * render_index_page()     -> the full "Composite Liquidity Index" section:
     index line with regime bands, sub-index lines, contribution decomposition,
     benchmark comparison (overlay + correlation table + rolling correlation +
@@ -77,8 +78,6 @@ def render_summary_panel(result: IndexResult) -> None:
     level = result.latest
     regime = result.latest_regime
     changes = result.changes()
-    easing_lbl, tight_lbl = result.drivers("1m")
-
     if pd.isna(level):
         st.warning(
             "The Composite Liquidity Index could not be computed — no component "
@@ -125,6 +124,15 @@ def render_summary_panel(result: IndexResult) -> None:
                 unsafe_allow_html=True,
             )
 
+    render_driver_cards(result)
+
+
+def render_driver_cards(result: IndexResult) -> None:
+    """Render only the main 1-month easing and tightening contributors."""
+    if pd.isna(result.latest):
+        return
+
+    easing_lbl, tight_lbl = result.drivers("1m")
     d1, d2 = st.columns(2, gap="small")
     with d1:
         st.markdown(

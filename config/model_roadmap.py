@@ -291,6 +291,42 @@ def coverage_summary() -> dict:
 def do_not_fake_list() -> list[dict]:
     return [m for m in ROADMAP if m.get("do_not_fake")]
 
+
+# Methodology questions deliberately parked for later research.  These are not
+# implementation instructions: the live model keeps its current settings until
+# evidence, historical validation, and an explicit model decision support a
+# change.
+METHODOLOGY_RESEARCH_BACKLOG: list[dict] = [
+    {
+        "topic": "Bucket weights",
+        "question": "Why should the five buckets use 30/20/20/20/10 weights?",
+        "current_treatment": "First-version judgement weights; not statistically estimated.",
+        "research_needed": "Compare equal weights, PCA/statistical weights and outcome-calibrated weights; test stability and concentration.",
+        "status": "Deferred research",
+    },
+    {
+        "topic": "Regime thresholds",
+        "question": "Why should 60+ be Loose, below 45 Tight and below 35 Stress?",
+        "current_treatment": "Provisional display thresholds; not empirically calibrated economic boundaries.",
+        "research_needed": "Calibrate against historical percentiles, funding-stress episodes and documented market events.",
+        "status": "Deferred research",
+    },
+    {
+        "topic": "Missing-bucket weights",
+        "question": "Should weights be fully renormalised when a bucket becomes unavailable?",
+        "current_treatment": "Qualifying buckets receive the unavailable bucket's weight pro rata.",
+        "research_needed": "Compare fixed-weight, partial-publication and renormalised variants; separate market moves from coverage effects.",
+        "status": "Deferred research",
+    },
+    {
+        "topic": "Historical event validation",
+        "question": "Do the chosen settings identify historical liquidity events reliably?",
+        "current_treatment": "No completed event-study or out-of-sample validation is claimed.",
+        "research_needed": "Define an event set and evaluation metrics, then test signal timing, false positives and robustness across vintages.",
+        "status": "Deferred research",
+    },
+]
+
 BUILD_PRIORITIES = {
     0: "Already built",
     1: "Priority 1 — enhance with existing data",

@@ -18,6 +18,7 @@ from charts.common import (
 )
 from config.pages import get_page
 from config.theme import BG, GRID, TEXT_DIM, section_color
+from data.external_loaders import load_crossasset
 from models.market_linkage import (
     MARKET_LINKAGE_CONFIG,
     all_pair_keys,
@@ -44,7 +45,16 @@ def render(ctx: PageContext) -> None:
     page = get_page("market_linkage")
     render_top_tabs(page["id"])
 
-    snap = build_market_linkage_snapshot(ctx.df, corr_window=20, long_window=63)
+    # ``ctx.df`` retains Bloomberg ticker names (SPX INDEX, USGG10YR INDEX,
+    # DXY CURNCY), while the linkage model deliberately works with the shared
+    # canonical cross-asset names (SPX, USGG10YR, DXY).  Use the same loader as
+    # the preceding Cross-Asset page so the live page and exports receive the
+    # identical, normalized three-series frame.
+    model_df = load_crossasset()
+    if model_df is None:
+        model_df = pd.DataFrame(columns=list(MARKET_LINKAGE_CONFIG))
+
+    snap = build_market_linkage_snapshot(model_df, corr_window=20, long_window=63)
     if snap.get("status") == "Missing data":
         render_page_header(page, latest_date="—")
         render_missing_data_warning(
@@ -169,7 +179,9 @@ def render(ctx: PageContext) -> None:
         st.plotly_chart(fig_c, use_container_width=True, key="market_linkage_corrs",
                         config={"displayModeBar": False})
 
-    reading = build_market_linkage_current_reading(ctx.df, corr_window=20, long_window=63)
+    reading = build_market_linkage_current_reading(
+        model_df, corr_window=20, long_window=63
+    )
     render_current_reading_list(
         "Current reading",
         [

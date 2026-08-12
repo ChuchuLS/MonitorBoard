@@ -22,7 +22,7 @@ from charts.common import (
     render_page_header, render_top_tabs, render_kpi_strip,
     render_explanation_box, render_section_footer,
 )
-from charts.liquidity import render_summary_panel, render_index_page
+from charts.liquidity import render_driver_cards, render_index_page
 from charts.funding import render_xccy_summary
 from data.loader import source_signature
 from index.methodology import INDEX_METHODOLOGY
@@ -122,8 +122,10 @@ def render(ctx: PageContext) -> None:
     # Build export bytes lazily — only if the user is on this page.
     export_bytes = ctx.export_builder() if ctx.export_builder else None
 
-    # Delegate the actual heavy panel to the existing renderer — untouched.
-    render_summary_panel(r)
+    # The research-pack shell above already renders level and horizon changes.
+    # Keep only the contributor cards here so the four headline KPIs appear
+    # exactly once on the page.
+    render_driver_cards(r)
     st.markdown("<div style='height:0.8rem;'></div>", unsafe_allow_html=True)
     render_index_page(
         ctx.df, ctx.dff, r, ctx.audit_bundle,

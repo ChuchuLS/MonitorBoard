@@ -528,7 +528,12 @@ print("    no stale standalone files ✓ (all data in DATA.xlsx)")
 
 # Phase 5 checks
 print("18. Phase 5 model roadmap checks ...")
-from config.model_roadmap import ROADMAP, coverage_summary, do_not_fake_list
+from config.model_roadmap import (
+    ROADMAP,
+    METHODOLOGY_RESEARCH_BACKLOG,
+    coverage_summary,
+    do_not_fake_list,
+)
 assert len(ROADMAP) > 10, f"roadmap too short: {len(ROADMAP)}"
 counts = coverage_summary()
 assert counts.get("Live", 0) >= 5, f"expected ≥5 Live, got {counts}"
@@ -544,8 +549,11 @@ dnf = do_not_fake_list()
 assert len(dnf) >= 5
 for m in dnf:
     assert m["current_status"] in ("Data Missing", "Not Started", "Needs confirmation")
+assert len(METHODOLOGY_RESEARCH_BACKLOG) == 4
+assert all(item["status"] == "Deferred research" for item in METHODOLOGY_RESEARCH_BACKLOG)
 print(f"    roadmap: {len(ROADMAP)} modules, coverage={counts}")
 print(f"    do_not_fake: {len(dnf)} modules correctly blocked")
+print("    methodology memo: 4 deferred research questions recorded")
 readme = open("README.md").read()
 assert "content and model benchmark" in readme.lower()
 print("    README: clarifies content goal ✓")
@@ -1836,9 +1844,16 @@ assert _ml_page["next"] == "sector_rotation"
 assert "market_linkage_pca" not in PAGES_BY_ID
 _ml_page_src = open("charts/pages/market_linkage.py").read()
 assert "build_market_linkage_snapshot" in _ml_page_src
+assert "load_crossasset()" in _ml_page_src
+assert "build_market_linkage_snapshot(ctx.df" not in _ml_page_src
 assert "one-trade gauge" in _ml_page_src.lower()
 assert "Mixed" not in _ml_page_src
-print("    G. 05b is the reference-style gauge; experimental PCA page removed ✓")
+print("    G. 05b uses normalized live data; experimental PCA page removed ✓")
+
+_liq_page_src = open("charts/pages/liquidity_overview.py").read()
+assert "render_driver_cards(r)" in _liq_page_src
+assert "render_summary_panel(r)" not in _liq_page_src
+print("       Liquidity shell renders headline KPIs once and keeps driver cards ✓")
 
 from config.model_roadmap import ROADMAP as _ML_ROADMAP
 _ml_rm = next(r for r in _ML_ROADMAP if r["module_id"] == "market_linkage")

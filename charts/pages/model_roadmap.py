@@ -15,6 +15,7 @@ import streamlit as st
 from config.pages import get_page
 from config.model_roadmap import (
     ROADMAP, coverage_summary, by_status, do_not_fake_list, BUILD_PRIORITIES,
+    METHODOLOGY_RESEARCH_BACKLOG,
 )
 from charts.common import (
     render_page_header, render_top_tabs, render_kpi_strip,
@@ -128,7 +129,27 @@ def render(ctx: PageContext) -> None:
         render_current_reading_list(
             "Blocked pending data, metadata, or methodology", dnf_items)
 
-    # ── D. Next recommended build ──
+    # ── D. Deferred methodology research ──
+    st.markdown("<div style='margin:1rem 0 0.3rem;font-size:11px;color:#888;"
+                "letter-spacing:0.1em;text-transform:uppercase;'>"
+                "Methodology research memo — deferred</div>", unsafe_allow_html=True)
+    render_model_note(
+        "Reminder for a later research pass",
+        "These questions are recorded for empirical review but are <b>not part "
+        "of the current implementation pass</b>. The live index keeps its current "
+        "weights, thresholds and publication rules until evidence supports an "
+        "explicitly approved change."
+    )
+    research_df = pd.DataFrame([{
+        "Topic": item["topic"],
+        "Question": item["question"],
+        "Current treatment": item["current_treatment"],
+        "Research needed": item["research_needed"],
+        "Status": item["status"],
+    } for item in METHODOLOGY_RESEARCH_BACKLOG])
+    st.dataframe(research_df, hide_index=True, use_container_width=True)
+
+    # ── E. Next recommended build ──
     st.markdown("<div style='margin:1rem 0 0.3rem;font-size:11px;color:#888;"
                 "letter-spacing:0.1em;text-transform:uppercase;'>"
                 "Recommended build order</div>", unsafe_allow_html=True)
