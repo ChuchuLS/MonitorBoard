@@ -6,6 +6,7 @@ Usage:
 """
 import sys, os, time, subprocess
 from pathlib import Path
+from io import BytesIO
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 _t0 = time.time()
@@ -34,9 +35,26 @@ assert "Plotly.newPlot" not in html_str, "lightweight mode must not embed Plotly
 assert "<script>" not in html_str.split("</head>")[0], "lightweight mode must not include Plotly JS"
 print(f"   lightweight: {len(html_str):,} chars in {elapsed_light:.2f}s ✓")
 
-# 3. Full inline Plotly export (opt-in via env var)
+# 3. Complete PDF export
+print("\n3. Complete linked PDF export ...")
+from scripts.export_research_pack_pdf import build_pdf
+pdf_bytes, pdf_name = build_pdf()
+assert pdf_bytes.startswith(b"%PDF-"), "PDF signature missing"
+assert len(pdf_bytes) > 50_000, "PDF export is unexpectedly small"
+assert pdf_name.startswith("rates_liquidity_board_") and pdf_name.endswith(".pdf")
+try:
+    from pypdf import PdfReader
+    reader = PdfReader(BytesIO(pdf_bytes))
+    assert len(reader.pages) == 2 + len(snap_data["pages"]), \
+        "PDF must contain cover + contents + every registered Board page"
+    assert reader.outline, "PDF bookmarks are missing"
+    print(f"   PDF: {len(reader.pages)} pages, {len(pdf_bytes):,} bytes, bookmarks present ✓")
+except ImportError:
+    print(f"   PDF: {len(pdf_bytes):,} bytes ✓ (pypdf structure check skipped)")
+
+# 4. Full inline Plotly export (opt-in via env var)
 if os.environ.get("FULL_EXPORT_SMOKE") == "1":
-    print("\n3. FULL inline Plotly HTML export ...")
+    print("\n4. FULL inline Plotly HTML export ...")
     # Run the heavy inline build in a fresh process. Reusing the process after
     # lightweight mode can leave Plotly/module-level render state in a slow or
     # non-deterministic state in some headless environments.
@@ -55,7 +73,7 @@ if os.environ.get("FULL_EXPORT_SMOKE") == "1":
     elapsed_full = time.time() - t_full
     print(f"   full: {full_len:,} chars in {elapsed_full:.2f}s ✓")
 else:
-    print("\n3. FULL inline Plotly test SKIPPED (set FULL_EXPORT_SMOKE=1 to enable)")
+    print("\n4. FULL inline Plotly test SKIPPED (set FULL_EXPORT_SMOKE=1 to enable)")
 
 print(f"\nALL EXPORT TESTS PASSED ✓")
 print(f"Total elapsed: {time.time() - _t0:.2f}s")

@@ -203,7 +203,25 @@ metadata, testing, or data.
 
 ---
 
-## Static research-pack export
+## One-click PDF and static research-pack export
+
+The Streamlit sidebar includes **Export Board to PDF**. It downloads a complete
+16:9 research pack generated from the current `DATA.xlsx` vintage, rather than
+printing only the page currently open. The PDF includes:
+
+- a cover and linked contents page;
+- one page for every registered Board page;
+- PDF bookmarks, top-section navigation and previous/next links;
+- current tables and vector charts generated from the production models;
+- explicit unavailable/partial states when verified inputs are missing.
+
+The PDF is cached by the `DATA.xlsx` content hash and production date, so a data
+update automatically invalidates the prior export. It can also be built from the
+command line:
+
+```bash
+python scripts/export_research_pack_pdf.py  # → output/pdf/rates_liquidity_board_<YYYYMMDD>.pdf
+```
 
 Two command-line scripts generate offline exports from DATA.xlsx:
 
@@ -213,17 +231,16 @@ python scripts/export_research_pack_html.py       # → reports/research_pack_<Y
 ```
 
 The HTML report is a standalone offline file — all CSS and Plotly JS are embedded
-inline, so it can be opened locally without internet access. Use your browser's
-Print → Save as PDF for a PDF version.
+inline, so it can be opened locally without internet access.
 
 The snapshot includes the page registry and key implemented outputs.
 The static HTML export currently covers a subset of the Streamlit models.
 Missing export coverage must not be interpreted as missing source data or
-an unimplemented Streamlit model. Future automated PDF generation is a
-planned enhancement.
+an unimplemented Streamlit model. The automated PDF export is separate and
+covers every registered Board page.
 
-The Streamlit app also offers lazy download buttons on the **Contents** page,
-inside the "Export research pack" expander.
+The PDF download is always visible in the Streamlit sidebar and is repeated on
+the **Contents** page inside the "Export research pack" expander.
 
 ---
 

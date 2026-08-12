@@ -27,4 +27,9 @@ class PageContext:
     export_builder: Callable[[], bytes] | None = None
     export_name: str = "liquidity_index.xlsx"
 
+    # Complete reference-style Board export. This is separate from the
+    # Liquidity page's analytical Excel workbook above.
+    pdf_export_builder: Callable[[], bytes] | None = None
+    pdf_export_name: str = "rates_liquidity_board.pdf"
+
     extras: dict = field(default_factory=dict)

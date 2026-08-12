@@ -186,8 +186,23 @@ def render(ctx: PageContext) -> None:
 
     # ── Export download (lazy) ──
     with st.expander("Export research pack", expanded=False):
-        st.caption("Generate a standalone HTML report from the current data. "
-                   "Use your browser's Print → Save as PDF for a PDF version.")
+        st.caption("Download the complete linked Board as a 16:9 PDF. The file "
+                   "contains the cover, contents, all registered pages, PDF "
+                   "bookmarks and internal navigation.")
+        if ctx.pdf_export_builder:
+            try:
+                st.download_button(
+                    "⬇  Download complete Board PDF",
+                    data=ctx.pdf_export_builder(),
+                    file_name=ctx.pdf_export_name,
+                    mime="application/pdf",
+                    key="contents_export_board_pdf",
+                    use_container_width=True,
+                )
+            except Exception as e:
+                st.error(f"PDF export failed: {e}")
+
+        st.caption("Optional machine-readable and standalone HTML exports")
         ec1, ec2 = st.columns(2)
         with ec1:
             if st.button("Generate HTML report", key="gen_html"):

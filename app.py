@@ -107,6 +107,13 @@ def _build_export(source_hash: str, production_date: str) -> bytes:
     cur = _build_index(source_hash, production_date)
     return build_index_workbook(cur, _build_audit(source_hash, production_date), df_local)
 
+@st.cache_data(show_spinner="Preparing Board PDF...")
+def _build_pdf_export(source_hash: str, production_date: str) -> tuple[bytes, str]:
+    """Build the complete linked research pack once per data vintage."""
+    from scripts.export_research_pack_pdf import build_pdf
+    df_local = load_data()
+    return build_pdf(df_local, _build_index(source_hash, production_date))
+
 
 sig = source_signature()
 index_result = _build_index(sig, _prod_date)
@@ -178,6 +185,22 @@ with st.sidebar:
                         text-transform:uppercase;letter-spacing:0.06em;">{reg}</div>
             """, unsafe_allow_html=True)
 
+    st.divider()
+    try:
+        pdf_bytes, pdf_name = _build_pdf_export(sig, _prod_date)
+        st.download_button(
+            label="⬇  Export Board to PDF",
+            data=pdf_bytes,
+            file_name=pdf_name,
+            mime="application/pdf",
+            key="sidebar_export_board_pdf",
+            use_container_width=True,
+            help="Download the complete linked Board, not only the page currently open.",
+        )
+        st.caption("Complete linked pack · all registered Board pages")
+    except Exception as exc:
+        st.error(f"PDF export unavailable: {type(exc).__name__}")
+
 
 # Build context — export is LAZY (callable, not pre-built bytes)
 dff = date_filter(df, start_date, end_date)
@@ -186,6 +209,8 @@ ctx = PageContext(
     index_result=index_result, audit_bundle=audit_bundle,
     export_builder=lambda: _build_export(sig, _prod_date),
     export_name=export_filename(audit_bundle),
+    pdf_export_builder=lambda: _build_pdf_export(sig, _prod_date)[0],
+    pdf_export_name=_build_pdf_export(sig, _prod_date)[1],
 )
 
 page_id = _LABEL_TO_ID.get(nav_choice, "contents")
