@@ -4,7 +4,7 @@ charts/pages/scoring.py
 Section 08 — Global Scoring (Phase 2: LIVE).
 
 Integrates the Pulsar/CTA cross-sectional scoring model: ranks 10 sovereign
-bond markets on macro + market factors, and 17 equity index futures on macro +
+bond markets on macro + market factors, and 18 requested equity indices on macro +
 EPS revisions. Uses DATA.xlsx / scoring sheets.
 """
 
@@ -57,14 +57,22 @@ def _render_scores_table(scores: pd.DataFrame, label_col: str,
         st.info("No scores available.")
         return
 
-    cols_to_show = [c for c in ["macro", "markets", "score", "p5d", "p1m", "p3m"]
+    cols_to_show = [c for c in ["macro_factor_count", "macro", "markets", "score", "p5d", "p1m", "p3m"]
                     if c in scores.columns]
     disp = scores[[label_col] + cols_to_show].copy()
+    disp["Status"] = scores.get(
+        "status",
+        pd.Series(np.where(pd.to_numeric(scores[score_col], errors="coerce").notna(),
+                           "Ready", "Missing data"), index=scores.index),
+    )
     disp = disp.rename(columns={label_col: "Name"})
 
     # Format numbers
     for c in cols_to_show:
-        disp[c] = disp[c].apply(lambda v: f"{v:+.2f}" if pd.notna(v) else "—")
+        if c == "macro_factor_count":
+            disp[c] = disp[c].apply(lambda v: f"{int(v)}/5" if pd.notna(v) else "—")
+        else:
+            disp[c] = disp[c].apply(lambda v: f"{v:+.2f}" if pd.notna(v) else "—")
 
     st.dataframe(disp, hide_index=True, use_container_width=True,
                  height=min(600, 42 + 34 * len(disp)))
@@ -193,14 +201,35 @@ def render(ctx: PageContext) -> None:
 
         try:
             e_scores = score_equity(data, asof, {"macro": w_macro_e, "eps": w_eps_e})
+            eligible_scores = e_scores.loc[e_scores["rank_eligible"]].copy()
+            partial_names = e_scores.loc[e_scores["status"] == "Partial", "name"].tolist()
+            missing_names = e_scores.loc[e_scores["status"] == "Missing data", "name"].tolist()
+            top = eligible_scores.iloc[0] if not eligible_scores.empty else None
+            bottom = eligible_scores.iloc[-1] if not eligible_scores.empty else None
             render_kpi_strip([
-                {"label": "Top pick (equity)", "value": e_scores.iloc[0]["name"],
-                 "sub": f"Score {e_scores.iloc[0]['score']:+.2f}", "accent": "#5fb04f"},
-                {"label": "Bottom pick", "value": e_scores.iloc[-1]["name"],
-                 "sub": f"Score {e_scores.iloc[-1]['score']:+.2f}", "accent": "#d04848"},
-                {"label": "Panel size", "value": str(len(e_scores)),
-                 "sub": f"of {len(EQUITY_UNIVERSE)} indices"},
+                {"label": "Top pick (equity)", "value": top["name"] if top is not None else "—",
+                 "sub": f"Score {top['score']:+.2f}" if top is not None else "No valid score",
+                 "accent": "#5fb04f"},
+                {"label": "Bottom pick", "value": bottom["name"] if bottom is not None else "—",
+                 "sub": f"Score {bottom['score']:+.2f}" if bottom is not None else "No valid score",
+                 "accent": "#d04848"},
+                {"label": "Ranking-ready panel", "value": str(len(eligible_scores)),
+                 "sub": f"{len(partial_names)} Partial · {len(EQUITY_UNIVERSE)} requested"},
             ])
+            if partial_names:
+                st.caption(
+                    "Partial (provisional score, excluded from headline ranking): "
+                    + ", ".join(partial_names)
+                    + ". Their own GDP, CPI, fiscal, terms-of-trade and EPS data are "
+                      "used, but FCI is absent from DATA.xlsx. No FCI proxy is supplied."
+                )
+            if missing_names:
+                st.caption(
+                    "Missing data: " + ", ".join(missing_names) + ". These indices remain in "
+                    "the requested universe but are excluded from top/bottom ranking until their "
+                    "own macro, cash-index price and BEST_EPS/1FY inputs are present. No proxy or "
+                    "renamed series is used."
+                )
             _render_scores_table(e_scores, "name", key="eq_scores")
         except Exception as e:
             st.error(f"Equity scoring error: {e}")
@@ -211,7 +240,10 @@ def render(ctx: PageContext) -> None:
         "Markets pillar = mean(3M momentum_z inverted, carry_z, real yield_z). "
         "Composite = weighted blend.<br>"
         "<b>Equity:</b> Macro pillar = mean(Growth_z, CPI_z inv, Fiscal_z, "
-        "ToT momentum_z, FCI_z). EPS = 3M change in FY1 bottom-up EPS, "
+        "ToT momentum_z, FCI_z). If a macro factor is unavailable, a provisional "
+        "Partial score is calculated from the observed macro factors but excluded "
+        "from headline top/bottom ranking; Ready requires all five macro factors "
+        "plus EPS. EPS = 3M change in FY1 bottom-up EPS, "
         "z-scored. Composite = weighted blend. All z-scores are cross-sectional "
         "(across the panel on each date), not time-series.",
     )

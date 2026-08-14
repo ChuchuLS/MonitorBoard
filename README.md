@@ -93,7 +93,7 @@ page mirrors the front matter of an institutional chart pack.
 | 05b | Market Linkage & Correlations   | **Live**             | DATA.xlsx / Sheet1 | Reference-pack-style one-trade gauge: 63D PC1 explained variance across SPX / UST 10Y / DXY, plus the three 20D pairwise correlations. Descriptive, not causal. |
 | 06  | Sector Rotation & Breadth       | **Live**             | DATA.xlsx / Sheet1 + SPX_Sector_Weights | 11 S&P 500 sector indices + SPX. Main breadth and dispersion panels reproduce the reference-pack definitions: share above each sector's own 50-observation average and cross-sectional standard deviation of trailing 21-observation returns. Also includes relative performance, rotation quadrants and sector-weight context. Optional Cboe DSPX overlay activates only when DSPX INDEX is present. |
 | 06b | Sector Contribution Estimate     | **Live**             | DATA.xlsx / Sheet1 + SPX_Sector_Weights | Start-period periodic weight × sector simple return, with an explicit residual versus actual SPX. Transparent approximation only; not official index-provider attribution. |
-| 06c | SPX FY1 Earnings & Valuation     | **Live**             | DATA.xlsx / Equity_EPS + Equity_Prices | Confirmed BEST_EPS with 1FY override, implied FY1 P/E, exact log-return split into EPS growth and multiple change, plus a clearly labelled weekly OLS diagnostic. Not fair value or forecast. |
+| 06c | Global FY1 Earnings & Valuation  | **Live**             | DATA.xlsx / Equity_EPS + Equity_Prices | One index dropdown controls the rolling exact-return decomposition and implied FY1 P/E chart. Each index uses its own BEST_EPS 1FY and cash-index price; missing inputs remain missing. |
 | 07  | FX Rate Differential Monitor    | **Live**             | DATA.xlsx / Sheet1 | EURUSD / USDJPY / GBPUSD / AUDUSD rate-differential monitor plus the full EUR / JPY / AUD / GBP / CAD 3M and 12M cross-currency basis dashboard. Descriptive, not causal attribution or fair value. |
 | 08  | Data Quality & Methodology      | **Live**             | DATA.xlsx (all sections) | Source-of-truth trust chain, ticker coverage, scoring-sheet audit, methodology. |
 | A1  | Global Scoring (Appendix)       | **Live**             | DATA.xlsx / scoring sheets | Cross-sectional macro + market scoring: 10 rates, 17 equities. Standalone appendix. |
@@ -129,8 +129,10 @@ page mirrors the front matter of an institutional chart pack.
   before each return-window start date multiplied by sector simple returns, with
   the residual versus actual SPX shown explicitly. This is not official attribution.
   Methodology: `docs/SECTOR_CONTRIBUTION_ESTIMATE.md`.
-- SPX FY1 Earnings & Valuation monitor using the user-confirmed Bloomberg
+- Global FY1 Earnings & Valuation monitor using the user-confirmed Bloomberg
   `BEST_EPS` field with `BEST_FPERIOD_OVERRIDE=1FY` at weekly frequency. It
+  matches each EPS source date backward to the latest observed cash-index close
+  within three calendar days, without forward-fill, interpolation, or proxies. It
   calculates implied FY1 P/E and the exact additive log identity: index return =
   FY1 EPS growth + P/E change. A separate 26-week OLS diagnostic is descriptive
   and is not the reference pack's 3-year daily regression.
@@ -179,7 +181,7 @@ no row-position merge or inferred calendar shift is used. See
 - 05b Market Linkage & Correlations (SPX / UST 10Y / DXY one-trade gauge + pairwise correlations)
 - 06 Sector Rotation & Breadth (11 S&P 500 sectors + SPX — descriptive, not attribution)
 - 06b Sector Contribution Estimate (periodic start weights × sector simple returns, explicit residual; not official attribution)
-- 06c SPX FY1 Earnings & Valuation (BEST_EPS 1FY, implied P/E, exact weekly decomposition)
+- 06c Global FY1 Earnings & Valuation (single index dropdown; BEST_EPS 1FY, implied P/E, exact weekly decomposition)
 - 07 FX Rate Differential Monitor (EURUSD / USDJPY / GBPUSD / AUDUSD + full 3M/12M XCCY basis dashboard)
 - 08 Data Quality & Methodology (workbook audit + dependency map)
 
@@ -193,6 +195,8 @@ metadata, testing, or data.
 **Requested reference-pack inputs now available in DATA.xlsx:**
 - `DSPX INDEX` — Cboe S&P 500 Dispersion Index in `Sheet1`; overlaid on a separate axis from realised 21-observation sector-return dispersion.
 - `CSIA500 INDEX` — CSI A500 cash-index price and BEST_EPS/1FY history in `Equity_Prices` and `Equity_EPS`. Existing XIN9I / FTSE China A50 data remain separate and are not relabelled.
+- `NIFTY INDEX` — Nifty 50 cash-index price and BEST_EPS/1FY history in `Equity_Prices` and `Equity_EPS`. India GDP, CPI, fiscal and terms-of-trade inputs are available for scoring; FCI remains absent, so its scoring row is Partial and excluded from headline ranking.
+- `VN30 INDEX` — VN30 cash-index price and BEST_EPS/1FY history in `Equity_Prices` and `Equity_EPS`. Vietnam GDP, CPI, fiscal and terms-of-trade inputs are available for scoring; FCI remains absent, so its scoring row is Partial and excluded from headline ranking.
 - `DJI INDEX` — Dow Jones Industrial Average cash-index price and BEST_EPS/1FY history in `Equity_Prices` and `Equity_EPS`.
 
 - FOMC implied policy path (fixed contract months are now available; the FOMC calendar, day-weighted meeting-month method and probability framework are still needed)

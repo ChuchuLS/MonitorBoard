@@ -61,7 +61,8 @@ PAGES: list[dict] = [
         "data_source": "policy_futures_sheet",
         "description": "Eight fixed quarterly Three-Month SOFR contracts from SEP 26 "
                        "through JUN 28. Shows implied rates, 1D/5D/1M changes, 3M/6M/12M "
-                       "calendar spreads, terminal-rate diagnostics and the strip curve. "
+                       "calendar spreads, terminal-rate diagnostics and current/1-week/"
+                       "1-month strip curves. "
                        "Contract-month specific, but not a meeting-by-meeting FOMC path.",
         "builds_on": "policy",
         "next": "decomposition",
@@ -191,12 +192,12 @@ PAGES: list[dict] = [
     {
         "id": "earnings_valuation",
         "label": "Earnings",
-        "title": "SPX FY1 Earnings & Valuation",
+        "title": "Global FY1 Earnings & Valuation",
         "section": "06c",
         "color_key": "equities",
         "status": "live",
         "data_source": "scoring_sheets",
-        "description": "SPX Index level, confirmed weekly FY1 consensus EPS (BEST_EPS with 1FY override), implied FY1 P/E, exact log-return decomposition into earnings growth and multiple change, plus a clearly labelled weekly OLS diagnostic. Not fair value or a forecast.",
+        "description": "One index dropdown controls the rolling exact-return decomposition and implied FY1 P/E chart. Uses each selected index's own confirmed weekly FY1 consensus EPS (BEST_EPS with 1FY override), matched backward to its latest observed cash close within three calendar days; missing inputs remain Missing data. Not fair value or a forecast.",
         "builds_on": "sector_contribution",
         "next": "fx_rate_diff",
     },
@@ -238,7 +239,8 @@ PAGES: list[dict] = [
         "status": "live",
         "data_source": "scoring_sheets",
         "description": "Cross-sectional macro + market scoring model for 10 "
-                       "sovereign bond markets and 17 equity index futures. "
+                       "sovereign bond markets and 18 requested equity indices. "
+                       "Indices with incomplete factor sets are explicitly Partial and excluded from headline rankings; absent factors are never proxied. "
                        "Appendix — standalone model. Uses DATA.xlsx / scoring sheets.",
         "builds_on": "data_quality",
         "next": "model_roadmap",

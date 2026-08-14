@@ -419,13 +419,13 @@ def render(ctx: PageContext) -> None:
         from data.equity_earnings_loader import load_equity_earnings_data
         from models.earnings_valuation import assess_earnings_readiness
         _earnings_dep = assess_earnings_readiness(load_equity_earnings_data(), code="ES1")
-        special_dependencies["SPX FY1 earnings & valuation"] = (
+        special_dependencies["Global FY1 earnings & valuation"] = (
             _earnings_dep.get("status", "Missing data"),
             ", ".join(_earnings_dep.get("missing", [])) or "—",
             str(_earnings_dep.get("model_date") or "—"),
         )
     except Exception as exc:
-        special_dependencies["SPX FY1 earnings & valuation"] = (
+        special_dependencies["Global FY1 earnings & valuation"] = (
             "Missing data", f"Audit failed: {type(exc).__name__}", "—"
         )
 
@@ -480,7 +480,7 @@ def render(ctx: PageContext) -> None:
         ("05 Cross-Asset", "8-regime directional", dep_req_ca, False),
         ("05b Linkage", "Market linkage & correlations", dep_req_linkage, False),
         ("06 Sectors", "Sector rotation & breadth", None, False),
-        ("06c Earnings", "SPX FY1 earnings & valuation", None, False),
+        ("06c Earnings", "Global FY1 earnings & valuation", None, False),
         ("07 FX Rates", "FX rate-differential monitor", None, False),
         ("A1 Scoring", "Macro + market scoring", None, False),
     ]:
@@ -825,10 +825,10 @@ def render(ctx: PageContext) -> None:
          "Notes": "Start-period periodic weight × sector simple return with an "
                   "explicit residual versus actual SPX. Approximation only; not "
                   "official index-provider attribution."},
-        {"Model": "SPX FY1 Earnings & Valuation",
-         "Required": "SPX Index + BEST_EPS with BEST_FPERIOD_OVERRIDE=1FY",
+        {"Model": "Global FY1 Earnings & Valuation",
+         "Required": "Selected cash index + its own BEST_EPS with BEST_FPERIOD_OVERRIDE=1FY",
          "Status": "Live",
-         "Notes": "Weekly exact-date monitor. Implied FY1 P/E and exact log identity "
+            "Notes": "Weekly EPS-source-date / observed prior-close monitor. Implied FY1 P/E and exact log identity "
                   "decomposition into FY1 EPS growth and multiple change. A separate "
                   "26-week OLS diagnostic is descriptive and not the reference pack's "
                   "3-year daily model."},
@@ -1072,7 +1072,7 @@ def render(ctx: PageContext) -> None:
             f"({type(exc).__name__}: {str(exc)[:120]})"
         )
 
-    # ── SPX FY1 Earnings & Valuation audit ──
+    # ── Global FY1 Earnings & Valuation audit ──
     try:
         from data.equity_earnings_loader import load_equity_earnings_data
         from models.earnings_valuation import (
@@ -1085,11 +1085,11 @@ def render(ctx: PageContext) -> None:
         st.markdown(
             "<div style='margin:1rem 0 0.4rem;font-size:11px;color:#888;"
             "letter-spacing:0.1em;text-transform:uppercase;'>"
-            "SPX FY1 Earnings &amp; Valuation — source and alignment audit</div>",
+            "Global FY1 Earnings &amp; Valuation — source and alignment audit</div>",
             unsafe_allow_html=True,
         )
         _earn_rows = pd.DataFrame([{
-            "Model": "SPX FY1 Earnings & Valuation",
+            "Model": "Global FY1 Earnings & Valuation · default SPX audit",
             "EPS field": EPS_FIELD_METADATA["field"],
             "Forecast override": EPS_FIELD_METADATA["forecast_period_override"],
             "EPS frequency": EPS_FIELD_METADATA["frequency"],
@@ -1109,11 +1109,14 @@ def render(ctx: PageContext) -> None:
             if not _earn_global.empty else []
         )
         st.caption(
-            f"Global exact-date overview: {_ready_count}/{len(_earn_global)} requested indices Ready. "
+            f"Global source-date-matched overview: {_ready_count}/{len(_earn_global)} requested indices Ready. "
             f"Non-Ready: {', '.join(_missing_names) or 'none'}. "
-            "China is explicitly requested as CSIA500 Index (CSI A500) and the additional "
-            "US index as DJI Index. The existing XIN9I / FTSE China A50 series is not relabelled. "
-            "No EPS or price values are forward-filled. The implied FY1 P/E is calculated "
+            "China is explicitly requested as CSIA500 Index (CSI A500), India as Nifty 50, "
+            "Vietnam as VN30 and the additional US index as DJI Index. The existing XIN9I / "
+            "FTSE China A50 series is not relabelled. Nifty 50 and VN30 now use their own "
+            "NIFTY Index and VN30 Index histories from DATA.xlsx. Each EPS source date is "
+            "matched backward to the latest observed cash close within three calendar days. "
+            "No EPS or price values are forward-filled or interpolated. The implied FY1 P/E is calculated "
             "as index level ÷ FY1 EPS; it is not a Bloomberg-supplied P/E field."
         )
 
@@ -1163,6 +1166,12 @@ def render(ctx: PageContext) -> None:
             "CSI_A500", "CSI A500 cash index + FY1 EPS", "CSIA500 INDEX"
         ))
         _requested_rows.append(_earnings_requested_row(
+            "NIFTY50", "Nifty 50 cash index + FY1 EPS", "NIFTY INDEX"
+        ))
+        _requested_rows.append(_earnings_requested_row(
+            "VN30", "VN30 cash index + FY1 EPS", "VN30 INDEX"
+        ))
+        _requested_rows.append(_earnings_requested_row(
             "DJI", "Dow Jones Industrial Average + FY1 EPS", "DJI INDEX"
         ))
         st.markdown(
@@ -1177,7 +1186,7 @@ def render(ctx: PageContext) -> None:
         )
     except Exception as exc:
         st.warning(
-            "SPX earnings/valuation audit is unavailable because the audit failed. "
+            "Global earnings/valuation audit is unavailable because the audit failed. "
             f"({type(exc).__name__}: {str(exc)[:120]})"
         )
 

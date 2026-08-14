@@ -1650,8 +1650,8 @@ for _, _row in _cb_overview.iterrows():
         f"20D slopeΔ={_row['change_20d_2s10s_bp']:+.1f}bp"
     )
 
-# Phase 9.2: SPX FY1 Earnings & Valuation
-print("32. Phase 9.2 SPX FY1 Earnings & Valuation ...")
+# Phase 9.2: Global FY1 Earnings & Valuation
+print("32. Phase 9.2 Global FY1 Earnings & Valuation ...")
 import ast as _ast_ev
 _ev_src = open("models/earnings_valuation.py").read()
 _ev_tree = _ast_ev.parse(_ev_src)
@@ -1686,7 +1686,9 @@ _ev_snap = build_earnings_valuation_snapshot(_ev_data, code="ES1")
 assert _ev_snap["status"] == "Ready"
 assert _ev_snap["model_date"] == _ev_frame.index[-1].date()
 assert _ev_snap["aligned_observations"] == len(_ev_frame)
-print(f"    C. SPX common weekly observations={len(_ev_frame)}, date={_ev_snap['model_date']} ✓")
+assert _ev_snap["price_source_date"] <= _ev_snap["model_date"]
+assert 0 <= _ev_snap["latest_price_lag_days"] <= 3
+print(f"    C. SPX matched weekly observations={len(_ev_frame)}, date={_ev_snap['model_date']} ✓")
 
 _ev_dec = calculate_horizon_decomposition(_ev_frame, horizons=(1, 4, 13, 26))
 assert (_ev_dec["status"] == "Ready").all()
@@ -1715,16 +1717,23 @@ print("    F. Weekly OLS diagnostic is available and separately labelled ✓")
 
 _ev_global = build_global_earnings_overview(_ev_data, horizon=13)
 assert len(_ev_global) == len(EARNINGS_OVERVIEW_UNIVERSE)
-assert (_ev_global["status"] == "Ready").sum() >= 17
-_missing_codes = _ev_global.loc[_ev_global["status"] != "Ready", "code"].tolist()
-assert "KM1" in _missing_codes
-for _requested_code, _expected_ticker in (("CSI_A500", "CSIA500 Index"), ("DJI", "DJI Index")):
+assert len(_ev_global) == 18
+assert (_ev_global["status"] == "Ready").sum() == 18
+for _requested_code, _expected_ticker in (
+    ("CSI_A500", "CSIA500 Index"), ("NIFTY50", "NIFTY Index"),
+    ("VN30", "VN30 Index"), ("DJI", "DJI Index"),
+):
     _requested = _ev_global.loc[_ev_global["code"] == _requested_code]
     assert len(_requested) == 1 and _requested.iloc[0]["status"] == "Ready"
     assert _requested.iloc[0]["workbook_ticker"] == _expected_ticker
     assert _requested.iloc[0]["fy1_pe"] > 0
 assert "XU1" not in _ev_global["code"].tolist()
-print(f"    G. Global overview: {int((_ev_global['status']=='Ready').sum())}/{len(_ev_global)} Ready; CSI A500 + DJI are live with own Price/EPS rows ✓")
+assert "SM1" not in _ev_global["code"].tolist()
+assert "EO1" not in _ev_global["code"].tolist()
+_nifty_snap = build_earnings_valuation_snapshot(_ev_data, code="NIFTY50")
+assert _nifty_snap["price_source_date"] <= _nifty_snap["model_date"]
+assert 0 <= _nifty_snap["latest_price_lag_days"] <= 3
+print(f"    G. Global overview: {int((_ev_global['status']=='Ready').sum())}/{len(_ev_global)} Ready; A500, Nifty 50, VN30 and DJI use their own histories ✓")
 
 _ev_page = next(p for p in PAGES if p["id"] == "earnings_valuation")
 assert _ev_page["section"] == "06c" and _ev_page["status"] == "live"
@@ -1732,6 +1741,10 @@ assert _ev_page["builds_on"] == "sector_contribution" and _ev_page["next"] == "f
 _ev_page_src = open("charts/pages/earnings_valuation.py").read()
 assert "build_earnings_valuation_snapshot" in _ev_page_src
 assert "BEST_FPERIOD_OVERRIDE=1FY" in _ev_page_src
+assert "st.selectbox" in _ev_page_src
+assert "earnings_normalized" not in _ev_page_src
+assert "build_global_earnings_overview" not in _ev_page_src
+assert "st.dataframe" not in _ev_page_src
 for _bad in ("fair value is", "will outperform", "caused by earnings"):
     assert _bad not in _ev_page_src.lower()
 print("    H. Page registry and no-fabrication wording ✓")
@@ -1743,14 +1756,14 @@ assert _ev_rm["implemented_in"] == "models/earnings_valuation.py"
 _ev_realized_rm = next(r for r in _EV_ROADMAP if r["module_id"] == "forward_vs_realized_eps")
 assert _ev_realized_rm["current_status"] == "Data Missing"
 _ev_readme = open("README.md").read()
-assert "| 06c | SPX FY1 Earnings & Valuation" in _ev_readme
+assert "| 06c | Global FY1 Earnings & Valuation" in _ev_readme
 _ev_dq = open("charts/pages/data_quality.py").read()
-assert "SPX FY1 Earnings &amp; Valuation — source and alignment audit" in _ev_dq
+assert "Global FY1 Earnings &amp; Valuation — source and alignment audit" in _ev_dq
 _ev_snapshot = _shared_snapshot
 assert "spx_earnings_valuation" in _ev_snapshot
 assert _ev_snapshot["spx_earnings_valuation"]["fair_value_model"] is False
 _ev_html = open("scripts/export_research_pack_html.py").read()
-assert "SPX FY1 Earnings & Valuation" in _ev_html
+assert "Global FY1 Earnings & Valuation" in _ev_html
 print("    I. Roadmap, README, Data Quality, snapshot and HTML are consistent ✓")
 
 _ev_qlist = qlist
@@ -1916,6 +1929,7 @@ from config.tickers import SOFR_CONTRACT_CONFIG
 from data.policy_futures_loader import load_policy_futures
 from models.policy_futures_strip import (
     assess_sofr_strip,
+    build_sofr_curve_comparison,
     build_sofr_contract_price_frame,
     build_sofr_implied_rate_frame,
     build_sofr_strip_snapshot,
@@ -1956,6 +1970,17 @@ assert abs(_matrix.iloc[0]["6M"] - 100*(_t.loc[3,"implied_rate_pct"]-_t.loc[1,"i
 assert abs(_matrix.iloc[0]["12M"] - 100*(_t.loc[5,"implied_rate_pct"]-_t.loc[1,"implied_rate_pct"])) < 1e-9
 print("    C. Eight-contract strip, 3M/6M/12M matrix and common-date changes reconcile ✓")
 
+_curve_comparison, _curve_dates = build_sofr_curve_comparison(_fixed_fut)
+assert list(_curve_comparison.columns) == ["Current", "1W ago", "1M ago"]
+assert _curve_dates["Current"] == _rates.index[-1].date()
+assert _curve_dates["1W ago"] == _rates.index[-6].date()
+assert _curve_dates["1M ago"] == _rates.index[-21].date()
+np.testing.assert_allclose(_curve_comparison["Current"].values, _rates.iloc[-1].values)
+np.testing.assert_allclose(_curve_comparison["1W ago"].values, _rates.iloc[-6].values)
+np.testing.assert_allclose(_curve_comparison["1M ago"].values, _rates.iloc[-21].values)
+assert _fixed_snap["curve_comparison"].equals(_curve_comparison)
+print("    C2. Current, 1-week and 1-month curves use exact common observations ✓")
+
 _terminal = _fixed_snap["terminal"]
 assert _terminal["terminal_sequence"] in range(1, 9)
 assert _terminal["terminal_rate_pct"] == _t.loc[_terminal["terminal_sequence"], "implied_rate_pct"]
@@ -1977,6 +2002,7 @@ assert "row position" in _source_page.lower()
 assert "SFR1" not in _source_page and "SER1" not in _source_page and "FF1" not in _source_page
 assert "calendar spread matrix" in _source_page.lower()
 assert "meeting-by-meeting" in _source_page.lower()
+assert "1W ago" in _source_page and "1M ago" in _source_page
 print("    F. Live page uses fixed months and preserves the FOMC-path limitation ✓")
 
 _pf_page = next(p for p in PAGES if p["id"] == "policy_futures")
@@ -2088,23 +2114,54 @@ print(f"    D. DSPX is live: {float(_dspx_live.iloc[-1]):.2f} on {_dspx_live.ind
 from models.earnings_valuation import build_global_earnings_overview as _ev_overview_feedback
 from data.equity_earnings_loader import load_equity_earnings_data as _load_ev_feedback
 _ev_feedback_data = _load_ev_feedback()
-assert {"CSI_A500", "DJI"}.issubset(_ev_feedback_data["eps"].columns)
-assert {"CSI_A500", "DJI"}.issubset(_ev_feedback_data["prices"].columns)
+assert {"CSI_A500", "NIFTY50", "VN30", "DJI"}.issubset(_ev_feedback_data["eps"].columns)
+assert {"CSI_A500", "NIFTY50", "VN30", "DJI"}.issubset(_ev_feedback_data["prices"].columns)
 _ev_feedback = _ev_overview_feedback(_ev_feedback_data, horizon=13)
-for _code_feedback, _ticker_feedback in (("CSI_A500", "CSIA500 Index"), ("DJI", "DJI Index")):
+for _code_feedback, _ticker_feedback in (
+    ("CSI_A500", "CSIA500 Index"), ("NIFTY50", "NIFTY Index"),
+    ("VN30", "VN30 Index"), ("DJI", "DJI Index"),
+):
     _row_feedback = _ev_feedback.loc[_ev_feedback["code"] == _code_feedback]
     assert len(_row_feedback) == 1
     assert _row_feedback.iloc[0]["status"] == "Ready"
     assert _row_feedback.iloc[0]["workbook_ticker"] == _ticker_feedback
     assert _row_feedback.iloc[0]["fy1_pe"] > 0
 assert not (_ev_feedback["code"] == "XU1").any(), "FTSE China A50 must not be relabelled as CSI A500"
-print("    E. CSI A500 and DJI are live from their own cash-index + BEST_EPS/1FY rows; XIN9I remains separate ✓")
+print("    E. CSI A500, Nifty 50, VN30 and DJI are live from their own cash-index + BEST_EPS/1FY rows; XIN9I remains separate ✓")
+
+from data.external_loaders import load_pulsar as _load_scoring_feedback
+from models.scoring.engine import (
+    EQUITY_UNIVERSE as _equity_universe_feedback,
+    determine_scoring_asof as _determine_scoring_asof_feedback,
+    score_equity as _score_equity_feedback,
+)
+_equity_codes_feedback = [row[0] for row in _equity_universe_feedback]
+assert len(_equity_codes_feedback) == 18
+assert {"CSI_A500", "NIFTY50", "VN30", "DJI"}.issubset(_equity_codes_feedback)
+assert not {"SM1", "EO1", "XU1"}.intersection(_equity_codes_feedback)
+_scoring_feedback_data = _load_scoring_feedback()
+_scoring_feedback_asof = _determine_scoring_asof_feedback(_scoring_feedback_data)["asof_date"]
+_equity_scores_feedback = _score_equity_feedback(
+    _scoring_feedback_data, _scoring_feedback_asof, {"macro": 0.5, "eps": 0.5}
+)
+assert len(_equity_scores_feedback) == 18
+for _ready_code_feedback in ("CSI_A500", "DJI"):
+    assert pd.notna(_equity_scores_feedback.loc[_ready_code_feedback, "score"])
+for _partial_code_feedback in ("NIFTY50", "VN30"):
+    _partial = _equity_scores_feedback.loc[_partial_code_feedback]
+    assert pd.notna(_partial["score"])
+    assert _partial["status"] == "Partial"
+    assert _partial["macro_factor_count"] == 4
+    assert _partial["missing_factors"] == "FCI"
+    assert not bool(_partial["rank_eligible"])
+print("    E1. Scoring adds A500/Nifty 50/VN30/DJI; Nifty/VN30 use four real macro factors and remain Partial because FCI is absent ✓")
 
 _ref_snapshot = _shared_snapshot
 assert _ref_snapshot["cboe_dspx"]["status"] == "Ready"
-assert len(_ref_snapshot["requested_equity_earnings_rows"]) == 2
-assert all(row["status"] == "Ready" for row in _ref_snapshot["requested_equity_earnings_rows"])
-print("    E2. Snapshot export includes live DSPX, CSI A500 and DJI diagnostics ✓")
+assert len(_ref_snapshot["requested_equity_earnings_rows"]) == 4
+_ref_status = {row["code"]: row["status"] for row in _ref_snapshot["requested_equity_earnings_rows"]}
+assert _ref_status == {"CSI_A500": "Ready", "NIFTY50": "Ready", "VN30": "Ready", "DJI": "Ready"}
+print("    E2. Snapshot export includes Ready A500/Nifty 50/VN30/DJI earnings rows ✓")
 
 _dq_feedback = open("charts/pages/data_quality.py").read()
 assert "SOFR Futures Strip &amp; Calendar Spreads" in _dq_feedback

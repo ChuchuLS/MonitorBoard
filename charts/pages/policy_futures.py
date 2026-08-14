@@ -108,13 +108,34 @@ def render(ctx: PageContext) -> None:
                      f"{terminal.get('terminal_contract')} to {spreads.get('contract_12m') or '—'}"),
     ])
 
-    st.markdown("#### SOFR strip curve")
-    fig = go.Figure(go.Scatter(
-        x=table["contract_label"], y=table["implied_rate_pct"],
-        mode="lines+markers+text", text=[f"{v:.3f}%" for v in table["implied_rate_pct"]],
-        textposition="top center", line=dict(width=2), marker=dict(size=8),
-        hovertemplate="%{x}<br>Implied rate %{y:.4f}%<extra></extra>",
-    ))
+    st.markdown("#### SOFR strip curve — current vs 1 week / 1 month ago")
+    comparison = snap["curve_comparison"]
+    comparison_dates = snap["curve_comparison_dates"]
+    fig = go.Figure()
+    curve_styles = {
+        "Current": dict(color="#f8fafc", width=2.4, dash="solid"),
+        "1W ago": dict(color="#5fb04f", width=1.6, dash="dash"),
+        "1M ago": dict(color="#b184ff", width=1.6, dash="dot"),
+    }
+    for label in ("1M ago", "1W ago", "Current"):
+        values = comparison[label]
+        curve_date = comparison_dates.get(label)
+        is_current = label == "Current"
+        fig.add_trace(go.Scatter(
+            x=comparison.index,
+            y=values,
+            mode="lines+markers+text" if is_current else "lines+markers",
+            text=[f"{v:.3f}%" for v in values] if is_current else None,
+            textposition="top center",
+            name=f"{label} · {curve_date or 'unavailable'}",
+            line=curve_styles[label],
+            marker=dict(size=8 if is_current else 6),
+            customdata=[str(curve_date or "—")] * len(values),
+            hovertemplate=(
+                "%{x}<br>Curve date %{customdata}<br>"
+                "Implied rate %{y:.4f}%<extra></extra>"
+            ),
+        ))
     fig.add_hline(y=snap.get("effr_pct"), line=dict(width=1, dash="dot", color="#888"),
                   annotation_text="EFFR" if snap.get("effr_pct") is not None else None)
     fig.update_layout(
@@ -124,6 +145,10 @@ def render(ctx: PageContext) -> None:
         xaxis=dict(title="Contract month", showgrid=False), hovermode="x unified",
     )
     st.plotly_chart(fig, use_container_width=True, key="fixed_sofr_strip", config={"displayModeBar": False})
+    st.caption(
+        "1 week = 5 and 1 month = 20 common trading observations. Every curve uses "
+        "one exact date shared by all eight contracts; no forward-fill or interpolation."
+    )
 
     with st.expander("Fixed-contract price and rate history"):
         history = snap["implied_rate_history"].tail(504)

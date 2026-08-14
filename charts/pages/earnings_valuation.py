@@ -1,4 +1,4 @@
-"""charts/pages/earnings_valuation.py — 06c · SPX FY1 Earnings & Valuation."""
+"""charts/pages/earnings_valuation.py — 06c · Global FY1 Earnings & Valuation."""
 from __future__ import annotations
 
 import numpy as np
@@ -24,8 +24,8 @@ from models.earnings_valuation import (
     DEFAULT_BETA_WINDOW,
     DEFAULT_DECOMPOSITION_HORIZON,
     EPS_FIELD_METADATA,
+    INDEX_META,
     build_earnings_valuation_snapshot,
-    build_global_earnings_overview,
 )
 from ._context import PageContext
 
@@ -53,13 +53,47 @@ def render(ctx: PageContext) -> None:
     render_top_tabs(page["id"])
 
     data = load_equity_earnings_data()
-    snap = build_earnings_valuation_snapshot(data)
+    index_codes = list(INDEX_META)
+    selected_code = st.selectbox(
+        "Index",
+        index_codes,
+        index=index_codes.index("ES1"),
+        format_func=lambda code: (
+            f"{INDEX_META[code]['display_name']} · {INDEX_META[code]['region']}"
+        ),
+        key="earnings_index_selector",
+    )
+    selected_meta = INDEX_META[selected_code]
+    display_name = selected_meta["display_name"]
+    snap = build_earnings_valuation_snapshot(data, code=selected_code)
     model_date = snap.get("model_date")
 
     if snap.get("status") == "Missing data":
-        render_page_header(page, latest_date="—", viewing="Required inputs unavailable")
+        render_page_header(
+            page,
+            latest_date="—",
+            viewing=f"{display_name} · Required inputs unavailable",
+        )
         missing = snap.get("missing", [])
-        render_missing_data_warning(required=missing, missing=missing)
+        required = [
+            f"{display_name} cash-index price history",
+            f"{display_name} BEST_EPS with 1FY override",
+        ]
+        render_missing_data_warning(
+            required=required,
+            missing=missing or required,
+            message=(
+                f"{display_name} remains Missing data because its own cash-index "
+                "price and FY1 EPS histories cannot be matched under the documented "
+                "source-date rule. No other market, futures contract, renamed series, "
+                "forward-fill, interpolation, or zero is used."
+            ),
+        )
+        render_data_source_note(
+            "DATA.xlsx / Equity_EPS + Equity_Prices",
+            latest_date="—",
+            caveat="Missing requested source series are shown as missing, never proxied.",
+        )
         render_section_footer(page)
         return
 
@@ -67,31 +101,35 @@ def render(ctx: PageContext) -> None:
         page,
         latest_date=str(model_date or "—").upper(),
         viewing=(
-            f"SPX Index · Weekly exact-date alignment · "
-            f"{snap.get('aligned_observations', 0)} common observations"
+            f"{display_name} · Weekly EPS-source-date / observed prior-close alignment · "
+            f"{snap.get('aligned_observations', 0)} matched observations"
         ),
     )
 
     render_explanation_box(
         "Confirmed EPS source and exact identity",
-        "The FY1 EPS series is the Bloomberg <b>BEST_EPS</b> field with "
-        "<b>BEST_FPERIOD_OVERRIDE=1FY</b>, requested weekly. The implied FY1 "
-        "P/E is SPX Index level divided by FY1 EPS. On exact common weekly "
-        "dates, the additive log identity is <b>SPX return = FY1 EPS growth + "
+        "For the selected index, the FY1 EPS series is the Bloomberg <b>BEST_EPS</b> field with "
+        "<b>BEST_FPERIOD_OVERRIDE=1FY</b>, requested weekly. Each EPS source date is "
+        "matched backward to the latest observed cash close on or before that date, "
+        "with a maximum lag of three calendar days. The implied FY1 P/E is the matched "
+        "cash-index level divided by FY1 EPS. Across those matched weekly observations, "
+        "the additive log identity is <b>index return = FY1 EPS growth + "
         "P/E change</b>. This is a descriptive arithmetic decomposition, not "
-        "fair value, a forecast, or a causal attribution.",
+        "fair value, a forecast, or a causal attribution. No forward-fill, "
+        "interpolation, or proxy series is used.",
     )
 
     h = DEFAULT_DECOMPOSITION_HORIZON
     kpis = [
-        {"label": "SPX level", "value": _fmt(snap.get("price"), ",.2f"),
-         "sub": str(model_date or "—"), "accent": section_color(page["color_key"])},
+        {"label": f"{display_name} level", "value": _fmt(snap.get("price"), ",.2f"),
+         "sub": f"Observed close {snap.get('price_source_date') or '—'}",
+         "accent": section_color(page["color_key"])},
         {"label": "FY1 EPS", "value": _fmt(snap.get("eps_fy1"), ",.2f"),
          "sub": "BEST_EPS · 1FY · weekly"},
         {"label": "Implied FY1 P/E", "value": _fmt(snap.get("fy1_pe"), ".2f", "x"),
          "sub": f"Percentile {_fmt(snap.get('pe_percentile_available_history'), '.0f', '%')} "
-                f"of {snap.get('pe_percentile_observations', 0)} common observations"},
-        {"label": f"{h}W SPX return", "value": _fmt(snap.get("current_price_return_pct"), "+.2f", "%"),
+                f"of {snap.get('pe_percentile_observations', 0)} matched observations"},
+        {"label": f"{h}W index return", "value": _fmt(snap.get("current_price_return_pct"), "+.2f", "%"),
          "sub": f"{snap.get('current_start_date')} → {snap.get('current_end_date')}"},
         {"label": f"{h}W FY1 EPS", "value": _fmt(snap.get("current_eps_growth_pct"), "+.2f", "%"),
          "sub": snap.get("eps_revision_direction", "—")},
@@ -101,16 +139,6 @@ def render(ctx: PageContext) -> None:
     render_kpi_strip(kpis)
 
     frame = snap.get("frame", pd.DataFrame())
-    if not frame.empty:
-        normalized = frame[["price", "eps_fy1", "fy1_pe"]] / frame[["price", "eps_fy1", "fy1_pe"]].iloc[0] * 100
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=normalized.index, y=normalized["price"], name="SPX level", line=dict(width=1.6, color="#f8fafc")))
-        fig.add_trace(go.Scatter(x=normalized.index, y=normalized["eps_fy1"], name="FY1 EPS", line=dict(width=1.4, color="#5fb04f")))
-        fig.add_trace(go.Scatter(x=normalized.index, y=normalized["fy1_pe"], name="Implied FY1 P/E", line=dict(width=1.2, color="#b184ff")))
-        fig.update_layout(**_chart_layout(330), title="SPX, FY1 EPS and implied FY1 P/E — normalized to 100")
-        fig.update_yaxes(title="Index (first common observation = 100)")
-        st.plotly_chart(fig, use_container_width=True, key="earnings_normalized", config={"displayModeBar": False})
-        st.caption("All three series use the exact common weekly observation calendar. No forward-fill is used.")
 
     hist = snap.get("decomposition_history", pd.DataFrame())
     if not hist.empty:
@@ -124,7 +152,7 @@ def render(ctx: PageContext) -> None:
             marker_color="#b184ff",
         ))
         fig_d.add_trace(go.Scatter(
-            x=hist.index, y=hist["price_return_pct"], name="SPX net return",
+            x=hist.index, y=hist["price_return_pct"], name=f"{display_name} net return",
             line=dict(color="#f8fafc", width=1.4),
         ))
         fig_d.update_layout(**_chart_layout(360), barmode="relative",
@@ -132,7 +160,7 @@ def render(ctx: PageContext) -> None:
         fig_d.update_yaxes(title="Log return / change (%)")
         st.plotly_chart(fig_d, use_container_width=True, key="earnings_exact_decomp", config={"displayModeBar": False})
         st.caption(
-            "Exact identity: SPX log return = FY1 EPS log growth + implied FY1 P/E log change. "
+            f"Exact identity: {display_name} log return = FY1 EPS log growth + implied FY1 P/E log change. "
             "The identity residual is numerical rounding only."
         )
 
@@ -155,7 +183,9 @@ def render(ctx: PageContext) -> None:
             "Current reading",
             [
                 ("Model date", str(model_date or "—")),
-                (f"{h}W SPX return", _fmt(snap.get("current_price_return_pct"), "+.2f", "%")),
+                ("Price source date", str(snap.get("price_source_date") or "—")),
+                ("Price lag", _fmt(snap.get("latest_price_lag_days"), ".0f", " calendar days")),
+                (f"{h}W index return", _fmt(snap.get("current_price_return_pct"), "+.2f", "%")),
                 (f"{h}W FY1 EPS growth", _fmt(snap.get("current_eps_growth_pct"), "+.2f", "%")),
                 (f"{h}W P/E change", _fmt(snap.get("current_valuation_change_pct"), "+.2f", "%")),
                 ("Larger component", str(snap.get("current_driver", "—"))),
@@ -171,60 +201,17 @@ def render(ctx: PageContext) -> None:
             f"earnings component over {h} weeks: "
             f"<b>{_fmt(snap.get('regression_fitted_earnings_pct'), '+.2f', '%')}</b>; "
             f"regression residual: <b>{_fmt(snap.get('regression_residual_pct'), '+.2f', '%')}</b>. "
-            "This diagnostic is weekly, uses limited common history, and is not "
+            "This diagnostic is weekly, uses limited matched history, and is not "
             "the reference pack's 3-year daily regression model. Low R² means "
             "the fitted split has little explanatory power.",
-        )
-
-    st.markdown(
-        "<div style='margin:1rem 0 0.4rem;font-size:11px;color:#888;"
-        "letter-spacing:0.1em;text-transform:uppercase;'>"
-        "Global FY1 earnings and valuation overview — 13 weeks</div>",
-        unsafe_allow_html=True,
-    )
-    overview = build_global_earnings_overview(data, horizon=13)
-    if not overview.empty:
-        display = overview.rename(columns={
-            "index": "Index", "region": "Region", "requested_ticker": "Requested ticker",
-            "workbook_ticker": "Workbook ticker", "model_date": "Model date",
-            "aligned_observations": "Common obs", "price": "Index level",
-            "eps_fy1": "FY1 EPS", "fy1_pe": "FY1 P/E (x)",
-            "price_return_13w_pct": "13W index return (%)",
-            "eps_growth_13w_pct": "13W EPS growth (%)",
-            "valuation_change_13w_pct": "13W P/E change (%)",
-            "status": "Status",
-        })[[
-            "Index", "Region", "Requested ticker", "Workbook ticker", "Model date", "Common obs", "Index level",
-            "FY1 EPS", "FY1 P/E (x)", "13W index return (%)",
-            "13W EPS growth (%)", "13W P/E change (%)", "Status",
-        ]]
-        st.dataframe(
-            display.style.format({
-                "Index level": "{:,.2f}", "FY1 EPS": "{:,.2f}", "FY1 P/E (x)": "{:.2f}",
-                "13W index return (%)": "{:+.2f}", "13W EPS growth (%)": "{:+.2f}",
-                "13W P/E change (%)": "{:+.2f}",
-            }, na_rep="—"),
-            hide_index=True, use_container_width=True,
-        )
-        requested_status = {
-            row["code"]: row["status"]
-            for _, row in overview.loc[overview["code"].isin(["CSI_A500", "DJI"])].iterrows()
-        }
-        st.caption(
-            "Each index uses its own exact common EPS/price dates. CSI A500 is read from "
-            "the workbook ticker CSIA500 Index and DJI from DJI Index; both require their "
-            "own cash-index price and BEST_EPS/1FY history. Current status — "
-            f"CSI A500: {requested_status.get('CSI_A500', 'Missing data')}; "
-            f"DJI: {requested_status.get('DJI', 'Missing data')}. "
-            "The existing XIN9I / FTSE China A50 history is not relabelled or used as a "
-            "proxy. Missing data are never replaced by another market, a futures proxy, "
-            "or zero."
         )
 
     render_data_source_note(
         "DATA.xlsx / Equity_EPS + Equity_Prices",
         latest_date=str(model_date or "—"),
-        caveat="BEST_EPS with 1FY override; weekly exact-date alignment; not blended 12M or trailing EPS",
+        caveat=(f"{display_name}: BEST_EPS with 1FY override; each weekly EPS source "
+                "date is matched to the latest observed prior cash close within three "
+                "calendar days; not blended 12M or trailing EPS"),
     )
     render_model_note(
         "Methodology and limitations",
@@ -232,7 +219,9 @@ def render(ctx: PageContext) -> None:
         f"<code>{EPS_FIELD_METADATA['formula']}</code>. The main decomposition "
         "is an exact log identity and does not require regression. The implied "
         "P/E is a calculated ratio, not a Bloomberg-supplied valuation field. "
-        "Historical percentiles use only the currently available exact common "
-        "history. No claim of fair value, causality, or forecast is made.",
+        "Historical percentiles use only the currently available matched "
+        "history. The single dropdown controls both remaining charts. No claim "
+        "of fair value, causality, or forecast is made. Matching never looks "
+        "forward and never fills or interpolates a missing price.",
     )
     render_section_footer(page)

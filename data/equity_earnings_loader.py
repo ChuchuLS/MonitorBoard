@@ -38,18 +38,22 @@ def _clean_label(value) -> str:
     return str(value).strip()
 
 
-# The newly added CSI A500 and DJI Bloomberg blocks intentionally keep their
-# own Date/value columns, but their internal short-code row is blank.  Resolve
-# those two series from the ticker row rather than inventing or reusing another
-# market code.  Normalisation is case/space insensitive so workbook display
-# casing can change without breaking the production mapping.
+# Newly added Bloomberg blocks can keep their own Date/value columns while the
+# internal short-code row is blank. Resolve only the explicitly confirmed
+# ticker rows below; never infer a code from another market or relabel a proxy.
+# Normalisation is case/space insensitive so workbook display casing can change
+# without breaking the production mapping.
 _TICKER_CODE_ALIASES = {
     "CSIA500INDEX": "CSI_A500",
     "DJIINDEX": "DJI",
+    "NIFTYINDEX": "NIFTY50",
+    "VN30INDEX": "VN30",
 }
 _CODE_COUNTRY_FALLBACK = {
     "CSI_A500": "China",
     "DJI": "USA",
+    "NIFTY50": "India",
+    "VN30": "Vietnam",
 }
 
 

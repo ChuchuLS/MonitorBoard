@@ -15,6 +15,7 @@ from config.tickers import SOFR_CONTRACT_CONFIG, TICKERS
 
 DEFAULT_HORIZONS = (1, 5, 20)
 DEFAULT_MIN_OBSERVATIONS = 21
+CURVE_COMPARISON_HORIZONS = {"Current": 0, "1W ago": 5, "1M ago": 20}
 
 
 def _asof_ts(asof) -> pd.Timestamp | None:
@@ -120,6 +121,30 @@ def build_sofr_strip_table(
     return pd.DataFrame(rows)
 
 
+def build_sofr_curve_comparison(
+    futures_df: pd.DataFrame,
+    asof=None,
+) -> tuple[pd.DataFrame, dict[str, object]]:
+    """Return current, 1-week and 1-month curves on exact common dates.
+
+    One week and one month are defined as 5 and 20 common trading observations.
+    The function does not forward-fill, interpolate, or mix dates across contracts.
+    """
+    rates = build_sofr_implied_rate_frame(futures_df, asof=asof, require_all=True)
+    labels = [SOFR_CONTRACT_CONFIG[code]["contract_label"] for code in contract_codes()]
+    comparison = pd.DataFrame(index=pd.Index(labels, name="contract_label"), dtype=float)
+    dates: dict[str, object] = {}
+    for label, horizon in CURVE_COMPARISON_HORIZONS.items():
+        if len(rates) <= horizon:
+            comparison[label] = np.nan
+            dates[label] = None
+            continue
+        row = rates.iloc[-horizon - 1]
+        comparison[label] = [float(row[code]) for code in contract_codes()]
+        dates[label] = rates.index[-horizon - 1].date()
+    return comparison, dates
+
+
 def build_calendar_spread_matrix(strip_table: pd.DataFrame) -> pd.DataFrame:
     """Far-contract implied rate minus row-contract rate, in basis points."""
     if strip_table is None or strip_table.empty:
@@ -206,6 +231,8 @@ def build_sofr_strip_snapshot(
         "calendar_spread_matrix": pd.DataFrame(),
         "price_history": pd.DataFrame(),
         "implied_rate_history": pd.DataFrame(),
+        "curve_comparison": pd.DataFrame(),
+        "curve_comparison_dates": {},
         "effr_pct": None, "effr_date": None,
         "sofr_pct": None, "sofr_date": None,
         "terminal": determine_terminal(pd.DataFrame(), None),
@@ -216,6 +243,9 @@ def build_sofr_strip_snapshot(
     table = build_sofr_strip_table(futures_df, horizons=horizons, asof=asof)
     prices = build_sofr_contract_price_frame(futures_df, asof)
     rates = build_sofr_implied_rate_frame(futures_df, asof)
+    curve_comparison, curve_comparison_dates = build_sofr_curve_comparison(
+        futures_df, asof=asof
+    )
     effr, effr_date = _spot_on_or_before(market_df, TICKERS["EFFR"], readiness["model_date"])
     sofr, sofr_date = _spot_on_or_before(market_df, TICKERS["SOFR"], readiness["model_date"])
     terminal = determine_terminal(table, effr)
@@ -224,6 +254,8 @@ def build_sofr_strip_snapshot(
         "calendar_spread_matrix": build_calendar_spread_matrix(table),
         "price_history": prices,
         "implied_rate_history": rates,
+        "curve_comparison": curve_comparison,
+        "curve_comparison_dates": curve_comparison_dates,
         "effr_pct": effr, "effr_date": effr_date,
         "sofr_pct": sofr, "sofr_date": sofr_date,
         "terminal": terminal,

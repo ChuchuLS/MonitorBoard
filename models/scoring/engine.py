@@ -4,10 +4,11 @@ models/scoring/engine.py
 Global Rates & Equity cross-sectional scoring model.
 
 Extracted from the Pulsar/CTA Dashboard. Pure math — no Streamlit.
-Scores 10 sovereign bond markets and 17 equity indices on macro + market
+Scores 10 sovereign bond markets and 18 requested equity indices on macro + market
 factors, producing a cross-sectional z-score ranking.
 """
 
+from datetime import date, datetime
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -30,19 +31,23 @@ RATES_UNIVERSE = [
 ]
 RATES_CODES = [c for c, _ in RATES_UNIVERSE]
 
-# Equity dashboard: 17 indices
+# Equity dashboard: 18 requested indices. SMI and AEX were removed by user
+# request. FTSE China A50 is not relabelled; the China row now uses the
+# independently supplied CSI A500 series. Nifty 50 and VN30 use their own
+# confirmed DATA.xlsx price, EPS and country-macro inputs; no FCI proxy is used.
 EQUITY_UNIVERSE = [
     ("PT1",  "S&P/TSX",        "Canada"),
     ("NQ1",  "Nasdaq 100",     "USA"),
     ("KM1",  "KOSPI",          "S. Korea"),
     ("XP1",  "ASX",            "Australia"),
     ("HI1",  "Hang Seng",      "Hong Kong"),
-    ("XU1",  "FTSE China A50", "China"),
+    ("CSI_A500", "CSI A500",   "China"),
+    ("NIFTY50", "Nifty 50",    "India"),
+    ("VN30",  "VN30",           "Vietnam"),
     ("ES1",  "S&P 500",        "USA"),
+    ("DJI",  "Dow Jones Industrial Average", "USA"),
     ("RTY1", "Russell 2000",   "USA"),
-    ("SM1",  "SMI",            "Switzerland"),
     ("Z 1",  "FTSE 100",       "UK"),
-    ("EO1",  "AEX",            "Netherlands"),
     ("CF1",  "CAC 40",         "France"),
     ("ST1",  "FTSE MIB",       "Italy"),
     ("NK1",  "Nikkei 225",     "Japan"),
@@ -56,8 +61,8 @@ EQUITY_META = {c: (n, r) for c, n, r in EQUITY_UNIVERSE}
 # Each equity index → its macro country (for GDP/CPI/Fiscal lookup)
 INDEX_TO_COUNTRY = {
     "PT1": "CA", "NQ1": "US", "KM1": "KR", "XP1": "AU",
-    "HI1": "HK", "XU1": "CN", "ES1": "US", "RTY1": "US",
-    "SM1": "CH", "Z 1": "GB", "EO1": "NL", "CF1": "FR",
+    "HI1": "HK", "CSI_A500": "CN", "NIFTY50": "IN", "VN30": "VN",
+    "ES1": "US", "DJI": "US", "RTY1": "US", "Z 1": "GB", "CF1": "FR",
     "ST1": "IT", "NK1": "JP", "VG1": "EZ", "IB1": "ES", "GX1": "DE",
 }
 
@@ -69,12 +74,13 @@ INDEX_TO_FCI_REGION = {
     "KM1": "NQ1",   # Korea → US FCI (USD-funded EM)
     "XP1": "NQ1",   # Australia → US FCI
     "HI1": "XU1",   # Hang Seng → China FCI
-    "XU1": "XU1",   # China
+    "CSI_A500": "XU1",  # China FCI column; not an equity-price proxy
+    "NIFTY50": None,  # no India FCI supplied
+    "VN30": None,     # no Vietnam FCI supplied
     "ES1": "NQ1",   # US
+    "DJI": "NQ1",   # US
     "RTY1": "NQ1",  # US
-    "SM1": "VG1",   # Switzerland → Eurozone FCI
     "Z 1": "Z 1",   # UK
-    "EO1": "VG1",   # Netherlands → Eurozone FCI
     "CF1": "VG1",   # France → Eurozone FCI
     "ST1": "VG1",   # Italy → Eurozone FCI
     "NK1": "NQ1",   # Japan → US FCI (open economy fallback)
@@ -86,9 +92,10 @@ INDEX_TO_FCI_REGION = {
 # Each equity index → its Citi ToT currency ticker
 INDEX_TO_TOT_TICKER = {
     "PT1": "CTOTCAD Index", "NQ1": "CTOTUSD Index", "KM1": "CTOTKRW Index",
-    "XP1": "CTOTAUD Index", "HI1": "CTOTHKD Index", "XU1": "CTOTCNY Index",
-    "ES1": "CTOTUSD Index", "RTY1": "CTOTUSD Index", "SM1": "CTOTCHF Index",
-    "Z 1": "CTOTGBP Index", "EO1": "CTOTEUR Index", "CF1": "CTOTEUR Index",
+    "XP1": "CTOTAUD Index", "HI1": "CTOTHKD Index", "CSI_A500": "CTOTCNY Index",
+    "NIFTY50": "CTOTINR Index", "VN30": "CTOTVND Index",
+    "ES1": "CTOTUSD Index", "DJI": "CTOTUSD Index", "RTY1": "CTOTUSD Index",
+    "Z 1": "CTOTGBP Index", "CF1": "CTOTEUR Index",
     "ST1": "CTOTEUR Index", "NK1": "CTOTJPY Index", "VG1": "CTOTEUR Index",
     "IB1": "CTOTEUR Index", "GX1": "CTOTEUR Index",
 }
@@ -105,6 +112,68 @@ RATES_TO_TOT_TICKER = {
 # ============================================================
 # LOADER
 # ============================================================
+_MACRO_TICKER_CODE_ALIASES = {
+    "VEGDQYOYINDEX": "VN",
+    "IGQREGDYINDEX": "IN",
+    "VNCPIYOYINDEX": "VN",
+    "INFUTOTYINDEX": "IN",
+    "EHBBINYINDEX": "IN",
+    "EHBBVNINDEX": "VN",
+}
+
+
+def _normalise_token(value) -> str:
+    if value is None or pd.isna(value):
+        return ""
+    return "".join(ch for ch in str(value).upper() if ch.isalnum())
+
+
+def _parse_country_macro_sheet(xlsx_path: str, sheet_name: str) -> pd.DataFrame:
+    """Parse country macro panels, including confirmed blank-header additions.
+
+    Most columns use the shared Date column in A. DATA(7) supplies Vietnam
+    fiscal data as an independent Date/value spill; that source calendar is
+    preserved rather than aligned by row position. Ticker aliases are limited
+    to the exact India/Vietnam rows present in the workbook.
+    """
+    try:
+        raw = pd.read_excel(xlsx_path, sheet_name=sheet_name, header=None)
+    except Exception:
+        return pd.DataFrame()
+    if raw.empty or raw.shape[0] < 6 or raw.shape[1] < 2:
+        return pd.DataFrame()
+
+    shared_dates = pd.to_datetime(raw.iloc[5:, 0], errors="coerce")
+    series = {}
+    for value_col in range(1, raw.shape[1]):
+        ticker = raw.iloc[4, value_col] if raw.shape[0] > 4 else None
+        alias = _MACRO_TICKER_CODE_ALIASES.get(_normalise_token(ticker))
+        raw_code = raw.iloc[3, value_col] if raw.shape[0] > 3 else None
+        code = alias or ("" if raw_code is None or pd.isna(raw_code) else str(raw_code).strip())
+        if not code or code.lower().startswith("unnamed") or code == "Date":
+            continue
+
+        dates = shared_dates
+        if value_col > 1:
+            prior = raw.iloc[5:, value_col - 1]
+            true_date_count = sum(
+                isinstance(value, (date, datetime, pd.Timestamp, np.datetime64))
+                for value in prior
+                if value is not None and not pd.isna(value)
+            )
+            prior_ticker = raw.iloc[4, value_col - 1] if raw.shape[0] > 4 else None
+            if true_date_count >= 2 and (prior_ticker is None or pd.isna(prior_ticker)):
+                dates = pd.to_datetime(prior, errors="coerce")
+
+        values = pd.to_numeric(raw.iloc[5:, value_col], errors="coerce")
+        s = pd.Series(values.to_numpy(), index=dates, name=code)
+        s = s[~s.index.isna()].dropna().sort_index()
+        s = s[~s.index.duplicated(keep="last")]
+        if not s.empty:
+            series[code] = s
+    return pd.concat(series, axis=1).sort_index() if series else pd.DataFrame()
+
+
 def _read_sheet_pandas(xlsx_path: str, sheet_name: str, header_row: int = 4) -> pd.DataFrame:
     """Read a BDH-style scoring sheet using pandas (much faster than openpyxl).
     header_row is 0-indexed for pandas (row 4 in Excel = header=3 in pandas).
@@ -159,7 +228,27 @@ def load_all(xlsx_path: str) -> dict:
     }
     result = {}
     for key, name in sheets.items():
-        result[key] = _read_sheet_pandas(xlsx_path, name)
+        result[key] = (
+            _parse_country_macro_sheet(xlsx_path, name)
+            if key in {"gdp", "cpi", "fiscal"}
+            else _read_sheet_pandas(xlsx_path, name)
+        )
+    # Equity_EPS contains independent Date/value spills and the newly supplied
+    # A500 / DJI / Nifty 50 / VN30 blocks have blank short-code headers. Reuse
+    # the production parser so those exact ticker-identified rows enter Scoring
+    # without relabelling another market or aligning EPS dates by row position.
+    try:
+        from data.equity_earnings_loader import _parse_eps_sheet, _parse_price_sheet
+        eps, _ = _parse_eps_sheet(Path(xlsx_path))
+        prices, _ = _parse_price_sheet(Path(xlsx_path))
+        if not eps.empty:
+            result["eps"] = eps
+        if not prices.empty:
+            result["px"] = prices
+    except Exception:
+        # Keep the generic sheet reads. Missing requested tickers remain NaN and
+        # are surfaced as incomplete rather than substituted.
+        pass
     return result
 
 
@@ -310,7 +399,7 @@ def score_equity(data: dict, asof: pd.Timestamp, weights: dict) -> pd.DataFrame:
     tot_mom = tot_now - tot_then  # absolute change in ToT index
 
     # FCI: latest value of the index's regional FCI
-    fci_by_index = pd.Series({code: fci_v.get(INDEX_TO_FCI_REGION[code], np.nan)
+    fci_by_index = pd.Series({code: fci_v.get(INDEX_TO_FCI_REGION.get(code), np.nan)
                               for code in EQUITY_CODES})
 
     # EPS Δ: 3M % change in FY1 EPS estimate
@@ -327,7 +416,15 @@ def score_equity(data: dict, asof: pd.Timestamp, weights: dict) -> pd.DataFrame:
     z_tot    = zscore(tot_mom,   EQUITY_CODES, +1)
     z_fci    = zscore(fci_by_index, EQUITY_CODES, +1)
 
-    macro = pd.concat([z_growth, z_infl, z_def, z_tot, z_fci], axis=1).mean(axis=1)
+    macro_factors = pd.DataFrame({
+        "GDP": z_growth,
+        "CPI": z_infl,
+        "Fiscal": z_def,
+        "ToT": z_tot,
+        "FCI": z_fci,
+    })
+    macro_factor_count = macro_factors.notna().sum(axis=1)
+    macro = macro_factors.mean(axis=1)
 
     # EPS as separate factor (z-scored across the panel)
     z_eps = zscore(eps_delta, EQUITY_CODES, +1)
@@ -349,6 +446,7 @@ def score_equity(data: dict, asof: pd.Timestamp, weights: dict) -> pd.DataFrame:
         "def_z":    z_def,
         "tot_z":    z_tot,
         "fci_z":    z_fci,
+        "macro_factor_count": macro_factor_count,
         "macro":    macro,
         "eps_delta": eps_delta,
         "score":    score,
@@ -360,8 +458,23 @@ def score_equity(data: dict, asof: pd.Timestamp, weights: dict) -> pd.DataFrame:
     out.index.name = "code"
     out["name"]   = [EQUITY_META[c][0] for c in out.index]
     out["region"] = [EQUITY_META[c][1] for c in out.index]
-    out["incomplete"] = macro.isna() | z_eps.isna()
-    return out.sort_values("score", ascending=False, na_position="last")
+    out["missing_factors"] = [
+        ", ".join(macro_factors.columns[macro_factors.loc[code].isna()].tolist())
+        for code in out.index
+    ]
+    out["status"] = np.where(
+        out["score"].isna(),
+        "Missing data",
+        np.where((macro_factor_count == len(macro_factors.columns)) & z_eps.notna(),
+                 "Ready", "Partial"),
+    )
+    out["rank_eligible"] = out["status"].eq("Ready")
+    out["incomplete"] = ~out["rank_eligible"]
+    status_order = out["status"].map({"Ready": 0, "Partial": 1, "Missing data": 2})
+    out = out.assign(_status_order=status_order)
+    return out.sort_values(
+        ["_status_order", "score"], ascending=[True, False], na_position="last"
+    ).drop(columns="_status_order")
 
 
 # ============================================================

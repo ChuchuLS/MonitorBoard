@@ -1,4 +1,4 @@
-"""SPX FY1 Earnings & Valuation monitor.
+"""Global FY1 Earnings & Valuation monitor.
 
 The EPS source is confirmed by the user-provided Bloomberg Excel formula:
 
@@ -7,7 +7,9 @@ The EPS source is confirmed by the user-provided Bloomberg Excel formula:
 
 Therefore the model labels the series as weekly FY1 consensus EPS estimates.
 It does not label the data blended-forward-12-month, trailing, or realised EPS.
-All production calculations use exact common EPS/price dates; no forward-fill.
+Each weekly EPS observation is matched to the latest observed cash-index close
+on or before the EPS source date, within three calendar days. No forward-fill,
+interpolation, row-position alignment, or proxy series is used.
 """
 from __future__ import annotations
 
@@ -25,6 +27,7 @@ DEFAULT_DECOMPOSITION_HORIZON = 4
 DEFAULT_BETA_WINDOW = 26
 DEFAULT_MIN_BETA_OBS = 20
 DEFAULT_FLAT_THRESHOLD_PCT = 0.25
+MAX_PRICE_MATCH_LAG_DAYS = 3
 
 EPS_FIELD_METADATA = {
     "field": "BEST_EPS",
@@ -38,21 +41,23 @@ EPS_FIELD_METADATA = {
                '"BEST_FPERIOD_OVERRIDE=1FY","Per=W","Dir=V","Dt")',
 }
 
-# The global earnings table has its own explicit cash-index universe.  China is
-# intentionally represented by CSI A500 rather than relabelling the existing
-# FTSE China A50 (XU1) history.  DJI is an additional requested US index.  The
-# The workbook now contains both requested series. Their short-code row may be
-# blank, so data/equity_earnings_loader.py resolves them from the Bloomberg
-# ticker row without relabelling the existing FTSE China A50 (XU1) series.
+# The dropdown follows the requested Scoring universe. CSI A500 and DJI are
+# resolved from their own workbook ticker rows. SMI, AEX and FTSE China A50 are
+# not part of this requested universe. Missing source rows remain Missing data.
+_REQUESTED_TICKERS = {
+    "CSI_A500": "CSIA500 INDEX",
+    "DJI": "DJI INDEX",
+    "NIFTY50": "NIFTY INDEX",
+    "VN30": "VN30 INDEX",
+}
 EARNINGS_OVERVIEW_UNIVERSE = [
-    {"code": code, "display_name": name, "region": region, "ticker": None}
+    {
+        "code": code,
+        "display_name": name,
+        "region": region,
+        "ticker": _REQUESTED_TICKERS.get(code),
+    }
     for code, name, region in EQUITY_UNIVERSE
-    if code != "XU1"
-] + [
-    {"code": "CSI_A500", "display_name": "CSI A500", "region": "China",
-     "ticker": "CSIA500 INDEX"},
-    {"code": "DJI", "display_name": "Dow Jones Industrial Average", "region": "USA",
-     "ticker": "DJI INDEX"},
 ]
 
 INDEX_META = {
@@ -78,7 +83,13 @@ def _safe_float(value):
 
 
 def build_equity_earnings_frame(data: dict, code: str = SPX_CODE, asof=None) -> pd.DataFrame:
-    """Return exact-date-aligned price, FY1 EPS, and implied FY1 P/E."""
+    """Return source-date-matched price, FY1 EPS, and implied FY1 P/E.
+
+    Bloomberg can stamp weekly EPS observations on weekends. Each EPS source
+    date is therefore paired with the most recent *observed* cash-index close
+    no more than three calendar days earlier. This is a bounded as-of join, not
+    a forward-fill or an inferred price.
+    """
     eps = data.get("eps") if isinstance(data, dict) else None
     prices = data.get("prices") if isinstance(data, dict) else None
     if not isinstance(eps, pd.DataFrame) or not isinstance(prices, pd.DataFrame):
@@ -86,20 +97,42 @@ def build_equity_earnings_frame(data: dict, code: str = SPX_CODE, asof=None) -> 
     if code not in eps.columns or code not in prices.columns:
         return pd.DataFrame(columns=["price", "eps_fy1", "fy1_pe"])
 
-    frame = pd.concat(
-        [prices[code].rename("price"), eps[code].rename("eps_fy1")],
-        axis=1,
-        join="inner",
-    ).dropna()
+    price = pd.to_numeric(prices[code], errors="coerce").dropna().sort_index()
+    earnings = pd.to_numeric(eps[code], errors="coerce").dropna().sort_index()
+    price = price[~price.index.duplicated(keep="last")]
+    earnings = earnings[~earnings.index.duplicated(keep="last")]
     cutoff = _asof_timestamp(asof)
     if cutoff is not None:
-        frame = frame.loc[frame.index <= cutoff]
-    frame = frame[(frame["price"] > 0) & (frame["eps_fy1"] > 0)].sort_index()
-    frame = frame[~frame.index.duplicated(keep="last")]
+        price = price.loc[price.index <= cutoff]
+        earnings = earnings.loc[earnings.index <= cutoff]
+    if price.empty or earnings.empty:
+        return pd.DataFrame(columns=["price", "eps_fy1", "fy1_pe"])
+
+    price_frame = price.rename("price").rename_axis("price_source_date").reset_index()
+    eps_frame = earnings.rename("eps_fy1").rename_axis("eps_source_date").reset_index()
+    aligned = pd.merge_asof(
+        eps_frame.sort_values("eps_source_date"),
+        price_frame.sort_values("price_source_date"),
+        left_on="eps_source_date",
+        right_on="price_source_date",
+        direction="backward",
+        tolerance=pd.Timedelta(days=MAX_PRICE_MATCH_LAG_DAYS),
+        allow_exact_matches=True,
+    ).dropna(subset=["price", "eps_fy1", "price_source_date"])
+    aligned = aligned[(aligned["price"] > 0) & (aligned["eps_fy1"] > 0)]
+    aligned["price_lag_days"] = (
+        aligned["eps_source_date"] - aligned["price_source_date"]
+    ).dt.days
+    frame = aligned.set_index("eps_source_date")[["price", "eps_fy1"]].sort_index()
     if frame.empty:
         frame["fy1_pe"] = pd.Series(dtype=float)
         return frame
     frame["fy1_pe"] = frame["price"] / frame["eps_fy1"]
+    frame.attrs.update({
+        "alignment_method": "EPS source date matched to latest observed prior cash close within 3 calendar days",
+        "price_source_dates": aligned.set_index("eps_source_date")["price_source_date"].to_dict(),
+        "price_lag_days": aligned.set_index("eps_source_date")["price_lag_days"].to_dict(),
+    })
     return frame
 
 
@@ -270,6 +303,9 @@ def build_earnings_valuation_snapshot(
     result["decomposition"] = decomp
     result["decomposition_history"] = exact_hist
     result["regression_history"] = reg_hist
+    price_source_dates = frame.attrs.get("price_source_dates", {})
+    price_lag_days = frame.attrs.get("price_lag_days", {})
+    latest_eps_date = frame.index[-1]
     result.update({
         "price": float(latest["price"]),
         "eps_fy1": float(latest["eps_fy1"]),
@@ -278,6 +314,13 @@ def build_earnings_valuation_snapshot(
         "pe_percentile_observations": int(frame["fy1_pe"].notna().sum()),
         "decomposition_horizon": int(decomposition_horizon),
         "beta_window": int(beta_window),
+        "alignment_method": frame.attrs.get("alignment_method"),
+        "price_source_date": (
+            pd.Timestamp(price_source_dates.get(latest_eps_date)).date()
+            if price_source_dates.get(latest_eps_date) is not None else None
+        ),
+        "latest_price_lag_days": _safe_float(price_lag_days.get(latest_eps_date)),
+        "max_price_lag_days": int(MAX_PRICE_MATCH_LAG_DAYS),
     })
 
     selected = decomp.loc[decomp["horizon_weeks"] == int(decomposition_horizon)]

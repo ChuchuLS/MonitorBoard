@@ -518,9 +518,10 @@ def _policy_futures(p: PackCanvas, df):
          "sub": terminal.get("terminal_contract", "-")},
         {"label": "EFFR TO TERMINAL", "value": _fmt(terminal.get("terminal_gap_bp"), "+.1f", " bp")},
     ])
-    hist = snap.get("implied_rate_history")
-    p.line_chart(MARGIN_X, 280, 810, 210, hist.tail(260) if isinstance(hist, pd.DataFrame) else hist,
-                 "FIXED QUARTERLY SOFR IMPLIED RATES", ORANGE, max_series=8)
+    comparison = snap.get("curve_comparison")
+    p.line_chart(MARGIN_X, 280, 810, 210,
+                 comparison if isinstance(comparison, pd.DataFrame) else pd.DataFrame(),
+                 "SOFR STRIP CURVE - CURRENT VS 1W / 1M", ORANGE, max_series=3)
     table = snap.get("strip_table", pd.DataFrame()).copy()
     if not table.empty:
         table["contract"] = table["contract_label"]
@@ -531,7 +532,7 @@ def _policy_futures(p: PackCanvas, df):
             [("contract", "CONTRACT", .30), ("rate", "RATE", .26),
              ("d1", "1D BP", .20), ("d20", "20D BP", .24)],
             max_rows=8, title="CURRENT STRIP", color=ORANGE)
-    p.note(910, 280, 470, 130, "LIMITATION",
+    p.note(910, 100, 470, 105, "LIMITATION",
            "These are eight actual fixed quarterly Three-Month SOFR contracts. The page is not a meeting-by-meeting FOMC probability path and must not be read as one.", ORANGE)
 
 
@@ -801,10 +802,11 @@ def _earnings(p: PackCanvas, df):
         {"label": "4W DRIVER", "value": snap.get("current_driver", "-")},
     ])
     frame = snap.get("frame", pd.DataFrame())
+    history = snap.get("decomposition_history", pd.DataFrame())
+    history_cols = ["price_return_pct", "eps_growth_pct", "valuation_change_pct"]
     p.line_chart(MARGIN_X, 300, 720, 190,
-                 frame[["price", "eps_fy1"]] if isinstance(frame, pd.DataFrame) and not frame.empty else frame,
-                 "SPX LEVEL AND FY1 EPS - NORMALIZED", "#ff7357", max_series=2,
-                 normalize=True)
+                 history[history_cols] if isinstance(history, pd.DataFrame) and not history.empty else history,
+                 "ROLLING 4W EXACT RETURN DECOMPOSITION", "#ff7357", max_series=3)
     p.line_chart(820, 300, 560, 190,
                  frame["fy1_pe"] if isinstance(frame, pd.DataFrame) and "fy1_pe" in frame else pd.Series(dtype=float),
                  "IMPLIED FY1 P/E", "#ff7357", max_series=1)
@@ -911,13 +913,16 @@ def _scoring(p: PackCanvas, df):
             macro_f=equity["macro"].map(lambda v: _fmt(v, "+.2f")),
             score_f=equity["score"].map(lambda v: _fmt(v, "+.2f")),
             p1m_f=equity["p1m"].map(lambda v: _fmt(v, "+.2f", "%")),
+            status_f=equity["status"],
         )
     p.table(720, 478, 660, equity,
-            [("name", "EQUITY INDEX", .45), ("macro_f", "MACRO", .17),
-             ("score_f", "SCORE", .18), ("p1m_f", "1M", .20)],
-            max_rows=12, title="GLOBAL EQUITY SCORING - 50/50 WEIGHTS", color="#9aa0a6")
-    p.note(MARGIN_X, 145, 1320, 75, "METHODOLOGY",
-           "Scores are cross-sectional relative rankings. The PDF uses the Board defaults: rates 50% macro / 50% markets; equities 50% macro / 50% EPS. Future-dated source rows are excluded.", "#9aa0a6")
+            [("name", "EQUITY INDEX", .36), ("macro_f", "MACRO", .13),
+             ("score_f", "SCORE", .13), ("p1m_f", "1M", .16),
+             ("status_f", "STATUS", .22)],
+            max_rows=18, row_h=16,
+            title="GLOBAL EQUITY SCORING - 50/50 WEIGHTS", color="#9aa0a6")
+    p.note(MARGIN_X, 75, 1320, 62, "METHODOLOGY",
+           "Scores are cross-sectional relative rankings. The PDF uses the Board defaults: rates 50% macro / 50% markets; equities 50% macro / 50% EPS. Partial equity rows use only observed factors and are excluded from headline rankings; no missing FCI is proxied. Future-dated source rows are excluded.", "#9aa0a6")
 
 
 def _roadmap(p: PackCanvas, df):

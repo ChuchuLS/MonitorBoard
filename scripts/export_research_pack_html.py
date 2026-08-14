@@ -275,6 +275,20 @@ def _build_policy_futures(df):
         detail[col] = detail[col].map(lambda v: "—" if pd.isna(v) else f"{v:+.1f}")
     html += "<h3>SOFR futures strip</h3>" + _df_table(detail, max_rows=12)
 
+    comparison = snap["curve_comparison"].copy().reset_index()
+    comparison_dates = snap.get("curve_comparison_dates", {})
+    for col in ["Current", "1W ago", "1M ago"]:
+        comparison[col] = comparison[col].map(
+            lambda v: "—" if pd.isna(v) else f"{v:.3f}%"
+        )
+    html += (
+        "<h3>SOFR strip curve — current vs 1 week / 1 month ago</h3>"
+        + _df_table(comparison, max_rows=12)
+        + "<p class='sub'>Curve dates: "
+        + " · ".join(f"{key}: {value or '—'}" for key, value in comparison_dates.items())
+        + ". 1W = 5 and 1M = 20 common trading observations; no forward-fill.</p>"
+    )
+
     matrix = snap["calendar_spread_matrix"].copy()
     for col in ["3M", "6M", "12M"]:
         matrix[col] = matrix[col].map(lambda v: "—" if pd.isna(v) else f"{v:+.1f}")
@@ -579,7 +593,8 @@ def _build_data_quality(df, lvd, sig):
         from data.equity_earnings_loader import load_equity_earnings_data
         from models.earnings_valuation import build_global_earnings_overview
         overview = build_global_earnings_overview(load_equity_earnings_data(), horizon=13)
-        for code, label in (("CSI_A500", "CSI A500"), ("DJI", "Dow Jones Industrial Average")):
+        for code, label in (("CSI_A500", "CSI A500"), ("NIFTY50", "Nifty 50"),
+                            ("VN30", "VN30"), ("DJI", "Dow Jones Industrial Average")):
             row = overview.loc[overview["code"] == code]
             if row.empty or row.iloc[0]["status"] != "Ready":
                 requested_inputs.append((label, "Missing data — no proxy used"))
@@ -590,7 +605,7 @@ def _build_data_quality(df, lvd, sig):
                     f"Ready — {item['workbook_ticker']} · P/E {item['fy1_pe']:.2f}x · {item['model_date']}",
                 ))
     except Exception as exc:
-        requested_inputs.append(("CSI A500 / DJI", f"Audit unavailable — {type(exc).__name__}"))
+        requested_inputs.append(("Requested equity indices", f"Audit unavailable — {type(exc).__name__}"))
     html += _reading_box("Requested Reference-Pack Inputs", requested_inputs)
 
     # Streamlit coverage and future models
@@ -602,7 +617,7 @@ def _build_data_quality(df, lvd, sig):
         ("Sector Contribution Estimate", "Live in Streamlit; approximation with explicit residual; not official attribution; not currently included in the static HTML export"),
         ("FX Rate Differential Monitor", "Live in Streamlit; not currently included in the static HTML export"),
         ("Official SPX sector attribution", "Not implemented — daily-weight or official contribution methodology required"),
-        ("SPX FY1 Earnings & Valuation", "Live in Streamlit; CSI A500 and DJI source rows are audited in this HTML; full page remains Streamlit-only"),
+        ("Global FY1 Earnings & Valuation", "Live in Streamlit with one index dropdown; all 18 requested indices use their own workbook histories. Weekly EPS source dates are matched backward to observed prior cash closes within three calendar days; no proxy or interpolation is used"),
         ("Forward estimate vs realized EPS", "Not implemented — realized/trailing EPS field and period definition not supplied"),
     ]
     html += "<h3>Streamlit Coverage & Future Models</h3>"

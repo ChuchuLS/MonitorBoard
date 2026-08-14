@@ -1,4 +1,4 @@
-# SPX FY1 Earnings & Valuation
+# Global FY1 Earnings & Valuation
 
 ## Confirmed Bloomberg source
 
@@ -24,8 +24,12 @@ trailing, or realised EPS.
 
 ## Main model
 
-For SPX, the application intersects `Equity_EPS` and `Equity_Prices` on exact
-common dates. It does not forward-fill either input.
+For every requested index, the application keeps the weekly EPS source date and
+matches it backward to the latest observed cash-index close on or before that
+date, with a maximum lag of three calendar days. This bounded prior-close rule
+allows non-trading-day EPS timestamps (for example, Sunday) to use an actual
+observed Friday close. It never looks forward, forward-fills, interpolates, or
+uses another index as a proxy.
 
 ```text
 Implied FY1 P/E = SPX Index level / FY1 EPS
@@ -34,7 +38,7 @@ Implied FY1 P/E = SPX Index level / FY1 EPS
 The primary decomposition is an exact additive log identity:
 
 ```text
-SPX log return = FY1 EPS log growth + implied FY1 P/E log change
+Index log return = FY1 EPS log growth + implied FY1 P/E log change
 ```
 
 The reported identity residual should be numerical rounding only.
@@ -42,12 +46,12 @@ The reported identity residual should be numerical rounding only.
 ## Weekly OLS diagnostic
 
 A separate diagnostic estimates a rolling single-factor OLS beta from weekly
-SPX log returns and weekly FY1 EPS log changes. The default window is 26 common
-weekly changes, with a 20-observation minimum.
+matched cash-index log returns and weekly FY1 EPS log changes. The default window
+is 26 matched weekly changes, with a 20-observation minimum.
 
 The fitted earnings component and regression residual are descriptive model
 outputs. They are not causal attribution, fair value, or a forecast. The
-available common history is much shorter and lower-frequency than the
+available matched history is much shorter and lower-frequency than the
 reference chart pack's 3-year daily regression, so the two models are not
 presented as equivalent.
 

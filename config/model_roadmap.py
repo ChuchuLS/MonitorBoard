@@ -177,7 +177,7 @@ ROADMAP: list[dict] = [
      "missing_data": [], "recommended_priority": 4,
      "build_notes": "Requires divisor-consistent index treatment or official contribution "
                     "data. Not equivalent to the descriptive rotation monitor."},
-    {"section": "06", "module_id": "earnings_val", "title": "SPX FY1 earnings & valuation",
+    {"section": "06", "module_id": "earnings_val", "title": "Global FY1 earnings & valuation",
      "app_section": "06c", "reference_section": "06 · Equities & Earnings",
      "current_status": "Live", "do_not_fake": False,
      "implemented_in": "models/earnings_valuation.py",

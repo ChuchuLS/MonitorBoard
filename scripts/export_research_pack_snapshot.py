@@ -55,6 +55,7 @@ def build_snapshot() -> dict:
         ps = build_sofr_strip_snapshot(load_policy_futures(), df)
         table = ps.get("strip_table")
         matrix = ps.get("calendar_spread_matrix")
+        comparison = ps.get("curve_comparison")
         snap["sofr_futures_strip"] = {
             "status": ps.get("status"),
             "model_date": str(ps.get("model_date")) if ps.get("model_date") else None,
@@ -72,6 +73,14 @@ def build_snapshot() -> dict:
                 matrix.to_dict(orient="records")
                 if hasattr(matrix, "empty") and not matrix.empty else []
             ),
+            "curve_comparison": (
+                comparison.reset_index().to_dict(orient="records")
+                if hasattr(comparison, "empty") and not comparison.empty else []
+            ),
+            "curve_comparison_dates": {
+                key: str(value) if value else None
+                for key, value in ps.get("curve_comparison_dates", {}).items()
+            },
             "fixed_contract_months": True,
             "fomc_meeting_path": False,
         }
@@ -262,6 +271,9 @@ def build_snapshot() -> dict:
         snap["spx_earnings_valuation"] = {
             "status": ev.get("status"),
             "model_date": str(ev.get("model_date")) if ev.get("model_date") else None,
+            "price_source_date": str(ev.get("price_source_date")) if ev.get("price_source_date") else None,
+            "latest_price_lag_days": ev.get("latest_price_lag_days"),
+            "alignment_method": ev.get("alignment_method"),
             "aligned_observations": ev.get("aligned_observations"),
             "eps_field": "BEST_EPS",
             "forecast_period_override": "1FY",
@@ -281,7 +293,9 @@ def build_snapshot() -> dict:
             "forecast_model": False,
         }
         requested = build_global_earnings_overview(_earnings_data, horizon=13)
-        requested = requested.loc[requested["code"].isin(["CSI_A500", "DJI"])]
+        requested = requested.loc[
+            requested["code"].isin(["CSI_A500", "NIFTY50", "VN30", "DJI"])
+        ]
         snap["requested_equity_earnings_rows"] = [
             {
                 "code": row["code"],
