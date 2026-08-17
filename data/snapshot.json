@@ -925,7 +925,7 @@
       "average_top_minus_bottom": -0.5196180397590386,
       "median_top_minus_bottom": -1.3322908103819346,
       "hit_rate_pct": 33.33333333333333,
-      "mean_rank_ic": -0.07383073624813104,
+      "mean_rank_ic": -0.07383073624813102,
       "outcome_unit": "%",
       "costs_included": false,
       "macro_vintage_safe": false
@@ -940,7 +940,7 @@
       "average_top_minus_bottom": -1.2345403651509617,
       "median_top_minus_bottom": -1.2285615666666267,
       "hit_rate_pct": 41.66666666666667,
-      "mean_rank_ic": -0.025430869222406238,
+      "mean_rank_ic": -0.02543086922240624,
       "outcome_unit": "bp",
       "costs_included": false,
       "macro_vintage_safe": false
@@ -982,7 +982,7 @@
         "top_outcome": 0.489453322481644,
         "bottom_outcome": 1.8529590110952787,
         "top_minus_bottom": -1.3635056886136347,
-        "rank_ic": -0.26432631297411185,
+        "rank_ic": -0.2643263129741118,
         "outcome_unit": "%"
       },
       {
@@ -1034,7 +1034,7 @@
         "top_outcome": -3.698354028980178,
         "bottom_outcome": 0.2153341407773679,
         "top_minus_bottom": -3.913688169757546,
-        "rank_ic": -0.31388749665675775,
+        "rank_ic": -0.3138874966567578,
         "outcome_unit": "%"
       },
       {
@@ -1047,7 +1047,7 @@
         "top_outcome": -7.445785479630252,
         "bottom_outcome": -1.5870787624697957,
         "top_minus_bottom": -5.858706717160456,
-        "rank_ic": -0.2725865102545528,
+        "rank_ic": -0.27258651025455277,
         "outcome_unit": "%"
       },
       {
@@ -1060,7 +1060,7 @@
         "top_outcome": 0.36305069544826746,
         "bottom_outcome": -0.4766304061934605,
         "top_minus_bottom": 0.8396811016417279,
-        "rank_ic": 0.25929765902352986,
+        "rank_ic": 0.2592976590235299,
         "outcome_unit": "%"
       },
       {
@@ -1086,7 +1086,7 @@
         "top_outcome": 0.13689311358338063,
         "bottom_outcome": 2.9815603246789113,
         "top_minus_bottom": -2.8446672110955307,
-        "rank_ic": -0.4790914422655777,
+        "rank_ic": -0.47909144226557765,
         "outcome_unit": "%"
       },
       {
@@ -1114,7 +1114,7 @@
         "top_outcome": 7.902654033333316,
         "bottom_outcome": 10.602165733333338,
         "top_minus_bottom": -2.6995117000000226,
-        "rank_ic": -0.5896683773696626,
+        "rank_ic": -0.5896683773696627,
         "outcome_unit": "bp"
       },
       {
@@ -1166,7 +1166,7 @@
         "top_outcome": 8.52592783333336,
         "bottom_outcome": 7.658990233333348,
         "top_minus_bottom": 0.8669376000000124,
-        "rank_ic": 0.1945297739776207,
+        "rank_ic": 0.19452977397762067,
         "outcome_unit": "bp"
       },
       {
@@ -1244,7 +1244,7 @@
         "top_outcome": 3.071101500000021,
         "bottom_outcome": 8.506027599999996,
         "top_minus_bottom": -5.434926099999975,
-        "rank_ic": -0.20060882941442132,
+        "rank_ic": -0.2006088294144213,
         "outcome_unit": "bp"
       },
       {

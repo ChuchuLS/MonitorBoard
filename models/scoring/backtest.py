@@ -72,6 +72,26 @@ def _ranked_frame(scores: pd.DataFrame, outcome: pd.Series, kind: str) -> pd.Dat
     return eligible.sort_values(["score", "code"], ascending=[False, True])
 
 
+def _spearman_rank_correlation(left: pd.Series, right: pd.Series) -> float:
+    """Return Spearman's rho without pandas' optional SciPy dependency.
+
+    Spearman correlation is the ordinary Pearson correlation of the two
+    average-rank series.  Ranking first keeps tie handling equivalent to
+    ``Series.corr(..., method="spearman")`` while allowing the dashboard to
+    run in the lean Streamlit deployment environment.
+    """
+    pair = pd.concat(
+        [pd.to_numeric(left, errors="coerce"), pd.to_numeric(right, errors="coerce")],
+        axis=1,
+    ).dropna()
+    if len(pair) < 2:
+        return np.nan
+    left_rank = pair.iloc[:, 0].rank(method="average")
+    right_rank = pair.iloc[:, 1].rank(method="average")
+    correlation = left_rank.corr(right_rank, method="pearson")
+    return float(correlation) if pd.notna(correlation) else np.nan
+
+
 def run_score_backtest(data: dict, kind: str, config: BacktestConfig | None = None) -> pd.DataFrame:
     """Run a non-overlapping weekly or monthly score evaluation.
 
@@ -131,7 +151,7 @@ def run_score_backtest(data: dict, kind: str, config: BacktestConfig | None = No
         bottom = ranked.tail(cfg.top_n)
         top_value = float(top["outcome"].mean())
         bottom_value = float(bottom["outcome"].mean())
-        rank_ic = ranked["score"].corr(ranked["outcome"], method="spearman")
+        rank_ic = _spearman_rank_correlation(ranked["score"], ranked["outcome"])
         rows.append({
             "market": kind,
             "signal_date": signal_date,

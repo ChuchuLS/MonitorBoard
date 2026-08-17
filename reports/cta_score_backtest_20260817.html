@@ -1,0 +1,316 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>CTA Score Backtest</title>
+<style>
+body{background:#080b0c;color:#e8edf0;font:14px Inter,Arial,sans-serif;margin:32px auto;max-width:1180px;line-height:1.5}
+h1{font-size:26px} h2{color:#e8b931;margin-top:30px} h3{margin-top:28px}
+.note{border-left:3px solid #d99830;background:#111517;padding:14px 16px;margin:18px 0}
+table{border-collapse:collapse;width:100%;margin:10px 0 24px} th,td{border:1px solid #273036;padding:7px 9px;text-align:left}
+th{background:#13191c;color:#aab4ba} td{font-variant-numeric:tabular-nums}
+</style></head><body>
+<h1>Existing CTA / Global Score — Offline Backtest</h1>
+<p>Data through 2026-08-17. Weekly, non-overlapping signal evaluation; Top 3 minus Bottom 3; Board default 50/50 weights.</p>
+<div class="note"><b>Interpretation limit.</b> The available high-frequency factor history starts on 2026-02-16. After requiring a full 90-calendar-day lookback, only 12 equity and 12 rates observations remain. The workbook contains revised macro observations rather than vintage snapshots. This is therefore a preliminary historical signal check, not a statistically validated or deployable strategy backtest.</div>
+<section><h2>Equity score</h2><table><tr><th>Status</th><td>Limited sample</td></tr><tr><th>Usable periods</th><td>12</td></tr><tr><th>Signal window</th><td>2026-05-22 → 2026-08-14</td></tr><tr><th>Average Top 3 − Bottom 3</th><td>-0.520 %</td></tr><tr><th>Median Top 3 − Bottom 3</th><td>-1.332 %</td></tr><tr><th>Positive-spread hit rate</th><td>33.3%</td></tr><tr><th>Mean Spearman rank IC</th><td>-0.074</td></tr></table></section>
+<p>Outcome: next-week cash-index return. Only rows with all four scoring macro factors (GDP, CPI, fiscal and terms of trade) plus EPS and status Ready enter the ranking. FCI is context only and is not used. Gross of costs.</p>
+<section><h2>Rates score</h2><table><tr><th>Status</th><td>Limited sample</td></tr><tr><th>Usable periods</th><td>12</td></tr><tr><th>Signal window</th><td>2026-05-22 → 2026-08-14</td></tr><tr><th>Average Top 3 − Bottom 3</th><td>-1.235 bp</td></tr><tr><th>Median Top 3 − Bottom 3</th><td>-1.229 bp</td></tr><tr><th>Positive-spread hit rate</th><td>41.7%</td></tr><tr><th>Mean Spearman rank IC</th><td>-0.025</td></tr></table></section>
+<p>Outcome: minus next-week 10Y yield change in basis points, used only as a bond-direction proxy. The workbook does not contain sovereign total-return indices, so this is not portfolio P&amp;L.</p>
+<h3>Equity periods</h3><table class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Signal date</th>
+      <th>Outcome date</th>
+      <th>N</th>
+      <th>Top 3</th>
+      <th>Bottom 3</th>
+      <th>Top (%)</th>
+      <th>Bottom (%)</th>
+      <th>Spread (%)</th>
+      <th>Rank IC</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>2026-05-22</td>
+      <td>2026-05-29</td>
+      <td>18</td>
+      <td>RTY1, KM1, PT1</td>
+      <td>NIFTY50, CF1, DJI</td>
+      <td>+3.377</td>
+      <td>+0.335</td>
+      <td>+3.042</td>
+      <td>+0.360</td>
+    </tr>
+    <tr>
+      <td>2026-05-29</td>
+      <td>2026-06-05</td>
+      <td>18</td>
+      <td>KM1, ST1, NQ1</td>
+      <td>GX1, DJI, RTY1</td>
+      <td>-2.848</td>
+      <td>-1.547</td>
+      <td>-1.301</td>
+      <td>-0.152</td>
+    </tr>
+    <tr>
+      <td>2026-06-05</td>
+      <td>2026-06-12</td>
+      <td>18</td>
+      <td>ST1, KM1, CSI_A500</td>
+      <td>Z 1, DJI, RTY1</td>
+      <td>+0.489</td>
+      <td>+1.853</td>
+      <td>-1.364</td>
+      <td>-0.264</td>
+    </tr>
+    <tr>
+      <td>2026-06-12</td>
+      <td>2026-06-19</td>
+      <td>18</td>
+      <td>KM1, CSI_A500, NK1</td>
+      <td>XP1, DJI, RTY1</td>
+      <td>+8.071</td>
+      <td>+0.734</td>
+      <td>+7.337</td>
+      <td>+0.574</td>
+    </tr>
+    <tr>
+      <td>2026-06-19</td>
+      <td>2026-06-26</td>
+      <td>18</td>
+      <td>KM1, NK1, CSI_A500</td>
+      <td>DJI, XP1, RTY1</td>
+      <td>-3.633</td>
+      <td>+0.297</td>
+      <td>-3.930</td>
+      <td>-0.419</td>
+    </tr>
+    <tr>
+      <td>2026-06-26</td>
+      <td>2026-07-03</td>
+      <td>18</td>
+      <td>KM1, CSI_A500, NK1</td>
+      <td>DJI, XP1, RTY1</td>
+      <td>-1.258</td>
+      <td>+0.808</td>
+      <td>-2.067</td>
+      <td>-0.155</td>
+    </tr>
+    <tr>
+      <td>2026-07-03</td>
+      <td>2026-07-10</td>
+      <td>18</td>
+      <td>KM1, CSI_A500, NK1</td>
+      <td>NQ1, XP1, RTY1</td>
+      <td>-3.698</td>
+      <td>+0.215</td>
+      <td>-3.914</td>
+      <td>-0.314</td>
+    </tr>
+    <tr>
+      <td>2026-07-10</td>
+      <td>2026-07-17</td>
+      <td>18</td>
+      <td>KM1, CSI_A500, NK1</td>
+      <td>NQ1, XP1, RTY1</td>
+      <td>-7.446</td>
+      <td>-1.587</td>
+      <td>-5.859</td>
+      <td>-0.273</td>
+    </tr>
+    <tr>
+      <td>2026-07-17</td>
+      <td>2026-07-24</td>
+      <td>18</td>
+      <td>CSI_A500, KM1, NK1</td>
+      <td>NQ1, Z 1, RTY1</td>
+      <td>+0.363</td>
+      <td>-0.477</td>
+      <td>+0.840</td>
+      <td>+0.259</td>
+    </tr>
+    <tr>
+      <td>2026-07-24</td>
+      <td>2026-07-31</td>
+      <td>18</td>
+      <td>KM1, NK1, IB1</td>
+      <td>NQ1, Z 1, RTY1</td>
+      <td>-0.267</td>
+      <td>+0.597</td>
+      <td>-0.864</td>
+      <td>-0.196</td>
+    </tr>
+    <tr>
+      <td>2026-07-31</td>
+      <td>2026-08-07</td>
+      <td>18</td>
+      <td>KM1, NK1, CSI_A500</td>
+      <td>Z 1, NQ1, RTY1</td>
+      <td>+0.137</td>
+      <td>+2.982</td>
+      <td>-2.845</td>
+      <td>-0.479</td>
+    </tr>
+    <tr>
+      <td>2026-08-07</td>
+      <td>2026-08-14</td>
+      <td>18</td>
+      <td>NK1, KM1, NIFTY50</td>
+      <td>NQ1, XP1, RTY1</td>
+      <td>+4.808</td>
+      <td>+0.120</td>
+      <td>+4.688</td>
+      <td>+0.172</td>
+    </tr>
+  </tbody>
+</table>
+<h3>Rates periods</h3><table class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Signal date</th>
+      <th>Outcome date</th>
+      <th>N</th>
+      <th>Top 3</th>
+      <th>Bottom 3</th>
+      <th>Top (bp)</th>
+      <th>Bottom (bp)</th>
+      <th>Spread (bp)</th>
+      <th>Rank IC</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>2026-05-22</td>
+      <td>2026-05-29</td>
+      <td>10</td>
+      <td>KR, AU, GB</td>
+      <td>JP, US, DE</td>
+      <td>+7.903</td>
+      <td>+10.602</td>
+      <td>-2.700</td>
+      <td>-0.590</td>
+    </tr>
+    <tr>
+      <td>2026-05-29</td>
+      <td>2026-06-05</td>
+      <td>10</td>
+      <td>KR, AU, CA</td>
+      <td>IT, US, DE</td>
+      <td>-10.770</td>
+      <td>-11.482</td>
+      <td>+0.712</td>
+      <td>+0.188</td>
+    </tr>
+    <tr>
+      <td>2026-06-05</td>
+      <td>2026-06-12</td>
+      <td>10</td>
+      <td>AU, GB, KR</td>
+      <td>IT, DE, US</td>
+      <td>+7.336</td>
+      <td>+5.791</td>
+      <td>+1.544</td>
+      <td>+0.523</td>
+    </tr>
+    <tr>
+      <td>2026-06-12</td>
+      <td>2026-06-19</td>
+      <td>10</td>
+      <td>GB, AU, KR</td>
+      <td>IT, DE, US</td>
+      <td>+0.688</td>
+      <td>+2.030</td>
+      <td>-1.341</td>
+      <td>-0.632</td>
+    </tr>
+    <tr>
+      <td>2026-06-19</td>
+      <td>2026-06-26</td>
+      <td>10</td>
+      <td>GB, AU, KR</td>
+      <td>CA, DE, US</td>
+      <td>+8.526</td>
+      <td>+7.659</td>
+      <td>+0.867</td>
+      <td>+0.195</td>
+    </tr>
+    <tr>
+      <td>2026-06-26</td>
+      <td>2026-07-03</td>
+      <td>10</td>
+      <td>GB, AU, KR</td>
+      <td>CA, DE, US</td>
+      <td>-6.900</td>
+      <td>-8.512</td>
+      <td>+1.612</td>
+      <td>+0.491</td>
+    </tr>
+    <tr>
+      <td>2026-07-03</td>
+      <td>2026-07-10</td>
+      <td>10</td>
+      <td>GB, AU, CA</td>
+      <td>DE, JP, US</td>
+      <td>-6.635</td>
+      <td>-5.519</td>
+      <td>-1.116</td>
+      <td>+0.000</td>
+    </tr>
+    <tr>
+      <td>2026-07-10</td>
+      <td>2026-07-17</td>
+      <td>10</td>
+      <td>GB, AU, FR</td>
+      <td>DE, JP, US</td>
+      <td>-8.006</td>
+      <td>-0.083</td>
+      <td>-7.923</td>
+      <td>-0.479</td>
+    </tr>
+    <tr>
+      <td>2026-07-17</td>
+      <td>2026-07-24</td>
+      <td>10</td>
+      <td>AU, GB, CA</td>
+      <td>DE, IT, US</td>
+      <td>-10.582</td>
+      <td>-7.553</td>
+      <td>-3.028</td>
+      <td>-0.115</td>
+    </tr>
+    <tr>
+      <td>2026-07-24</td>
+      <td>2026-07-31</td>
+      <td>10</td>
+      <td>GB, AU, CA</td>
+      <td>IT, JP, US</td>
+      <td>+2.811</td>
+      <td>-2.365</td>
+      <td>+5.176</td>
+      <td>+0.321</td>
+    </tr>
+    <tr>
+      <td>2026-07-31</td>
+      <td>2026-08-07</td>
+      <td>10</td>
+      <td>AU, GB, KR</td>
+      <td>ES, US, DE</td>
+      <td>+3.071</td>
+      <td>+8.506</td>
+      <td>-5.435</td>
+      <td>-0.201</td>
+    </tr>
+    <tr>
+      <td>2026-08-07</td>
+      <td>2026-08-14</td>
+      <td>10</td>
+      <td>GB, AU, KR</td>
+      <td>ES, US, DE</td>
+      <td>-3.263</td>
+      <td>-0.080</td>
+      <td>-3.183</td>
+      <td>-0.006</td>
+    </tr>
+  </tbody>
+</table>
+<div class="note"><b>No-fabrication controls.</b> No forward observation enters signal construction; no missing scoring factor, price, EPS, yield or return is replaced by a proxy or zero; FCI has no effect on the equity signal; no transaction-cost assumption is invented.</div>
+</body></html>
