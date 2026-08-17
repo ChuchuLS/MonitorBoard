@@ -2205,7 +2205,13 @@ assert _shared_snapshot["index_market_breadth"]["proxy_used"] is False
 print("    E3. 06c index trend is live; all unavailable constituent breadth metrics and 100W history remain explicitly Partial ✓")
 
 # Offline score backtest: no page integration, full lookback and limited sample.
-from models.scoring.backtest import BacktestConfig as _BtCfg, build_score_backtest as _build_bt
+from models.scoring.backtest import (
+    BacktestConfig as _BtCfg,
+    _spearman_rank_correlation as _spearman_rho,
+    build_score_backtest as _build_bt,
+)
+assert abs(_spearman_rho(pd.Series([1, 2, 2, 4]), pd.Series([4, 3, 3, 1])) + 1.0) < 1e-12
+assert np.isnan(_spearman_rho(pd.Series([1.0]), pd.Series([2.0])))
 _bt = _build_bt(_scoring_feedback_data, _BtCfg(rebalance="weekly", top_n=3))
 for _kind in ("equity", "rates"):
     _periods = _bt[f"{_kind}_periods"]
