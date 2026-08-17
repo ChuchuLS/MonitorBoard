@@ -37,7 +37,7 @@ except Exception:
 print("   all imports OK")
 
 # Registry / theme sanity — Phase 1 shell must be internally consistent.
-assert len(PAGES) == 16, f"expected 16 registered pages, got {len(PAGES)}"
+assert len(PAGES) == 18, f"expected 18 registered pages, got {len(PAGES)}"
 if _HAS_STREAMLIT_PAGES:
     for p in PAGES:
         for k in ("id", "label", "title", "section", "color_key", "status",
@@ -217,7 +217,7 @@ if _HAS_STREAMLIT_PAGES:
     from charts.pages import (contents, liquidity_overview, policy, policy_futures,
                               decomposition, regimes, global_rates, country_boards,
                               cross_asset, market_linkage, sector_rotation,
-                              sector_contribution, earnings_valuation, fx_rate_diff,
+                              sector_contribution, index_breadth, earnings_valuation, fx_rate_diff,
                               data_quality, scoring, model_roadmap)
     print("    all registered page modules import cleanly")
 else:
@@ -233,9 +233,9 @@ assert len(TOP_NAV_GROUPS) == 9
 assert len(_grouped_ids) == len(set(_grouped_ids))
 assert set(_grouped_ids) == {p["id"] for p in PAGES}
 assert next(g for g in TOP_NAV_GROUPS if g["id"] == "equities")["page_ids"] == (
-    "sector_rotation", "sector_contribution", "earnings_valuation"
+    "sector_rotation", "sector_contribution", "index_breadth", "earnings_valuation"
 )
-print("    top strip: 9 grouped sections cover all 16 sidebar pages ✓")
+print(f"    top strip: 9 grouped sections cover all {len(PAGES)} sidebar pages ✓")
 
 # Phase 2: DATA.xlsx workbook-section loaders + model modules
 from data.external_loaders import load_crossasset, load_ficc, load_pulsar
@@ -548,7 +548,7 @@ for m in ROADMAP:
 dnf = do_not_fake_list()
 assert len(dnf) >= 5
 for m in dnf:
-    assert m["current_status"] in ("Data Missing", "Not Started", "Needs confirmation")
+    assert m["current_status"] in ("Data Missing", "Not Started", "Needs confirmation", "Partial")
 assert len(METHODOLOGY_RESEARCH_BACKLOG) == 4
 assert all(item["status"] == "Deferred research" for item in METHODOLOGY_RESEARCH_BACKLOG)
 print(f"    roadmap: {len(ROADMAP)} modules, coverage={counts}")
@@ -1057,12 +1057,12 @@ for m in _rm_e:
             "spx_sector app_section must be None"
         assert "Equities" in (m.get("reference_section") or "")
     if m["module_id"] == "earnings_val":
-        assert m.get("app_section") == "06c", "earnings_val app_section must be 06c"
+        assert m.get("app_section") == "06d", "earnings_val app_section must be 06d"
         assert "Equities" in (m.get("reference_section") or "") or "Earnings" in (m.get("reference_section") or "")
     if m["module_id"] == "spx_sector_contribution":
         assert m.get("app_section") == "06b"
         assert "Equities" in (m.get("reference_section") or "")
-print(f"    G. Roadmap: FX=07, contribution=06b, earnings=06c, future attribution unassigned ✓")
+print(f"    G. Roadmap: FX=07, contribution=06b, breadth=06c, earnings=06d, future attribution unassigned ✓")
 
 # H. FX four-pair readiness after exact source-Date merge
 from models.fx_rate_differential import available_fx_pairs as _afx_e
@@ -1736,8 +1736,8 @@ assert 0 <= _nifty_snap["latest_price_lag_days"] <= 3
 print(f"    G. Global overview: {int((_ev_global['status']=='Ready').sum())}/{len(_ev_global)} Ready; A500, Nifty 50, VN30 and DJI use their own histories ✓")
 
 _ev_page = next(p for p in PAGES if p["id"] == "earnings_valuation")
-assert _ev_page["section"] == "06c" and _ev_page["status"] == "live"
-assert _ev_page["builds_on"] == "sector_contribution" and _ev_page["next"] == "fx_rate_diff"
+assert _ev_page["section"] == "06d" and _ev_page["status"] == "live"
+assert _ev_page["builds_on"] == "index_breadth" and _ev_page["next"] == "fx_rate_diff"
 _ev_page_src = open("charts/pages/earnings_valuation.py").read()
 assert "build_earnings_valuation_snapshot" in _ev_page_src
 assert "BEST_FPERIOD_OVERRIDE=1FY" in _ev_page_src
@@ -1756,7 +1756,7 @@ assert _ev_rm["implemented_in"] == "models/earnings_valuation.py"
 _ev_realized_rm = next(r for r in _EV_ROADMAP if r["module_id"] == "forward_vs_realized_eps")
 assert _ev_realized_rm["current_status"] == "Data Missing"
 _ev_readme = open("README.md").read()
-assert "| 06c | Global FY1 Earnings & Valuation" in _ev_readme
+assert "| 06d | Global FY1 Earnings & Valuation" in _ev_readme
 _ev_dq = open("charts/pages/data_quality.py").read()
 assert "Global FY1 Earnings &amp; Valuation — source and alignment audit" in _ev_dq
 _ev_snapshot = _shared_snapshot
@@ -2132,6 +2132,7 @@ print("    E. CSI A500, Nifty 50, VN30 and DJI are live from their own cash-inde
 from data.external_loaders import load_pulsar as _load_scoring_feedback
 from models.scoring.engine import (
     EQUITY_UNIVERSE as _equity_universe_feedback,
+    build_equity_fci_context as _build_equity_fci_context_feedback,
     determine_scoring_asof as _determine_scoring_asof_feedback,
     score_equity as _score_equity_feedback,
 )
@@ -2145,16 +2146,31 @@ _equity_scores_feedback = _score_equity_feedback(
     _scoring_feedback_data, _scoring_feedback_asof, {"macro": 0.5, "eps": 0.5}
 )
 assert len(_equity_scores_feedback) == 18
-for _ready_code_feedback in ("CSI_A500", "DJI"):
-    assert pd.notna(_equity_scores_feedback.loc[_ready_code_feedback, "score"])
-for _partial_code_feedback in ("NIFTY50", "VN30"):
-    _partial = _equity_scores_feedback.loc[_partial_code_feedback]
-    assert pd.notna(_partial["score"])
-    assert _partial["status"] == "Partial"
-    assert _partial["macro_factor_count"] == 4
-    assert _partial["missing_factors"] == "FCI"
-    assert not bool(_partial["rank_eligible"])
-print("    E1. Scoring adds A500/Nifty 50/VN30/DJI; Nifty/VN30 use four real macro factors and remain Partial because FCI is absent ✓")
+assert (_equity_scores_feedback["status"] == "Ready").all()
+assert (_equity_scores_feedback["macro_factor_count"] == 4).all()
+assert (_equity_scores_feedback["missing_factors"] == "").all()
+assert _equity_scores_feedback["rank_eligible"].all()
+assert "fci_z" not in _equity_scores_feedback.columns
+
+_scoring_without_fci = dict(_scoring_feedback_data)
+_scoring_without_fci["fci"] = pd.DataFrame()
+_scores_without_fci = _score_equity_feedback(
+    _scoring_without_fci, _scoring_feedback_asof, {"macro": 0.5, "eps": 0.5}
+)
+pd.testing.assert_series_equal(
+    _equity_scores_feedback["score"].sort_index(),
+    _scores_without_fci["score"].sort_index(),
+)
+_fci_context_feedback = _build_equity_fci_context_feedback(
+    _scoring_feedback_data, _scoring_feedback_asof
+)
+assert len(_fci_context_feedback) == 4
+assert set(_fci_context_feedback["ticker"]) == {
+    "BFCIUS Index", "CHBGFCI INDEX", "BFCIGB INDEX", "BFCIEU INDEX",
+}
+assert (_fci_context_feedback["status"] == "Available").all()
+assert _fci_context_feedback["source_date"].notna().all()
+print("    E1. All 18 indices use the same four-factor Macro + EPS score; FCI is separate context and cannot change ranking ✓")
 
 _ref_snapshot = _shared_snapshot
 assert _ref_snapshot["cboe_dspx"]["status"] == "Ready"
@@ -2162,6 +2178,80 @@ assert len(_ref_snapshot["requested_equity_earnings_rows"]) == 4
 _ref_status = {row["code"]: row["status"] for row in _ref_snapshot["requested_equity_earnings_rows"]}
 assert _ref_status == {"CSI_A500": "Ready", "NIFTY50": "Ready", "VN30": "Ready", "DJI": "Ready"}
 print("    E2. Snapshot export includes Ready A500/Nifty 50/VN30/DJI earnings rows ✓")
+
+# New 06c index breadth page: real price trend, explicit constituent-data gap.
+from data.index_breadth_loader import BREADTH_METRICS as _IB_METRICS, load_index_breadth as _load_ib
+from models.index_breadth import build_index_breadth_snapshot as _build_ib
+_ib_page = next(p for p in PAGES if p["id"] == "index_breadth")
+assert _ib_page["section"] == "06c" and _ib_page["status"] == "partial"
+assert _ib_page["next"] == "earnings_valuation"
+assert PAGES.index(_ib_page) + 1 == PAGES.index(_ev_page)
+_ib_current = _build_ib(_ev_feedback_data["prices"], _load_ib(), "ES1", "Daily")
+assert _ib_current["status"] == "Partial"
+assert _ib_current["price"] > 0
+assert pd.notna(_ib_current["ma_50d"]) and pd.notna(_ib_current["ma_200d"])
+assert pd.isna(_ib_current["ma_100w"])
+assert _ib_current["weekly_observations"] < 100
+assert set(_ib_current["missing_metrics"]) == set(_IB_METRICS.values())
+_ib_dates = pd.date_range("2026-08-03", periods=5, freq="B")
+_ib_index = pd.MultiIndex.from_product([_ib_dates, ["ES1"]], names=["date", "code"])
+_ib_supplied = pd.DataFrame({key: 1.0 for key in _IB_METRICS}, index=_ib_index)
+_ib_ready = _build_ib(_ev_feedback_data["prices"], _ib_supplied, "ES1", "Daily")
+assert _ib_ready["status"] == "Ready" and not _ib_ready["missing_metrics"]
+_ib_page_src = open("charts/pages/index_breadth.py").read()
+assert "sector indices" in _ib_page_src and "never inferred" in _ib_page_src
+assert _shared_snapshot["index_market_breadth"]["status"] == "Partial"
+assert _shared_snapshot["index_market_breadth"]["proxy_used"] is False
+print("    E3. 06c index trend is live; all unavailable constituent breadth metrics and 100W history remain explicitly Partial ✓")
+
+# Offline score backtest: no page integration, full lookback and limited sample.
+from models.scoring.backtest import BacktestConfig as _BtCfg, build_score_backtest as _build_bt
+_bt = _build_bt(_scoring_feedback_data, _BtCfg(rebalance="weekly", top_n=3))
+for _kind in ("equity", "rates"):
+    _periods = _bt[f"{_kind}_periods"]
+    _summary = _bt[f"{_kind}_summary"]
+    assert 10 <= len(_periods) < 26
+    assert _summary["status"] == "Limited sample"
+    assert _summary["costs_included"] is False
+    assert _summary["macro_vintage_safe"] is False
+    assert (_periods["signal_date"] < _periods["outcome_date"]).all()
+    for _, _bt_row in _periods.iterrows():
+        assert set(_bt_row["top_codes"].split(", ")).isdisjoint(
+            set(_bt_row["bottom_codes"].split(", "))
+        )
+_min_bt_date = max(
+    _scoring_feedback_data["tot"].index.min(),
+    _scoring_feedback_data["eps"].index.min(),
+) + pd.Timedelta(days=90)
+assert _bt["equity_periods"]["signal_date"].min() >= _min_bt_date
+assert _bt["rates_summary"]["outcome_unit"] == "bp"
+_future_bt_data = dict(_scoring_feedback_data)
+_future_bt_date = pd.Timestamp(current_production_date()) + pd.Timedelta(days=14)
+for _future_key in ("px", "y10y"):
+    _future_frame = _scoring_feedback_data[_future_key].copy()
+    _future_frame.loc[_future_bt_date] = _future_frame.ffill().iloc[-1]
+    _future_bt_data[_future_key] = _future_frame.sort_index()
+_future_bt = _build_bt(_future_bt_data, _BtCfg(rebalance="weekly", top_n=3))
+for _kind in ("equity", "rates"):
+    pd.testing.assert_frame_equal(
+        _bt[f"{_kind}_periods"].reset_index(drop=True),
+        _future_bt[f"{_kind}_periods"].reset_index(drop=True),
+    )
+
+_bt_page = next(p for p in PAGES if p["id"] == "scoring_backtest")
+assert _bt_page["section"] == "A2" and _bt_page["status"] == "partial"
+assert _bt_page["builds_on"] == "scoring" and _bt_page["next"] == "model_roadmap"
+assert next(p for p in PAGES if p["id"] == "scoring")["next"] == "scoring_backtest"
+_bt_page_src = open("charts/pages/scoring_backtest.py").read()
+assert "build_score_backtest" in _bt_page_src
+assert "st.slider" not in _bt_page_src and "st.number_input" not in _bt_page_src
+assert "Sharpe ratio, drawdown and cumulative" in _bt_page_src
+assert "FCI contributes" in _bt_page_src
+assert "scoring_backtest" in open("charts/pages/__init__.py").read()
+assert "cta_score_backtest" in _shared_snapshot
+assert _shared_snapshot["cta_score_backtest"]["specification"]["fci_used"] is False
+assert len(_shared_snapshot["cta_score_backtest"]["equity_periods"]) == 12
+print("    E4. A2 CTA backtest page shows all 12 strict weekly periods for 18 equities; fixed specification ignores FCI/future rows and withholds unsupported P&L metrics ✓")
 
 _dq_feedback = open("charts/pages/data_quality.py").read()
 assert "SOFR Futures Strip &amp; Calendar Spreads" in _dq_feedback

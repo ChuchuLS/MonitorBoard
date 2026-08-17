@@ -79,6 +79,12 @@
     },
     {
       "section": "06c",
+      "id": "index_breadth",
+      "title": "Global Index Trend & Market Breadth",
+      "status": "Partial"
+    },
+    {
+      "section": "06d",
       "id": "earnings_valuation",
       "title": "Global FY1 Earnings & Valuation",
       "status": "Live"
@@ -100,6 +106,12 @@
       "id": "scoring",
       "title": "Global Scoring (Appendix)",
       "status": "Live"
+    },
+    {
+      "section": "A2",
+      "id": "scoring_backtest",
+      "title": "CTA Score Backtest",
+      "status": "Partial"
     },
     {
       "section": "09",
@@ -781,6 +793,27 @@
     ],
     "official_attribution": false
   },
+  "index_market_breadth": {
+    "status": "Partial",
+    "code": "ES1",
+    "model_date": "2026-08-13",
+    "price": 7798.99,
+    "ma_50d": 7507.7476,
+    "ma_200d": 7070.349299999999,
+    "ma_100w": NaN,
+    "weekly_observations": 52,
+    "missing_metrics": [
+      "Advancers minus decliners",
+      "% new 52-week highs",
+      "% new 52-week lows",
+      "% above 50DMA",
+      "% above 200DMA",
+      "% with 14-day RSI > 70",
+      "% with 14-day RSI < 30",
+      "Index put/call ratio"
+    ],
+    "proxy_used": false
+  },
   "spx_earnings_valuation": {
     "status": "Ready",
     "model_date": "2026-08-14",
@@ -865,5 +898,368 @@
     "model_date": "2026-08-13",
     "latest_value": 34.79,
     "synthetic_substitution": false
+  },
+  "cta_score_backtest": {
+    "specification": {
+      "rebalance": "weekly",
+      "top_n": 3,
+      "factor_lookback_calendar_days": 90,
+      "equity_weights": {
+        "macro": 0.5,
+        "eps": 0.5
+      },
+      "rates_weights": {
+        "macro": 0.5,
+        "markets": 0.5
+      },
+      "fci_used": false,
+      "transaction_costs_included": false
+    },
+    "equity_summary": {
+      "status": "Limited sample",
+      "periods": 12,
+      "rebalance": "weekly",
+      "top_n": 3,
+      "first_signal_date": "2026-05-22",
+      "last_outcome_date": "2026-08-14",
+      "average_top_minus_bottom": -0.5196180397590386,
+      "median_top_minus_bottom": -1.3322908103819346,
+      "hit_rate_pct": 33.33333333333333,
+      "mean_rank_ic": -0.07383073624813104,
+      "outcome_unit": "%",
+      "costs_included": false,
+      "macro_vintage_safe": false
+    },
+    "rates_summary": {
+      "status": "Limited sample",
+      "periods": 12,
+      "rebalance": "weekly",
+      "top_n": 3,
+      "first_signal_date": "2026-05-22",
+      "last_outcome_date": "2026-08-14",
+      "average_top_minus_bottom": -1.2345403651509617,
+      "median_top_minus_bottom": -1.2285615666666267,
+      "hit_rate_pct": 41.66666666666667,
+      "mean_rank_ic": -0.025430869222406238,
+      "outcome_unit": "bp",
+      "costs_included": false,
+      "macro_vintage_safe": false
+    },
+    "equity_periods": [
+      {
+        "market": "equity",
+        "signal_date": "2026-05-22",
+        "outcome_date": "2026-05-29",
+        "n_assets": 18,
+        "top_codes": "RTY1, KM1, PT1",
+        "bottom_codes": "NIFTY50, CF1, DJI",
+        "top_outcome": 3.376983685119317,
+        "bottom_outcome": 0.33490536768262896,
+        "top_minus_bottom": 3.042078317436688,
+        "rank_ic": 0.36016511867905054,
+        "outcome_unit": "%"
+      },
+      {
+        "market": "equity",
+        "signal_date": "2026-05-29",
+        "outcome_date": "2026-06-05",
+        "n_assets": 18,
+        "top_codes": "KM1, ST1, NQ1",
+        "bottom_codes": "GX1, DJI, RTY1",
+        "top_outcome": -2.8483358716945664,
+        "bottom_outcome": -1.5472599395443318,
+        "top_minus_bottom": -1.3010759321502345,
+        "rank_ic": -0.15170278637770898,
+        "outcome_unit": "%"
+      },
+      {
+        "market": "equity",
+        "signal_date": "2026-06-05",
+        "outcome_date": "2026-06-12",
+        "n_assets": 18,
+        "top_codes": "ST1, KM1, CSI_A500",
+        "bottom_codes": "Z 1, DJI, RTY1",
+        "top_outcome": 0.489453322481644,
+        "bottom_outcome": 1.8529590110952787,
+        "top_minus_bottom": -1.3635056886136347,
+        "rank_ic": -0.26432631297411185,
+        "outcome_unit": "%"
+      },
+      {
+        "market": "equity",
+        "signal_date": "2026-06-12",
+        "outcome_date": "2026-06-19",
+        "n_assets": 18,
+        "top_codes": "KM1, CSI_A500, NK1",
+        "bottom_codes": "XP1, DJI, RTY1",
+        "top_outcome": 8.070954725431527,
+        "bottom_outcome": 0.7342605430245156,
+        "top_minus_bottom": 7.336694182407011,
+        "rank_ic": 0.574083710990649,
+        "outcome_unit": "%"
+      },
+      {
+        "market": "equity",
+        "signal_date": "2026-06-19",
+        "outcome_date": "2026-06-26",
+        "n_assets": 18,
+        "top_codes": "KM1, NK1, CSI_A500",
+        "bottom_codes": "DJI, XP1, RTY1",
+        "top_outcome": -3.6326131722625736,
+        "bottom_outcome": 0.2970005117344354,
+        "top_minus_bottom": -3.929613683997009,
+        "rank_ic": -0.41920501198238047,
+        "outcome_unit": "%"
+      },
+      {
+        "market": "equity",
+        "signal_date": "2026-06-26",
+        "outcome_date": "2026-07-03",
+        "n_assets": 18,
+        "top_codes": "KM1, CSI_A500, NK1",
+        "bottom_codes": "DJI, XP1, RTY1",
+        "top_outcome": -1.2584726674992737,
+        "bottom_outcome": 0.8083376785091486,
+        "top_minus_bottom": -2.066810346008422,
+        "rank_ic": -0.15487869900826864,
+        "outcome_unit": "%"
+      },
+      {
+        "market": "equity",
+        "signal_date": "2026-07-03",
+        "outcome_date": "2026-07-10",
+        "n_assets": 18,
+        "top_codes": "KM1, CSI_A500, NK1",
+        "bottom_codes": "NQ1, XP1, RTY1",
+        "top_outcome": -3.698354028980178,
+        "bottom_outcome": 0.2153341407773679,
+        "top_minus_bottom": -3.913688169757546,
+        "rank_ic": -0.31388749665675775,
+        "outcome_unit": "%"
+      },
+      {
+        "market": "equity",
+        "signal_date": "2026-07-10",
+        "outcome_date": "2026-07-17",
+        "n_assets": 18,
+        "top_codes": "KM1, CSI_A500, NK1",
+        "bottom_codes": "NQ1, XP1, RTY1",
+        "top_outcome": -7.445785479630252,
+        "bottom_outcome": -1.5870787624697957,
+        "top_minus_bottom": -5.858706717160456,
+        "rank_ic": -0.2725865102545528,
+        "outcome_unit": "%"
+      },
+      {
+        "market": "equity",
+        "signal_date": "2026-07-17",
+        "outcome_date": "2026-07-24",
+        "n_assets": 18,
+        "top_codes": "CSI_A500, KM1, NK1",
+        "bottom_codes": "NQ1, Z 1, RTY1",
+        "top_outcome": 0.36305069544826746,
+        "bottom_outcome": -0.4766304061934605,
+        "top_minus_bottom": 0.8396811016417279,
+        "rank_ic": 0.25929765902352986,
+        "outcome_unit": "%"
+      },
+      {
+        "market": "equity",
+        "signal_date": "2026-07-24",
+        "outcome_date": "2026-07-31",
+        "n_assets": 18,
+        "top_codes": "KM1, NK1, IB1",
+        "bottom_codes": "NQ1, Z 1, RTY1",
+        "top_outcome": -0.26653951980035356,
+        "bottom_outcome": 0.5973636158310555,
+        "top_minus_bottom": -0.8639031356314091,
+        "rank_ic": -0.19617968541047362,
+        "outcome_unit": "%"
+      },
+      {
+        "market": "equity",
+        "signal_date": "2026-07-31",
+        "outcome_date": "2026-08-07",
+        "n_assets": 18,
+        "top_codes": "KM1, NK1, CSI_A500",
+        "bottom_codes": "Z 1, NQ1, RTY1",
+        "top_outcome": 0.13689311358338063,
+        "bottom_outcome": 2.9815603246789113,
+        "top_minus_bottom": -2.8446672110955307,
+        "rank_ic": -0.4790914422655777,
+        "outcome_unit": "%"
+      },
+      {
+        "market": "equity",
+        "signal_date": "2026-08-07",
+        "outcome_date": "2026-08-14",
+        "n_assets": 18,
+        "top_codes": "NK1, KM1, NIFTY50",
+        "bottom_codes": "NQ1, XP1, RTY1",
+        "top_outcome": 4.8082388224652455,
+        "bottom_outcome": 0.12013801664489214,
+        "top_minus_bottom": 4.688100805820353,
+        "rank_ic": 0.17234262125902994,
+        "outcome_unit": "%"
+      }
+    ],
+    "rates_periods": [
+      {
+        "market": "rates",
+        "signal_date": "2026-05-22",
+        "outcome_date": "2026-05-29",
+        "n_assets": 10,
+        "top_codes": "KR, AU, GB",
+        "bottom_codes": "JP, US, DE",
+        "top_outcome": 7.902654033333316,
+        "bottom_outcome": 10.602165733333338,
+        "top_minus_bottom": -2.6995117000000226,
+        "rank_ic": -0.5896683773696626,
+        "outcome_unit": "bp"
+      },
+      {
+        "market": "rates",
+        "signal_date": "2026-05-29",
+        "outcome_date": "2026-06-05",
+        "n_assets": 10,
+        "top_codes": "KR, AU, CA",
+        "bottom_codes": "IT, US, DE",
+        "top_outcome": -10.76955796666669,
+        "bottom_outcome": -11.481715566666677,
+        "top_minus_bottom": 0.712157599999987,
+        "rank_ic": 0.18787878787878787,
+        "outcome_unit": "bp"
+      },
+      {
+        "market": "rates",
+        "signal_date": "2026-06-05",
+        "outcome_date": "2026-06-12",
+        "n_assets": 10,
+        "top_codes": "AU, GB, KR",
+        "bottom_codes": "IT, DE, US",
+        "top_outcome": 7.3355038999999955,
+        "bottom_outcome": 5.791193100000004,
+        "top_minus_bottom": 1.5443107999999919,
+        "rank_ic": 0.5227987675648555,
+        "outcome_unit": "bp"
+      },
+      {
+        "market": "rates",
+        "signal_date": "2026-06-12",
+        "outcome_date": "2026-06-19",
+        "n_assets": 10,
+        "top_codes": "GB, AU, KR",
+        "bottom_codes": "IT, DE, US",
+        "top_outcome": 0.6882190666666806,
+        "bottom_outcome": 2.0295203999999956,
+        "top_minus_bottom": -1.3413013333333148,
+        "rank_ic": -0.6322217654272672,
+        "outcome_unit": "bp"
+      },
+      {
+        "market": "rates",
+        "signal_date": "2026-06-19",
+        "outcome_date": "2026-06-26",
+        "n_assets": 10,
+        "top_codes": "GB, AU, KR",
+        "bottom_codes": "CA, DE, US",
+        "top_outcome": 8.52592783333336,
+        "bottom_outcome": 7.658990233333348,
+        "top_minus_bottom": 0.8669376000000124,
+        "rank_ic": 0.1945297739776207,
+        "outcome_unit": "bp"
+      },
+      {
+        "market": "rates",
+        "signal_date": "2026-06-26",
+        "outcome_date": "2026-07-03",
+        "n_assets": 10,
+        "top_codes": "GB, AU, KR",
+        "bottom_codes": "CA, DE, US",
+        "top_outcome": -6.899738300000043,
+        "bottom_outcome": -8.511543300000005,
+        "top_minus_bottom": 1.6118049999999622,
+        "rank_ic": 0.49090909090909085,
+        "outcome_unit": "bp"
+      },
+      {
+        "market": "rates",
+        "signal_date": "2026-07-03",
+        "outcome_date": "2026-07-10",
+        "n_assets": 10,
+        "top_codes": "GB, AU, CA",
+        "bottom_codes": "DE, JP, US",
+        "top_outcome": -6.634871133333291,
+        "bottom_outcome": -5.519049333333352,
+        "top_minus_bottom": -1.1158217999999387,
+        "rank_ic": 0.0,
+        "outcome_unit": "bp"
+      },
+      {
+        "market": "rates",
+        "signal_date": "2026-07-10",
+        "outcome_date": "2026-07-17",
+        "n_assets": 10,
+        "top_codes": "GB, AU, FR",
+        "bottom_codes": "DE, JP, US",
+        "top_outcome": -8.006223033333375,
+        "bottom_outcome": -0.08314793333332737,
+        "top_minus_bottom": -7.923075100000048,
+        "rank_ic": -0.4787878787878787,
+        "outcome_unit": "bp"
+      },
+      {
+        "market": "rates",
+        "signal_date": "2026-07-17",
+        "outcome_date": "2026-07-24",
+        "n_assets": 10,
+        "top_codes": "AU, GB, CA",
+        "bottom_codes": "DE, IT, US",
+        "top_outcome": -10.581509266666641,
+        "bottom_outcome": -7.553116533333333,
+        "top_minus_bottom": -3.028392733333308,
+        "rank_ic": -0.11515151515151514,
+        "outcome_unit": "bp"
+      },
+      {
+        "market": "rates",
+        "signal_date": "2026-07-24",
+        "outcome_date": "2026-07-31",
+        "n_assets": 10,
+        "top_codes": "GB, AU, CA",
+        "bottom_codes": "IT, JP, US",
+        "top_outcome": 2.810589466666628,
+        "bottom_outcome": -2.3653327666666613,
+        "top_minus_bottom": 5.175922233333289,
+        "rank_ic": 0.32121212121212117,
+        "outcome_unit": "bp"
+      },
+      {
+        "market": "rates",
+        "signal_date": "2026-07-31",
+        "outcome_date": "2026-08-07",
+        "n_assets": 10,
+        "top_codes": "AU, GB, KR",
+        "bottom_codes": "ES, US, DE",
+        "top_outcome": 3.071101500000021,
+        "bottom_outcome": 8.506027599999996,
+        "top_minus_bottom": -5.434926099999975,
+        "rank_ic": -0.20060882941442132,
+        "outcome_unit": "bp"
+      },
+      {
+        "market": "rates",
+        "signal_date": "2026-08-07",
+        "outcome_date": "2026-08-14",
+        "n_assets": 10,
+        "top_codes": "GB, AU, KR",
+        "bottom_codes": "ES, US, DE",
+        "top_outcome": -3.2625198292724513,
+        "bottom_outcome": -0.07993098079427756,
+        "top_minus_bottom": -3.182588848478174,
+        "rank_ic": -0.006060606060606061,
+        "outcome_unit": "bp"
+      }
+    ]
   }
 }

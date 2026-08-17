@@ -93,10 +93,12 @@ page mirrors the front matter of an institutional chart pack.
 | 05b | Market Linkage & Correlations   | **Live**             | DATA.xlsx / Sheet1 | Reference-pack-style one-trade gauge: 63D PC1 explained variance across SPX / UST 10Y / DXY, plus the three 20D pairwise correlations. Descriptive, not causal. |
 | 06  | Sector Rotation & Breadth       | **Live**             | DATA.xlsx / Sheet1 + SPX_Sector_Weights | 11 S&P 500 sector indices + SPX. Main breadth and dispersion panels reproduce the reference-pack definitions: share above each sector's own 50-observation average and cross-sectional standard deviation of trailing 21-observation returns. Also includes relative performance, rotation quadrants and sector-weight context. Optional Cboe DSPX overlay activates only when DSPX INDEX is present. |
 | 06b | Sector Contribution Estimate     | **Live**             | DATA.xlsx / Sheet1 + SPX_Sector_Weights | Start-period periodic weight × sector simple return, with an explicit residual versus actual SPX. Transparent approximation only; not official index-provider attribution. |
-| 06c | Global FY1 Earnings & Valuation  | **Live**             | DATA.xlsx / Equity_EPS + Equity_Prices | One index dropdown controls the rolling exact-return decomposition and implied FY1 P/E chart. Each index uses its own BEST_EPS 1FY and cash-index price; missing inputs remain missing. |
+| 06c | Global Index Trend & Market Breadth | **Partial**        | DATA.xlsx / Equity_Prices + optional Index_Breadth | One index dropdown controls the price-trend and breadth monitor. Real 50D/200D moving averages activate when history permits; constituent-level advance–decline, 52-week high/low, MA breadth, RSI breadth and put/call panels remain missing until their own source fields are supplied. |
+| 06d | Global FY1 Earnings & Valuation  | **Live**             | DATA.xlsx / Equity_EPS + Equity_Prices | One index dropdown controls the rolling exact-return decomposition and implied FY1 P/E chart. Each index uses its own BEST_EPS 1FY and cash-index price; missing inputs remain missing. |
 | 07  | FX Rate Differential Monitor    | **Live**             | DATA.xlsx / Sheet1 | EURUSD / USDJPY / GBPUSD / AUDUSD rate-differential monitor plus the full EUR / JPY / AUD / GBP / CAD 3M and 12M cross-currency basis dashboard. Descriptive, not causal attribution or fair value. |
 | 08  | Data Quality & Methodology      | **Live**             | DATA.xlsx (all sections) | Source-of-truth trust chain, ticker coverage, scoring-sheet audit, methodology. |
-| A1  | Global Scoring (Appendix)       | **Live**             | DATA.xlsx / scoring sheets | Cross-sectional macro + market scoring: 10 rates, 17 equities. Standalone appendix. |
+| A1  | Global Scoring (Appendix)       | **Live** | DATA.xlsx / scoring sheets | Cross-sectional scoring for 10 rates and 18 requested equities. Equity ranking uses four-factor Macro + EPS; regional FCI is context only. |
+| A2  | CTA Score Backtest              | **Partial — limited sample** | DATA.xlsx / scoring sheets | Fixed weekly Top 3 minus Bottom 3 evaluation for Equity and Rates Scores. Shows all usable periods and limitations; it is not validated strategy P&L. |
 | 09  | Model Roadmap & Content Gap     | **Live**             | DATA.xlsx (all sections) | Content gap analysis vs reference PDF — what is implemented, missing, and next. |
 
 ### Implemented now
@@ -111,7 +113,22 @@ page mirrors the front matter of an institutional chart pack.
   This matches the reference chart pack's one-trade gauge structure.
   Methodology: `docs/MARKET_LINKAGE.md`.
 - SOFR Futures Strip & Calendar Spreads using eight fixed quarterly contracts (`SFRU6` through `SFRM8`). Each contract keeps its own Bloomberg Date output; the model joins by Date, converts price with `100 - price`, and calculates 3M/6M/12M forward calendar spreads. It is not a meeting-by-meeting FOMC path.
-- Global Scoring appendix (rates + equity cross-sectional ranking).
+- Global Scoring appendix (rates + equity cross-sectional ranking), plus a
+  dedicated A2 CTA Score Backtest page and downloadable offline report generated
+  by `scripts/run_cta_score_backtest.py`. The fixed specification requires a full 90-day factor
+  lookback, excludes future rows and Partial equity scores, and reports gross
+  results without invented transaction costs. Because high-frequency scoring
+  inputs begin on 2026-02-16 and macro vintages are not archived, the output is
+  explicitly a limited-sample signal check rather than strategy validation.
+  Equity Macro uses GDP, inverted CPI, fiscal balance and terms-of-trade
+  momentum only. At the default 50% Macro / 50% EPS weights, each Macro factor
+  contributes 12.5% of the total score. The four supplied regional FCI series
+  remain visible as raw context but are not mapped to indices and contribute 0%.
+- Global Index Trend & Market Breadth (06c) before Earnings. Each selector row
+  uses its own cash-index history for price and moving averages. The current
+  workbook does not contain constituent breadth inputs, so advance–decline,
+  52-week high/low, 50D/200D coverage, RSI breadth and index put/call panels are
+  explicitly Partial rather than reconstructed from sectors, ETFs or proxies.
 - DATA.xlsx workbook-section audit across Sheet1 and scoring sheets.
 - Country Rate Boards for US / DE / JP / UK / CA / AU / CH using fully aligned
   2Y / 5Y / 10Y / 30Y nominal observations, with yield changes, curve slopes
@@ -181,12 +198,14 @@ no row-position merge or inferred calendar shift is used. See
 - 05b Market Linkage & Correlations (SPX / UST 10Y / DXY one-trade gauge + pairwise correlations)
 - 06 Sector Rotation & Breadth (11 S&P 500 sectors + SPX — descriptive, not attribution)
 - 06b Sector Contribution Estimate (periodic start weights × sector simple returns, explicit residual; not official attribution)
-- 06c Global FY1 Earnings & Valuation (single index dropdown; BEST_EPS 1FY, implied P/E, exact weekly decomposition)
+- 06c Global Index Trend & Market Breadth (selectable real price trend; constituent breadth inputs explicitly Partial)
+- 06d Global FY1 Earnings & Valuation (single index dropdown; BEST_EPS 1FY, implied P/E, exact weekly decomposition)
 - 07 FX Rate Differential Monitor (EURUSD / USDJPY / GBPUSD / AUDUSD + full 3M/12M XCCY basis dashboard)
 - 08 Data Quality & Methodology (workbook audit + dependency map)
 
 **Appendix:**
 - A1 Global Scoring (cross-sectional macro + market ranking)
+- A2 CTA Score Backtest (live page, Partial because history is limited and rates are not investable P&L)
 
 **Future analytical modules not yet implemented** — the app intentionally does
 NOT fake these. Future analytical modules may require additional methodology,
@@ -195,8 +214,8 @@ metadata, testing, or data.
 **Requested reference-pack inputs now available in DATA.xlsx:**
 - `DSPX INDEX` — Cboe S&P 500 Dispersion Index in `Sheet1`; overlaid on a separate axis from realised 21-observation sector-return dispersion.
 - `CSIA500 INDEX` — CSI A500 cash-index price and BEST_EPS/1FY history in `Equity_Prices` and `Equity_EPS`. Existing XIN9I / FTSE China A50 data remain separate and are not relabelled.
-- `NIFTY INDEX` — Nifty 50 cash-index price and BEST_EPS/1FY history in `Equity_Prices` and `Equity_EPS`. India GDP, CPI, fiscal and terms-of-trade inputs are available for scoring; FCI remains absent, so its scoring row is Partial and excluded from headline ranking.
-- `VN30 INDEX` — VN30 cash-index price and BEST_EPS/1FY history in `Equity_Prices` and `Equity_EPS`. Vietnam GDP, CPI, fiscal and terms-of-trade inputs are available for scoring; FCI remains absent, so its scoring row is Partial and excluded from headline ranking.
+- `NIFTY INDEX` — Nifty 50 cash-index price and BEST_EPS/1FY history in `Equity_Prices` and `Equity_EPS`. Its own India GDP, CPI, fiscal and terms-of-trade inputs are used in the common four-factor Equity Macro score; FCI is not required for any index ranking.
+- `VN30 INDEX` — VN30 cash-index price and BEST_EPS/1FY history in `Equity_Prices` and `Equity_EPS`. Its own Vietnam GDP, CPI, fiscal and terms-of-trade inputs are used in the common four-factor Equity Macro score; FCI is not required for any index ranking.
 - `DJI INDEX` — Dow Jones Industrial Average cash-index price and BEST_EPS/1FY history in `Equity_Prices` and `Equity_EPS`.
 
 - FOMC implied policy path (fixed contract months are now available; the FOMC calendar, day-weighted meeting-month method and probability framework are still needed)
