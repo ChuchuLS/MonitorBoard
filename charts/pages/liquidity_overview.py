@@ -16,7 +16,7 @@ import pandas as pd
 import streamlit as st
 
 from config.pages import get_page
-from config.theme import section_color, REGIME_COLORS
+from config.theme import section_color
 
 from charts.common import (
     render_page_header, render_top_tabs, render_kpi_strip,
@@ -51,7 +51,6 @@ def render(ctx: PageContext) -> None:
     render_page_header(page, latest_date=latest, viewing=viewing)
 
     regime = getattr(r, "latest_regime", "—")
-    regime_color = REGIME_COLORS.get(regime, "#9aa0a6")
 
     def _fmt_change(v, unit="pts"):
         if v is None or pd.isna(v):
@@ -62,7 +61,7 @@ def render(ctx: PageContext) -> None:
     kpi_cards = [
         {"label": "Composite Liquidity Index",
          "value": f"{r.latest:.1f}" if pd.notna(r.latest) else "—",
-         "sub": f"50 = neutral · regime <b style='color:{regime_color}'>{regime}</b>",
+         "sub": f"50 = neutral · regime: {regime}",
          "accent": color},
         {"label": "1-week change",
          "value": _fmt_change(changes.get("1w")),
