@@ -66,27 +66,14 @@ INDEX_TO_COUNTRY = {
     "ST1": "IT", "NK1": "JP", "VG1": "EZ", "IB1": "ES", "GX1": "DE",
 }
 
-# Each equity index → its FCI region (we have 4 FCIs only)
-# Goldman/Bloomberg only publish FCI for major financial systems
-INDEX_TO_FCI_REGION = {
-    "PT1": "NQ1",   # Canada → US FCI (closest financial system proxy)
-    "NQ1": "NQ1",   # US
-    "KM1": "NQ1",   # Korea → US FCI (USD-funded EM)
-    "XP1": "NQ1",   # Australia → US FCI
-    "HI1": "XU1",   # Hang Seng → China FCI
-    "CSI_A500": "XU1",  # China FCI column; not an equity-price proxy
-    "NIFTY50": None,  # no India FCI supplied
-    "VN30": None,     # no Vietnam FCI supplied
-    "ES1": "NQ1",   # US
-    "DJI": "NQ1",   # US
-    "RTY1": "NQ1",  # US
-    "Z 1": "Z 1",   # UK
-    "CF1": "VG1",   # France → Eurozone FCI
-    "ST1": "VG1",   # Italy → Eurozone FCI
-    "NK1": "NQ1",   # Japan → US FCI (open economy fallback)
-    "VG1": "VG1",   # Eurozone
-    "IB1": "VG1",   # Spain → Eurozone FCI
-    "GX1": "VG1",   # Germany → Eurozone FCI
+# FCI is retained as a separate context panel only. These are the four exact
+# series supplied in DATA.xlsx / Equity_FCI. They are deliberately not mapped
+# onto individual equity indices and do not enter the Equity Score or ranking.
+FCI_CONTEXT_META = {
+    "NQ1": {"region": "USA", "ticker": "BFCIUS Index"},
+    "XU1": {"region": "China", "ticker": "CHBGFCI INDEX"},
+    "Z 1": {"region": "UK", "ticker": "BFCIGB INDEX"},
+    "VG1": {"region": "Eurozone", "ticker": "BFCIEU INDEX"},
 }
 
 # Each equity index → its Citi ToT currency ticker
@@ -279,6 +266,29 @@ def pct_change(df: pd.DataFrame, asof: pd.Timestamp, days: int) -> pd.Series:
     return (last / base - 1) * 100
 
 
+def build_equity_fci_context(data: dict, asof: pd.Timestamp) -> pd.DataFrame:
+    """Return the supplied regional FCI series as non-scoring context.
+
+    Each series keeps its own latest observation date on or before ``asof``.
+    No country/index mapping, proxy, fill across series, z-score or ranking is
+    applied.
+    """
+    frame = (data or {}).get("fci")
+    rows = []
+    for code, meta in FCI_CONTEXT_META.items():
+        series = pd.Series(dtype=float)
+        if frame is not None and not frame.empty and code in frame.columns:
+            series = pd.to_numeric(frame.loc[:asof, code], errors="coerce").dropna()
+        rows.append({
+            "region": meta["region"],
+            "ticker": meta["ticker"],
+            "latest_value": float(series.iloc[-1]) if not series.empty else np.nan,
+            "source_date": series.index[-1].date() if not series.empty else None,
+            "status": "Available" if not series.empty else "Missing data",
+        })
+    return pd.DataFrame(rows)
+
+
 def diff_n_days(df: pd.DataFrame, asof: pd.Timestamp, days: int) -> pd.Series:
     """Absolute (not %) change over n days. For yields, ToT etc."""
     last = latest(df, asof)
@@ -364,8 +374,9 @@ def score_rates(data: dict, asof: pd.Timestamp, weights: dict) -> pd.DataFrame:
 def score_equity(data: dict, asof: pd.Timestamp, weights: dict) -> pd.DataFrame:
     """
     Pulsar Equity dashboard:
-    Macro pillar = mean(Growth_z, Inflation_z (inv), Deficit_z, ToT_z, FCI_z)
+    Macro pillar = mean(Growth_z, Inflation_z (inv), Deficit_z, ToT_z)
     Then composite score = weighted blend of macro + EPS revisions.
+    FCI is a separate context series and never enters this calculation.
     Plus performance and vol columns.
     """
     gdp_v    = latest(data["gdp"],    asof)
@@ -373,7 +384,6 @@ def score_equity(data: dict, asof: pd.Timestamp, weights: dict) -> pd.DataFrame:
     fiscal_v = latest(data["fiscal"], asof)
     tot_v    = latest(data["tot"],    asof)
     tot_3m   = value_n_days_ago(data["tot"], asof, 90)
-    fci_v    = latest(data["fci"],    asof)
 
     # Map each index to its country macro values
     def by_index(country_series: pd.Series) -> pd.Series:
@@ -398,10 +408,6 @@ def score_equity(data: dict, asof: pd.Timestamp, weights: dict) -> pd.DataFrame:
     tot_now, tot_then = tot_for_index(tot_v, tot_3m)
     tot_mom = tot_now - tot_then  # absolute change in ToT index
 
-    # FCI: latest value of the index's regional FCI
-    fci_by_index = pd.Series({code: fci_v.get(INDEX_TO_FCI_REGION.get(code), np.nan)
-                              for code in EQUITY_CODES})
-
     # EPS Δ: 3M % change in FY1 EPS estimate
     eps_v   = latest(data["eps"], asof)
     eps_3m  = value_n_days_ago(data["eps"], asof, 90)
@@ -414,14 +420,12 @@ def score_equity(data: dict, asof: pd.Timestamp, weights: dict) -> pd.DataFrame:
     z_infl   = zscore(inflation, EQUITY_CODES, -1)
     z_def    = zscore(deficit,   EQUITY_CODES, +1)
     z_tot    = zscore(tot_mom,   EQUITY_CODES, +1)
-    z_fci    = zscore(fci_by_index, EQUITY_CODES, +1)
 
     macro_factors = pd.DataFrame({
         "GDP": z_growth,
         "CPI": z_infl,
         "Fiscal": z_def,
         "ToT": z_tot,
-        "FCI": z_fci,
     })
     macro_factor_count = macro_factors.notna().sum(axis=1)
     macro = macro_factors.mean(axis=1)
@@ -445,7 +449,6 @@ def score_equity(data: dict, asof: pd.Timestamp, weights: dict) -> pd.DataFrame:
         "infl_z":   z_infl,
         "def_z":    z_def,
         "tot_z":    z_tot,
-        "fci_z":    z_fci,
         "macro_factor_count": macro_factor_count,
         "macro":    macro,
         "eps_delta": eps_delta,
@@ -458,8 +461,9 @@ def score_equity(data: dict, asof: pd.Timestamp, weights: dict) -> pd.DataFrame:
     out.index.name = "code"
     out["name"]   = [EQUITY_META[c][0] for c in out.index]
     out["region"] = [EQUITY_META[c][1] for c in out.index]
+    required_factors = macro_factors.assign(EPS=z_eps)
     out["missing_factors"] = [
-        ", ".join(macro_factors.columns[macro_factors.loc[code].isna()].tolist())
+        ", ".join(required_factors.columns[required_factors.loc[code].isna()].tolist())
         for code in out.index
     ]
     out["status"] = np.where(

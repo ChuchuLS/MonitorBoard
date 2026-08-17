@@ -70,7 +70,7 @@ def _render_scores_table(scores: pd.DataFrame, label_col: str,
     # Format numbers
     for c in cols_to_show:
         if c == "macro_factor_count":
-            disp[c] = disp[c].apply(lambda v: f"{int(v)}/5" if pd.notna(v) else "—")
+            disp[c] = disp[c].apply(lambda v: f"{int(v)}/4" if pd.notna(v) else "—")
         else:
             disp[c] = disp[c].apply(lambda v: f"{v:+.2f}" if pd.notna(v) else "—")
 
@@ -93,7 +93,8 @@ def render(ctx: PageContext) -> None:
             missing=["Scoring model sheets not found"],
             message="The global scoring model requires sheets Macro_GDP, "
                     "Macro_CPI, Macro_Fiscal, Rates_10Y, Equity_ToT, "
-                    "Equity_FCI, Equity_EPS, Equity_Prices in DATA.xlsx.",
+                    "Equity_EPS and Equity_Prices in DATA.xlsx. Equity_FCI is "
+                    "optional non-scoring context.",
         )
         render_section_footer(page)
         return
@@ -133,10 +134,11 @@ def render(ctx: PageContext) -> None:
         "Ranks sovereign bond markets and equity indices on a blend of "
         "<b>macro</b> factors (GDP, CPI, fiscal balance) and <b>market</b> "
         "factors (momentum, carry, real yield for rates; terms of trade, "
-        "FCI, EPS revisions for equities). Each factor is z-scored "
+        "EPS revisions for equities). Each scoring factor is z-scored "
         "cross-sectionally so the ranking is relative, not absolute. A positive "
         "composite score means higher-ranked relative to peers using "
-        "observations available on or before the production model as-of date.",
+        "observations available on or before the production model as-of date. "
+        "FCI is displayed separately as context and has no effect on the score.",
     )
 
     if future_rows:
@@ -152,7 +154,7 @@ def render(ctx: PageContext) -> None:
                      use_container_width=True)
 
     from models.scoring.engine import (
-        score_rates, score_equity,
+        build_equity_fci_context, score_rates, score_equity,
         RATES_UNIVERSE, EQUITY_UNIVERSE,
     )
 
@@ -220,8 +222,8 @@ def render(ctx: PageContext) -> None:
                 st.caption(
                     "Partial (provisional score, excluded from headline ranking): "
                     + ", ".join(partial_names)
-                    + ". Their own GDP, CPI, fiscal, terms-of-trade and EPS data are "
-                      "used, but FCI is absent from DATA.xlsx. No FCI proxy is supplied."
+                    + ". One or more of the four required macro factors or EPS is "
+                      "missing. No missing input is replaced by a proxy or zero."
                 )
             if missing_names:
                 st.caption(
@@ -231,6 +233,38 @@ def render(ctx: PageContext) -> None:
                     "renamed series is used."
                 )
             _render_scores_table(e_scores, "name", key="eq_scores")
+
+            st.markdown(
+                "<div style='font-size:11px;color:#888;letter-spacing:0.1em;"
+                "text-transform:uppercase;margin:1rem 0 0.35rem;'>"
+                "FCI context · not used in Equity Score</div>",
+                unsafe_allow_html=True,
+            )
+            st.caption(
+                "The four supplied regional FCI series are shown at their own latest "
+                "source dates. They are not mapped to individual indices, z-scored, "
+                "filled across regions, or used in ranking and backtesting."
+            )
+            fci_context = build_equity_fci_context(data, asof)
+            fci_display = fci_context.rename(columns={
+                "region": "Region",
+                "ticker": "Workbook ticker",
+                "latest_value": "Latest value",
+                "source_date": "Source date",
+                "status": "Status",
+            })
+            fci_display["Latest value"] = fci_display["Latest value"].apply(
+                lambda v: f"{v:.3f}" if pd.notna(v) else "—"
+            )
+            fci_display["Source date"] = fci_display["Source date"].apply(
+                lambda v: str(v) if v is not None else "—"
+            )
+            st.dataframe(
+                fci_display,
+                hide_index=True,
+                use_container_width=True,
+                height=min(210, 42 + 34 * len(fci_display)),
+            )
         except Exception as e:
             st.error(f"Equity scoring error: {e}")
 
@@ -240,12 +274,15 @@ def render(ctx: PageContext) -> None:
         "Markets pillar = mean(3M momentum_z inverted, carry_z, real yield_z). "
         "Composite = weighted blend.<br>"
         "<b>Equity:</b> Macro pillar = mean(Growth_z, CPI_z inv, Fiscal_z, "
-        "ToT momentum_z, FCI_z). If a macro factor is unavailable, a provisional "
+        "ToT momentum_z). If a macro factor is unavailable, a provisional "
         "Partial score is calculated from the observed macro factors but excluded "
-        "from headline top/bottom ranking; Ready requires all five macro factors "
+        "from headline top/bottom ranking; Ready requires all four macro factors "
         "plus EPS. EPS = 3M change in FY1 bottom-up EPS, "
         "z-scored. Composite = weighted blend. All z-scores are cross-sectional "
-        "(across the panel on each date), not time-series.",
+        "(across the panel on each date), not time-series. At the default 50% "
+        "Macro / 50% EPS weights, each of the four equally weighted Macro factors "
+        "contributes 12.5% of the total score. FCI remains a separate raw context "
+        "panel and contributes 0%.",
     )
 
     render_section_footer(page)

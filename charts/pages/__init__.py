@@ -15,10 +15,12 @@ from . import cross_asset as _cross_asset
 from . import market_linkage as _market_linkage
 from . import sector_rotation as _sector_rotation
 from . import sector_contribution as _sector_contribution
+from . import index_breadth as _index_breadth
 from . import earnings_valuation as _earnings_valuation
 from . import fx_rate_diff as _fx_rate_diff
 from . import data_quality as _data_quality
 from . import scoring as _scoring
+from . import scoring_backtest as _scoring_backtest
 from . import model_roadmap as _model_roadmap
 
 
@@ -36,9 +38,11 @@ RENDERERS = {
     "fx_rate_diff":   _fx_rate_diff.render,
     "sector_rotation": _sector_rotation.render,
     "sector_contribution": _sector_contribution.render,
+    "index_breadth": _index_breadth.render,
     "earnings_valuation": _earnings_valuation.render,
     "data_quality":   _data_quality.render,
     "scoring":        _scoring.render,
+    "scoring_backtest": _scoring_backtest.render,
     "model_roadmap":  _model_roadmap.render,
 }
 

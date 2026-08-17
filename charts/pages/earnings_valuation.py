@@ -1,4 +1,4 @@
-"""charts/pages/earnings_valuation.py — 06c · Global FY1 Earnings & Valuation."""
+"""charts/pages/earnings_valuation.py — 06d · Global FY1 Earnings & Valuation."""
 from __future__ import annotations
 
 import numpy as np

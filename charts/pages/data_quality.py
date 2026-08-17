@@ -386,6 +386,24 @@ def render(ctx: PageContext) -> None:
         )
 
     try:
+        from data.equity_earnings_loader import load_equity_earnings_data as _load_ib_prices
+        from data.index_breadth_loader import load_index_breadth as _load_ib_metrics
+        from models.index_breadth import build_index_breadth_snapshot as _build_ib_snapshot
+        _ib_data = _load_ib_prices()
+        _ib_dep = _build_ib_snapshot(
+            _ib_data.get("prices"), _load_ib_metrics(), "ES1", "Daily"
+        )
+        special_dependencies["Global index trend & market breadth"] = (
+            _ib_dep.get("status", "Missing data"),
+            ", ".join(_ib_dep.get("missing_metrics", [])) or "—",
+            str(_ib_dep.get("model_date") or "—"),
+        )
+    except Exception as exc:
+        special_dependencies["Global index trend & market breadth"] = (
+            "Missing data", f"Audit failed: {type(exc).__name__}", "—"
+        )
+
+    try:
         from models.country_rate_boards import (
             available_country_boards as _available_country_boards,
             build_global_country_board_overview as _build_country_board_overview,
@@ -469,6 +487,34 @@ def render(ctx: PageContext) -> None:
             "Missing data", f"Audit failed: {type(exc).__name__}", "—"
         )
 
+    try:
+        from data.external_loaders import load_pulsar as _load_backtest_data
+        from models.scoring.backtest import (
+            BacktestConfig as _BacktestConfig,
+            build_score_backtest as _build_score_backtest,
+        )
+        _bt_dep = _build_score_backtest(
+            _load_backtest_data() or {},
+            _BacktestConfig(rebalance="weekly", top_n=3),
+        )
+        _eq_bt = _bt_dep["equity_summary"]
+        _rt_bt = _bt_dep["rates_summary"]
+        _bt_periods = min(_eq_bt.get("periods", 0), _rt_bt.get("periods", 0))
+        _bt_date = max(
+            [d for d in (_eq_bt.get("last_outcome_date"), _rt_bt.get("last_outcome_date")) if d],
+            default=None,
+        )
+        special_dependencies["CTA score backtest"] = (
+            "Partial" if _bt_periods else "Missing data",
+            ("Limited history; revised macro; rates outcome is a yield-change proxy"
+             if _bt_periods else "No usable backtest periods"),
+            str(_bt_date or "—"),
+        )
+    except Exception as exc:
+        special_dependencies["CTA score backtest"] = (
+            "Missing data", f"Audit failed: {type(exc).__name__}", "—"
+        )
+
     dep_rows = []
     for label, model, req, exp in [
         ("00 Liquidity", "Composite Liquidity Index", None, False),
@@ -480,9 +526,11 @@ def render(ctx: PageContext) -> None:
         ("05 Cross-Asset", "8-regime directional", dep_req_ca, False),
         ("05b Linkage", "Market linkage & correlations", dep_req_linkage, False),
         ("06 Sectors", "Sector rotation & breadth", None, False),
-        ("06c Earnings", "Global FY1 earnings & valuation", None, False),
+        ("06c Breadth", "Global index trend & market breadth", None, False),
+        ("06d Earnings", "Global FY1 earnings & valuation", None, False),
         ("07 FX Rates", "FX rate-differential monitor", None, False),
         ("A1 Scoring", "Macro + market scoring", None, False),
+        ("A2 Backtest", "CTA score backtest", None, False),
     ]:
         if model in special_dependencies:
             dep_st, miss, lvd = special_dependencies[model]
@@ -825,6 +873,13 @@ def render(ctx: PageContext) -> None:
          "Notes": "Start-period periodic weight × sector simple return with an "
                   "explicit residual versus actual SPX. Approximation only; not "
                   "official index-provider attribution."},
+        {"Model": "Global Index Trend & Market Breadth",
+         "Required": "Each cash index + constituent-level breadth fields in Index_Breadth",
+         "Status": "Partial",
+         "Notes": "Selectable cash-index price trend and available 50D/200D averages are live. "
+                  "Advance–decline, 52-week high/low, MA breadth, RSI breadth and put/call "
+                  "remain missing; the current price history is also shorter than 100 weeks. "
+                  "No sector, ETF or cross-index proxy is used."},
         {"Model": "Global FY1 Earnings & Valuation",
          "Required": "Selected cash index + its own BEST_EPS with BEST_FPERIOD_OVERRIDE=1FY",
          "Status": "Live",

@@ -791,6 +791,34 @@ def _sector_contribution(p: PackCanvas, df):
            "The estimate multiplies the latest periodic sector weight available on or before each window start by each sector's simple return. The residual reconciles the estimate to the actual SPX return. This is not divisor-consistent official index-provider attribution.", "#ff7357")
 
 
+def _index_breadth(p: PackCanvas, df):
+    from data.equity_earnings_loader import load_equity_earnings_data
+    from data.index_breadth_loader import load_index_breadth
+    from models.index_breadth import build_index_breadth_snapshot
+    data = load_equity_earnings_data()
+    snap = build_index_breadth_snapshot(
+        data.get("prices", pd.DataFrame()), load_index_breadth(), "ES1", "Daily"
+    )
+    p.kpis([
+        {"label": "SPX CLOSE", "value": _fmt(snap.get("price"), ",.2f"), "accent": "#ff7357"},
+        {"label": "50DMA", "value": _fmt(snap.get("ma_50d"), ",.2f")},
+        {"label": "200DMA", "value": _fmt(snap.get("ma_200d"), ",.2f")},
+        {"label": "100-WEEK MA", "value": _fmt(snap.get("ma_100w"), ",.2f"),
+         "sub": f"{snap.get('weekly_observations', 0)}/100 weekly closes"},
+    ])
+    trend = snap.get("trend", pd.DataFrame())
+    cols = [c for c in ["price", "ma_50d", "ma_200d", "ma_100w"]
+            if isinstance(trend, pd.DataFrame) and c in trend and trend[c].notna().any()]
+    p.line_chart(MARGIN_X, 290, 870, 205,
+                 trend[cols] if cols else pd.DataFrame(),
+                 "SPX PRICE TREND - OBSERVED CLOSES", "#ff7357", max_series=4,
+                 last_n=260)
+    p.note(950, 330, 430, 165, "CONSTITUENT BREADTH INPUTS MISSING",
+           "DATA.xlsx does not contain index-level advance-decline, new 52-week high/low percentages, 50D/200D constituent coverage, RSI breadth or an index-specific put/call series. Those panels are withheld rather than inferred from price, sectors, ETFs or another index.", "#d99830")
+    p.note(MARGIN_X, 120, 1320, 95, "STATUS - PARTIAL",
+           "The selectable Streamlit page uses each requested index's own cash close for the price trend. The workbook currently has about one year of prices, so a true 100-week average is unavailable. An optional long-form Index_Breadth sheet activates the remaining panels only when real source observations are supplied.", "#ff7357")
+
+
 def _earnings(p: PackCanvas, df):
     from data.equity_earnings_loader import load_equity_earnings_data
     from models.earnings_valuation import build_earnings_valuation_snapshot
@@ -875,7 +903,7 @@ def _data_quality(p: PackCanvas, df, r):
     p.table(MARGIN_X, 478, 830, coverage,
             [("section", "NO", .10), ("page", "PAGE", .44),
              ("status", "STATUS", .18), ("source", "SOURCE", .28)],
-            max_rows=14, title="BOARD COVERAGE", color="#9aa0a6", row_h=22)
+            max_rows=17, title="BOARD COVERAGE", color="#9aa0a6", row_h=22)
     rows = [{"metric": k, "value": v} for k, v in summary.items()] if isinstance(summary, dict) else []
     p.table(930, 478, 450, rows,
             [("metric", "QUALITY METRIC", .62), ("value", "VALUE", .38)],
@@ -922,7 +950,62 @@ def _scoring(p: PackCanvas, df):
             max_rows=18, row_h=16,
             title="GLOBAL EQUITY SCORING - 50/50 WEIGHTS", color="#9aa0a6")
     p.note(MARGIN_X, 75, 1320, 62, "METHODOLOGY",
-           "Scores are cross-sectional relative rankings. The PDF uses the Board defaults: rates 50% macro / 50% markets; equities 50% macro / 50% EPS. Partial equity rows use only observed factors and are excluded from headline rankings; no missing FCI is proxied. Future-dated source rows are excluded.", "#9aa0a6")
+           "Scores are cross-sectional relative rankings. The PDF uses the Board defaults: rates 50% macro / 50% markets; equities 50% four-factor macro / 50% EPS. GDP, inverted CPI, fiscal and terms of trade each contribute 12.5% of the default Equity Score. FCI is context only, is not mapped to indices and contributes 0%. Partial rows are excluded; future-dated rows are excluded.", "#9aa0a6")
+
+
+def _scoring_backtest(p: PackCanvas, df):
+    from data.external_loaders import load_pulsar
+    from models.scoring.backtest import BacktestConfig, build_score_backtest
+
+    result = build_score_backtest(
+        load_pulsar() or {}, BacktestConfig(rebalance="weekly", top_n=3)
+    )
+    equity = result["equity_periods"].copy()
+    rates = result["rates_periods"].copy()
+    eq = result["equity_summary"]
+    rt = result["rates_summary"]
+    p.kpis([
+        {"label": "EQUITY PERIODS", "value": eq.get("periods", 0),
+         "sub": eq.get("status", "Missing data")},
+        {"label": "EQUITY AVG SPREAD", "value": _fmt(eq.get("average_top_minus_bottom"), "+.3f", "%"),
+         "sub": f"Hit rate {_fmt(eq.get('hit_rate_pct'), '.1f', '%')}"},
+        {"label": "EQUITY MEAN IC", "value": _fmt(eq.get("mean_rank_ic"), "+.3f"),
+         "sub": "Spearman rank IC"},
+        {"label": "RATES PERIODS", "value": rt.get("periods", 0),
+         "sub": rt.get("status", "Missing data")},
+        {"label": "RATES AVG PROXY", "value": _fmt(rt.get("average_top_minus_bottom"), "+.3f", "bp"),
+         "sub": f"Hit rate {_fmt(rt.get('hit_rate_pct'), '.1f', '%')}"},
+        {"label": "RATES MEAN IC", "value": _fmt(rt.get("mean_rank_ic"), "+.3f"),
+         "sub": "Spearman rank IC"},
+    ])
+
+    def period_view(frame, unit):
+        if frame.empty:
+            return frame
+        return pd.DataFrame({
+            "date": pd.to_datetime(frame["outcome_date"]).dt.strftime("%Y-%m-%d"),
+            "spread": frame["top_minus_bottom"].map(
+                lambda value: _fmt(value, "+.3f", unit)
+            ),
+            "ic": frame["rank_ic"].map(lambda value: _fmt(value, "+.3f")),
+            "top": frame["top_codes"],
+            "bottom": frame["bottom_codes"],
+        })
+
+    eq_view = period_view(equity, "%")
+    rt_view = period_view(rates, "bp")
+    p.table(MARGIN_X, 476, 650, eq_view,
+            [("date", "EQUITY OUTCOME", .20), ("spread", "SPREAD", .15),
+             ("ic", "IC", .10), ("top", "TOP 3", .27), ("bottom", "BOTTOM 3", .28)],
+            max_rows=12, row_h=17, title="EQUITY - ALL USABLE WEEKLY PERIODS",
+            color="#e8b931")
+    p.table(730, 476, 650, rt_view,
+            [("date", "RATES OUTCOME", .20), ("spread", "PROXY", .15),
+             ("ic", "IC", .10), ("top", "TOP 3", .27), ("bottom", "BOTTOM 3", .28)],
+            max_rows=12, row_h=17, title="RATES - ALL USABLE WEEKLY PERIODS",
+            color="#e8b931")
+    p.note(MARGIN_X, 75, 1320, 105, "LIMITED-SAMPLE SIGNAL CHECK",
+           "Fixed weekly Top 3 minus Bottom 3 specification with a full 90-calendar-day lookback. Equity uses next-week cash-index price returns; FCI is not an input. Rates use minus the next-week 10Y yield change, not total-return P&L. Macro observations are revised rather than vintages, transaction costs are absent, and history begins in February 2026. No Sharpe, drawdown, cumulative P&L or strategy-validation claim is presented.", "#e8b931")
 
 
 def _roadmap(p: PackCanvas, df):
@@ -960,10 +1043,12 @@ PAGE_BUILDERS = {
     "market_linkage": _market_linkage,
     "sector_rotation": _sector_rotation,
     "sector_contribution": _sector_contribution,
+    "index_breadth": _index_breadth,
     "earnings_valuation": _earnings,
     "fx_rate_diff": _fx,
     "data_quality": _data_quality,
     "scoring": _scoring,
+    "scoring_backtest": _scoring_backtest,
     "model_roadmap": _roadmap,
 }
 

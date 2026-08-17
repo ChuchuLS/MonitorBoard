@@ -260,6 +260,30 @@ def build_snapshot() -> dict:
     except Exception:
         pass
 
+    # Global Index Trend & Market Breadth — selected default SPX audit
+    try:
+        from data.equity_earnings_loader import load_equity_earnings_data
+        from data.index_breadth_loader import load_index_breadth
+        from models.index_breadth import build_index_breadth_snapshot
+        _ib_data = load_equity_earnings_data()
+        _ib = build_index_breadth_snapshot(
+            _ib_data.get("prices"), load_index_breadth(), "ES1", "Daily"
+        )
+        snap["index_market_breadth"] = {
+            "status": _ib.get("status"),
+            "code": "ES1",
+            "model_date": str(_ib.get("model_date")) if _ib.get("model_date") else None,
+            "price": _ib.get("price"),
+            "ma_50d": _ib.get("ma_50d"),
+            "ma_200d": _ib.get("ma_200d"),
+            "ma_100w": _ib.get("ma_100w"),
+            "weekly_observations": _ib.get("weekly_observations"),
+            "missing_metrics": _ib.get("missing_metrics"),
+            "proxy_used": False,
+        }
+    except Exception:
+        pass
+
     # SPX FY1 Earnings & Valuation — exact weekly identity decomposition
     try:
         from data.equity_earnings_loader import load_equity_earnings_data
@@ -324,6 +348,48 @@ def build_snapshot() -> dict:
             "model_date": str(dspx.index[-1].date()) if len(dspx) else None,
             "latest_value": float(dspx.iloc[-1]) if len(dspx) else None,
             "synthetic_substitution": False,
+        }
+    except Exception:
+        pass
+
+    # CTA Score Backtest — fixed weekly primary specification. This is a
+    # limited-sample signal evaluation, not strategy P&L.
+    try:
+        from data.external_loaders import load_pulsar
+        from models.scoring.backtest import BacktestConfig, build_score_backtest
+
+        bt = build_score_backtest(
+            load_pulsar() or {}, BacktestConfig(rebalance="weekly", top_n=3)
+        )
+
+        def _summary_record(summary):
+            return {
+                key: (str(value) if key in {"first_signal_date", "last_outcome_date"} else value)
+                for key, value in summary.items()
+            }
+
+        def _period_records(frame):
+            if frame is None or frame.empty:
+                return []
+            view = frame.copy()
+            for column in ("signal_date", "outcome_date"):
+                view[column] = view[column].astype(str)
+            return view.to_dict(orient="records")
+
+        snap["cta_score_backtest"] = {
+            "specification": {
+                "rebalance": "weekly",
+                "top_n": 3,
+                "factor_lookback_calendar_days": 90,
+                "equity_weights": {"macro": 0.5, "eps": 0.5},
+                "rates_weights": {"macro": 0.5, "markets": 0.5},
+                "fci_used": False,
+                "transaction_costs_included": False,
+            },
+            "equity_summary": _summary_record(bt["equity_summary"]),
+            "rates_summary": _summary_record(bt["rates_summary"]),
+            "equity_periods": _period_records(bt["equity_periods"]),
+            "rates_periods": _period_records(bt["rates_periods"]),
         }
     except Exception:
         pass

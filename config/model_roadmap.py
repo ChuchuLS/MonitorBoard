@@ -177,8 +177,24 @@ ROADMAP: list[dict] = [
      "missing_data": [], "recommended_priority": 4,
      "build_notes": "Requires divisor-consistent index treatment or official contribution "
                     "data. Not equivalent to the descriptive rotation monitor."},
-    {"section": "06", "module_id": "earnings_val", "title": "Global FY1 earnings & valuation",
+    {"section": "06c", "module_id": "index_market_breadth", "title": "Global index trend & market breadth",
      "app_section": "06c", "reference_section": "06 · Equities & Earnings",
+     "current_status": "Partial", "do_not_fake": True,
+     "implemented_in": "models/index_breadth.py, charts/pages/index_breadth.py",
+     "evidence_basis": "Equity_Prices available; constituent breadth fields absent",
+     "data_source_status": "partial",
+     "can_render_real_chart": True,
+     "required_data": ["Daily cash-index close", "Advancers minus decliners",
+                       "% new 52-week highs/lows", "% above 50DMA/200DMA",
+                       "% RSI14 above 70/below 30", "Optional index put/call ratio"],
+     "missing_data": ["Index_Breadth constituent-level fields for every requested index",
+                      "At least 100 weekly closes for the 100-week moving average"],
+     "recommended_priority": 1,
+     "build_notes": "Selectable price trend is live from each index's own cash close. "
+                    "Reference breadth panels remain withheld until the corresponding "
+                    "constituent-level fields are supplied; no sector, ETF or cross-index proxy."},
+    {"section": "06", "module_id": "earnings_val", "title": "Global FY1 earnings & valuation",
+     "app_section": "06d", "reference_section": "06 · Equities & Earnings",
      "current_status": "Live", "do_not_fake": False,
      "implemented_in": "models/earnings_valuation.py",
      "evidence_basis": "DATA.xlsx + user-confirmed Bloomberg formula",
@@ -244,6 +260,18 @@ ROADMAP: list[dict] = [
      "can_render_real_chart": True,
      "required_data": ["Scoring sheets"], "missing_data": [], "recommended_priority": 0,
      "build_notes": "Standalone appendix."},
+    {"section": "A2", "module_id": "global_scoring_backtest", "title": "CTA Score Backtest",
+     "current_status": "Partial", "do_not_fake": False,
+     "implemented_in": "models/scoring/backtest.py, charts/pages/scoring_backtest.py, scripts/run_cta_score_backtest.py",
+     "evidence_basis": "Historical rows in current scoring sheets", "data_source_status": "limited history",
+     "can_render_real_chart": True,
+     "required_data": ["Point-in-time score factors", "Equity cash-index prices", "10Y yields"],
+     "missing_data": ["Unrevised macro vintage archive", "Sovereign total-return indices",
+                      "Longer factor history before 2026-02-16"],
+     "recommended_priority": 1,
+     "build_notes": "Live Board page plus downloadable offline report: weekly Top 3 minus Bottom 3 evaluation with a full 90-day factor "
+                    "lookback and no future rows. Results are gross of costs and explicitly "
+                    "limited-sample; rates use minus 10Y yield change as a directional proxy, not P&L."},
 
     # ── CLI Correlations ──
     {"section": "00", "module_id": "cli_spx_corr",

@@ -187,18 +187,34 @@ PAGES: list[dict] = [
                        "window start date. Explicit residual reconciliation. Not "
                        "official index-provider attribution.",
         "builds_on": "sector_rotation",
+        "next": "index_breadth",
+    },
+    {
+        "id": "index_breadth",
+        "label": "Index Breadth",
+        "title": "Global Index Trend & Market Breadth",
+        "section": "06c",
+        "color_key": "equities",
+        "status": "partial",
+        "data_source": "index_breadth_sheet",
+        "description": "Selectable-index trend panel using each index's own cash "
+                       "close and available 50D/200D/100W moving averages. Reference-style "
+                       "advance–decline, 52-week high/low, moving-average breadth, RSI "
+                       "breadth and index put/call panels activate only when the corresponding "
+                       "constituent-level Index_Breadth inputs are supplied; no proxy is used.",
+        "builds_on": "sector_contribution",
         "next": "earnings_valuation",
     },
     {
         "id": "earnings_valuation",
         "label": "Earnings",
         "title": "Global FY1 Earnings & Valuation",
-        "section": "06c",
+        "section": "06d",
         "color_key": "equities",
         "status": "live",
         "data_source": "scoring_sheets",
         "description": "One index dropdown controls the rolling exact-return decomposition and implied FY1 P/E chart. Uses each selected index's own confirmed weekly FY1 consensus EPS (BEST_EPS with 1FY override), matched backward to its latest observed cash close within three calendar days; missing inputs remain Missing data. Not fair value or a forecast.",
-        "builds_on": "sector_contribution",
+        "builds_on": "index_breadth",
         "next": "fx_rate_diff",
     },
     {
@@ -243,6 +259,22 @@ PAGES: list[dict] = [
                        "Indices with incomplete factor sets are explicitly Partial and excluded from headline rankings; absent factors are never proxied. "
                        "Appendix — standalone model. Uses DATA.xlsx / scoring sheets.",
         "builds_on": "data_quality",
+        "next": "scoring_backtest",
+    },
+    {
+        "id": "scoring_backtest",
+        "label": "CTA Backtest",
+        "title": "CTA Score Backtest",
+        "section": "A2",
+        "color_key": "scoring",
+        "status": "partial",
+        "data_source": "scoring_sheets",
+        "description": "Fixed-specification weekly Top 3 minus Bottom 3 signal "
+                       "evaluation for the current Rates and Equity Scores. Uses "
+                       "a full 90-calendar-day factor lookback and displays every "
+                       "usable period. Limited history, revised macro data and the "
+                       "rates yield-change proxy prevent strategy-validation or P&L claims.",
+        "builds_on": "scoring",
         "next": "model_roadmap",
     },
     {
@@ -256,7 +288,7 @@ PAGES: list[dict] = [
         "description": "Content gap analysis vs the reference PDF. Shows what "
                        "is implemented, what is missing, what data is needed, "
                        "and what should be built next.",
-        "builds_on": "scoring",
+        "builds_on": "scoring_backtest",
         "next": None,
     },
 ]
@@ -268,7 +300,7 @@ PAGE_IDS: list[str] = [p["id"] for p in PAGES]
 
 # The reference chart pack keeps the top strip at section level. Streamlit's
 # sidebar still exposes every individual page, while this grouped registry
-# prevents the orientation strip from expanding to 16 separate chips.
+# prevents the orientation strip from expanding to 18 separate chips.
 TOP_NAV_GROUPS: list[dict] = [
     {
         "id": "liquidity",
@@ -317,7 +349,7 @@ TOP_NAV_GROUPS: list[dict] = [
         "section": "06",
         "label": "Equities",
         "color_key": "equities",
-        "page_ids": ("sector_rotation", "sector_contribution", "earnings_valuation"),
+        "page_ids": ("sector_rotation", "sector_contribution", "index_breadth", "earnings_valuation"),
     },
     {
         "id": "fx",
@@ -331,7 +363,7 @@ TOP_NAV_GROUPS: list[dict] = [
         "section": "A",
         "label": "Appendix",
         "color_key": "data_quality",
-        "page_ids": ("data_quality", "scoring", "model_roadmap"),
+        "page_ids": ("data_quality", "scoring", "scoring_backtest", "model_roadmap"),
     },
 ]
 
@@ -389,6 +421,13 @@ DATA_SOURCES = {
         "sheet": "Macro_GDP / Macro_CPI / Macro_Fiscal / Rates_10Y / Equity_*",
         "role": "Global scoring model sheets (macro + market factors)",
         "source_of_truth": True,
-        "pages": ["earnings_valuation", "scoring"],
+        "pages": ["earnings_valuation", "scoring", "scoring_backtest"],
+    },
+    "index_breadth_sheet": {
+        "file": "data/DATA.xlsx",
+        "sheet": "Equity_Prices / optional Index_Breadth",
+        "role": "Selectable cash-index trend plus optional constituent-level market-breadth inputs",
+        "source_of_truth": True,
+        "pages": ["index_breadth"],
     },
 }
