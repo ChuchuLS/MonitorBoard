@@ -1,7 +1,10 @@
-streamlit>=1.32.0
-pandas>=2.0.0
-numpy>=1.24.0
-plotly>=5.18.0
-openpyxl>=3.1.0
-pyarrow>=14.0.0
-reportlab>=4.2.0
+# Reproducible Streamlit Cloud environment (Python 3.12 and 3.14 tested in CI).
+# Streamlit stays on the last release that supports the app's existing
+# use_container_width chart API; upgrade only together with the UI migration.
+streamlit==1.56.0
+pandas==2.3.3
+numpy==2.3.5
+plotly==6.9.0
+openpyxl==3.1.5
+pyarrow==23.0.0
+reportlab==4.4.9

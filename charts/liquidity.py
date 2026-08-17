@@ -21,6 +21,8 @@ contribution pushes it DOWN (tightening).
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -460,7 +462,7 @@ def _smooth(s: pd.Series, window: int) -> pd.Series:
 # ===========================================================================
 def render_index_page(df: pd.DataFrame, dff: pd.DataFrame, result: IndexResult,
                       audit: dict | None = None,
-                      export_bytes: bytes | None = None,
+                      export_bytes: bytes | Callable[[], bytes] | None = None,
                       export_name: str | None = None) -> None:
     """Render the entire Composite Liquidity Index section."""
     audit = audit or {}
@@ -471,7 +473,7 @@ def render_index_page(df: pd.DataFrame, dff: pd.DataFrame, result: IndexResult,
     )
 
     # Excel export — one click, full multi-sheet workbook.
-    if export_bytes:
+    if export_bytes is not None:
         _, btn_col = st.columns([6, 2])
         with btn_col:
             st.download_button(

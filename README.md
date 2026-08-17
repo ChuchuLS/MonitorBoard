@@ -38,6 +38,10 @@ streamlit run app.py
 
 A browser tab opens with the dashboard. That's it.
 
+The production dependency set is pinned in `requirements.txt`. The repository
+tests that same set on Python 3.12 and 3.14 before deployment. Do not upgrade an
+individual package in isolation; update the pins together with the smoke tests.
+
 ## Updating the market data
 
 `DATA.xlsx` is the **source of truth** — it's the only file you edit. The
@@ -72,6 +76,11 @@ Push the folder to GitHub and point [Streamlit Community Cloud](https://share.st
 at `app.py`. To password-protect it, add a secret named `app_password` in the
 app settings — the login gate turns on automatically. With no secret set, the
 app is open (handy for local use).
+
+Every push and pull request runs `.github/workflows/ci.yml`: source compilation,
+the model/data smoke suite, Excel/HTML/PDF/CTA export integration, and a real
+Streamlit runtime check of Contents plus A2 CTA Backtest. A failed check should
+be fixed before the Streamlit deployment is treated as production-ready.
 
 ---
 

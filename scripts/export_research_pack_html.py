@@ -658,8 +658,11 @@ def build_html(include_plotlyjs: bool = True,
             else:  # inline (default)
                 from plotly.offline import get_plotlyjs
                 plotly_js = f"<script>{get_plotlyjs()}</script>"
-        except ImportError:
-            pass
+        except ImportError as exc:
+            raise RuntimeError(
+                "Plotly is required for the requested interactive HTML export. "
+                "Install the pinned requirements or use plotly_mode='none'."
+            ) from exc
 
     parts = [
         f"<!DOCTYPE html><html><head><meta charset='utf-8'>",

@@ -6,6 +6,7 @@ full section listing with status pills.
 """
 from __future__ import annotations
 import html as _html
+import logging
 import pandas as pd
 import streamlit as st
 from config.pages import PAGES, STATUS_LABELS, STATUS_COLORS
@@ -15,6 +16,8 @@ from charts.common import (
     render_kpi_strip, render_current_reading_list, render_model_status_chip,
 )
 from ._context import PageContext
+
+logger = logging.getLogger(__name__)
 
 CONTENTS_PAGE_META = {
     "id": "contents", "section": "—", "title": "Contents",
@@ -43,6 +46,11 @@ def render(ctx: PageContext) -> None:
     changes = r.changes() if callable(getattr(r, "changes", None)) else {}
 
     readings = [("Latest valid data date", latest)]
+    state_failures: list[str] = []
+
+    def _record_state_failure(label: str, exc: Exception) -> None:
+        logger.exception("Contents summary failed: %s", label)
+        state_failures.append(f"{label} ({type(exc).__name__})")
 
     # Liquidity
     if pd.notna(r.latest):
@@ -67,8 +75,8 @@ def render(ctx: PageContext) -> None:
                 ccolor = REGIMES_8[cur]["color"]
                 readings.append(("Cross-Asset regime",
                                  f"<span style='color:{ccolor};'>{clabel}</span> ({days}d)"))
-    except Exception:
-        pass
+    except Exception as exc:
+        _record_state_failure("Cross-Asset regime", exc)
 
     # Curve Regime
     try:
@@ -79,8 +87,8 @@ def render(ctx: PageContext) -> None:
             cr_d = _dicr(h["regime"])
             readings.append(("Nominal 2s10s regime",
                              f"{cr} ({cr_d}d)" if pd.notna(cr) else "—"))
-    except Exception:
-        pass
+    except Exception as exc:
+        _record_state_failure("Nominal 2s10s regime", exc)
 
     # Rates
     try:
@@ -92,8 +100,8 @@ def render(ctx: PageContext) -> None:
                 row = r10.iloc[0]
                 readings.append(("US 10Y", f"{row['nominal']:.2f}% "
                                  f"(1M: {row['nominal_1m_change_bp']:+.0f} bp)"))
-    except Exception:
-        pass
+    except Exception as exc:
+        _record_state_failure("US 10Y summary", exc)
 
     # Global
     try:
@@ -108,8 +116,8 @@ def render(ctx: PageContext) -> None:
                              f"{chg.iloc[0]['label']} ({chg.iloc[0]['change_1m_bp']:+.0f} bp)"))
             readings.append(("Top 10Y 1M faller",
                              f"{chg.iloc[-1]['label']} ({chg.iloc[-1]['change_1m_bp']:+.0f} bp)"))
-    except Exception:
-        pass
+    except Exception as exc:
+        _record_state_failure("Global rates summary", exc)
 
     # Data quality
     try:
@@ -119,10 +127,16 @@ def render(ctx: PageContext) -> None:
         readings.append(("Data quality",
                          f"{summary['healthy']} healthy / {summary['stale']} stale / "
                          f"{summary['missing']} missing of {summary['total']}"))
-    except Exception:
-        pass
+    except Exception as exc:
+        _record_state_failure("Data-quality summary", exc)
 
     render_current_reading_list("Today's readings", readings)
+    if state_failures:
+        st.warning(
+            "Some dashboard-state summaries are unavailable: "
+            + "; ".join(state_failures)
+            + ". No missing reading was replaced with zero or a proxy."
+        )
 
     # ── Content coverage vs reference PDF ──
     try:
@@ -143,8 +157,12 @@ def render(ctx: PageContext) -> None:
         ]
         render_current_reading_list("Model coverage", cov_items)
         st.caption("See 08 · Model Roadmap for the full content gap analysis.")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.exception("Contents model-coverage summary failed")
+        st.warning(
+            "Model coverage is unavailable because its audit failed "
+            f"({type(exc).__name__}). The section list below remains available."
+        )
 
     # ── Section listing ──
     st.markdown("<div style='margin:1.2rem 0 0.4rem;font-size:11px;color:#888;"
@@ -193,7 +211,7 @@ def render(ctx: PageContext) -> None:
             try:
                 st.download_button(
                     "⬇  Download complete Board PDF",
-                    data=ctx.pdf_export_builder(),
+                    data=ctx.pdf_export_builder,
                     file_name=ctx.pdf_export_name,
                     mime="application/pdf",
                     key="contents_export_board_pdf",

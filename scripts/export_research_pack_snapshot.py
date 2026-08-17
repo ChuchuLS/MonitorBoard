@@ -13,7 +13,7 @@ Outputs:
 
 No Streamlit or heavy dependencies required.
 """
-import sys, os, json
+import sys, os, json, logging
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -21,6 +21,17 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from data.loader import load_data, latest_valid_date, source_signature
 from index.composite import compute_index
 from config.pages import PAGES, STATUS_LABELS
+
+logger = logging.getLogger(__name__)
+
+
+def _record_export_error(snapshot: dict, section: str, exc: Exception) -> None:
+    """Keep optional export failures explicit without leaking exception text."""
+    logger.exception("Snapshot export failed for %s", section)
+    snapshot.setdefault("export_errors", []).append({
+        "section": section,
+        "error_type": type(exc).__name__,
+    })
 
 
 def build_snapshot() -> dict:
@@ -39,6 +50,7 @@ def build_snapshot() -> dict:
                         if not __import__("math").isnan(v)},
         },
         "pages": [],
+        "export_errors": [],
     }
 
     # Page statuses
@@ -84,8 +96,8 @@ def build_snapshot() -> dict:
             "fixed_contract_months": True,
             "fomc_meeting_path": False,
         }
-    except Exception:
-        pass
+    except Exception as exc:
+        _record_export_error(snap, "sofr_futures_strip", exc)
 
     # Rate Decomposition
     try:
@@ -93,8 +105,8 @@ def build_snapshot() -> dict:
         cs = build_us_curve_snapshot(df)
         if not cs.empty:
             snap["rate_decomposition"] = cs.to_dict(orient="records")
-    except Exception:
-        pass
+    except Exception as exc:
+        _record_export_error(snap, "rate_decomposition", exc)
 
     # Curve Regimes
     try:
@@ -102,8 +114,8 @@ def build_snapshot() -> dict:
         m = build_regime_matrix(df)
         if not m.empty:
             snap["curve_regime_matrix"] = m.to_dict()
-    except Exception:
-        pass
+    except Exception as exc:
+        _record_export_error(snap, "curve_regime_matrix", exc)
 
     # Global Rates
     try:
@@ -114,8 +126,8 @@ def build_snapshot() -> dict:
         chg = country_1m_changes(df)
         if not chg.empty:
             snap["country_1m_changes"] = chg.to_dict(orient="records")
-    except Exception:
-        pass
+    except Exception as exc:
+        _record_export_error(snap, "global_rates", exc)
 
     # Country Rate Boards — one shared comparison calendar across all seven countries
     try:
@@ -145,8 +157,8 @@ def build_snapshot() -> dict:
                 "horizon": 20,
                 "countries": board_records,
             }
-    except Exception:
-        pass
+    except Exception as exc:
+        _record_export_error(snap, "country_rate_boards", exc)
 
     # Country real-rate / inflation-compensation extension. Only exact-tenor,
     # same-market inputs are exported; unsupported countries remain explicit.
@@ -189,8 +201,8 @@ def build_snapshot() -> dict:
             "countries": records,
             "unavailable": unavailable,
         }
-    except Exception:
-        pass
+    except Exception as exc:
+        _record_export_error(snap, "country_rate_decomposition", exc)
 
     # Cross-Asset
     try:
@@ -207,8 +219,8 @@ def build_snapshot() -> dict:
                     "days_in": days_in_current_regime(res["regime"]),
                     "latest": str(res.index.max().date()),
                 }
-    except Exception:
-        pass
+    except Exception as exc:
+        _record_export_error(snap, "cross_asset", exc)
 
     # Five-asset Market Linkage & Correlations
     try:
@@ -226,8 +238,8 @@ def build_snapshot() -> dict:
             "causal_attribution": False,
             "forecast_model": False,
         }
-    except Exception:
-        pass
+    except Exception as exc:
+        _record_export_error(snap, "market_linkage", exc)
 
     # Sector contribution estimate (20 common observations)
     try:
@@ -257,8 +269,8 @@ def build_snapshot() -> dict:
             ],
             "official_attribution": False,
         }
-    except Exception:
-        pass
+    except Exception as exc:
+        _record_export_error(snap, "sector_contribution_estimate", exc)
 
     # Global Index Trend & Market Breadth — selected default SPX audit
     try:
@@ -281,8 +293,8 @@ def build_snapshot() -> dict:
             "missing_metrics": _ib.get("missing_metrics"),
             "proxy_used": False,
         }
-    except Exception:
-        pass
+    except Exception as exc:
+        _record_export_error(snap, "index_market_breadth", exc)
 
     # SPX FY1 Earnings & Valuation — exact weekly identity decomposition
     try:
@@ -336,8 +348,8 @@ def build_snapshot() -> dict:
             }
             for _, row in requested.iterrows()
         ]
-    except Exception:
-        pass
+    except Exception as exc:
+        _record_export_error(snap, "spx_earnings_valuation", exc)
 
     try:
         from models.sector_rotation import build_spx_dispersion_index
@@ -349,8 +361,8 @@ def build_snapshot() -> dict:
             "latest_value": float(dspx.iloc[-1]) if len(dspx) else None,
             "synthetic_substitution": False,
         }
-    except Exception:
-        pass
+    except Exception as exc:
+        _record_export_error(snap, "cboe_dspx", exc)
 
     # CTA Score Backtest — fixed weekly primary specification. This is a
     # limited-sample signal evaluation, not strategy P&L.
@@ -391,8 +403,8 @@ def build_snapshot() -> dict:
             "equity_periods": _period_records(bt["equity_periods"]),
             "rates_periods": _period_records(bt["rates_periods"]),
         }
-    except Exception:
-        pass
+    except Exception as exc:
+        _record_export_error(snap, "cta_score_backtest", exc)
 
     return snap
 

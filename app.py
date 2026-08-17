@@ -20,7 +20,8 @@ import streamlit as st
 from config.theme import REGIME_COLORS, TEXT_DIM, section_color, page_css
 from config.pages import PAGES, PAGES_BY_ID, nav_label
 from data.loader import (
-    load_data, date_filter, data_source_label, source_signature,
+    load_data, date_filter, data_source_label, latest_valid_date,
+    source_signature,
 )
 from charts.pages import PageContext, render_page
 from index.composite import compute_index
@@ -118,6 +119,12 @@ def _build_pdf_export(source_hash: str, production_date: str) -> tuple[bytes, st
 sig = source_signature()
 index_result = _build_index(sig, _prod_date)
 audit_bundle = _build_audit(sig, _prod_date)
+_latest_export_date = latest_valid_date(df)
+_pdf_export_name = (
+    f"rates_liquidity_board_{_latest_export_date:%Y%m%d}.pdf"
+    if _latest_export_date is not None
+    else "rates_liquidity_board_unknown.pdf"
+)
 
 
 # Sidebar
@@ -187,11 +194,10 @@ with st.sidebar:
 
     st.divider()
     try:
-        pdf_bytes, pdf_name = _build_pdf_export(sig, _prod_date)
         st.download_button(
             label="⬇  Export Board to PDF",
-            data=pdf_bytes,
-            file_name=pdf_name,
+            data=lambda: _build_pdf_export(sig, _prod_date)[0],
+            file_name=_pdf_export_name,
             mime="application/pdf",
             key="sidebar_export_board_pdf",
             use_container_width=True,
@@ -210,7 +216,7 @@ ctx = PageContext(
     export_builder=lambda: _build_export(sig, _prod_date),
     export_name=export_filename(audit_bundle),
     pdf_export_builder=lambda: _build_pdf_export(sig, _prod_date)[0],
-    pdf_export_name=_build_pdf_export(sig, _prod_date)[1],
+    pdf_export_name=_pdf_export_name,
 )
 
 page_id = _LABEL_TO_ID.get(nav_choice, "contents")

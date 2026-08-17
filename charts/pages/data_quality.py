@@ -14,6 +14,7 @@ Ordering (Phase 1.5 cleanup):
 from __future__ import annotations
 
 import hashlib
+import logging
 from pathlib import Path
 
 import pandas as pd
@@ -32,6 +33,8 @@ from data.quality import validate_data, quality_summary, STALE_BDAYS
 from index.methodology import INDEX_METHODOLOGY
 
 from ._context import PageContext
+
+logger = logging.getLogger(__name__)
 
 # Required scoring-model sheets expected inside DATA.xlsx
 REQUIRED_SCORING_SHEETS = ["Macro_GDP", "Macro_CPI", "Macro_Fiscal", "Rates_10Y",
@@ -200,8 +203,13 @@ def render(ctx: PageContext) -> None:
                     message=f"<b>Scoring sheets lag Sheet1 by {gap} days</b><br>"
                             f"Sheet1 latest: {sheet1_latest} · "
                             f"Scoring sheets latest: {sc_date}")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.exception("Scoring freshness comparison failed")
+            st.warning(
+                "Scoring-sheet freshness could not be compared with Sheet1 "
+                f"({type(exc).__name__}). The source dates remain visible in the "
+                "audit table above."
+            )
 
     # ==================================================================
     # 2b. PHASE 2 MODEL READINESS

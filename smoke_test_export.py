@@ -22,10 +22,41 @@ assert Path("data/snapshot.json").exists()
 import json
 snap_data = json.loads(Path("data/snapshot.json").read_text())
 assert "index" in snap_data and "pages" in snap_data
+assert snap_data.get("export_errors") == [], \
+    f"snapshot sections failed: {snap_data.get('export_errors')}"
 print(f"   snapshot.json: index={snap_data['index']['level']}, {len(snap_data['pages'])} pages ✓")
 
-# 2. Lightweight HTML export (plotly_mode=none)
-print("\n2. Lightweight HTML export (plotly_mode=none) ...")
+# 2. Multi-sheet Excel export
+print("\n2. Multi-sheet Excel export ...")
+from data.loader import load_data, source_signature
+from index.composite import compute_index
+from index.export import build_index_workbook
+from index.methodology import (
+    component_contribution_table, compute_legacy_index, forward_fill_audit,
+    methodology_audit, reconciliation,
+)
+frame = load_data()
+index_result = compute_index(frame)
+legacy_result = compute_legacy_index(frame)
+audit = {
+    "methodology": methodology_audit(index_result, frame, data_hash=source_signature()),
+    "reconciliation": reconciliation(index_result, legacy_result, frame),
+    "components": component_contribution_table(index_result, frame),
+    "ffill_audit": forward_fill_audit(index_result, frame),
+}
+xlsx_bytes = build_index_workbook(index_result, audit, frame)
+assert xlsx_bytes.startswith(b"PK"), "Excel workbook ZIP signature missing"
+import openpyxl
+workbook = openpyxl.load_workbook(BytesIO(xlsx_bytes), read_only=True)
+expected_sheets = {
+    "Index", "Buckets", "Component_z", "Component_contrib",
+    "Latest_components", "Reconciliation", "Forward_fill_audit", "Methodology",
+}
+assert expected_sheets.issubset(workbook.sheetnames), workbook.sheetnames
+print(f"   Excel: {len(xlsx_bytes):,} bytes, {len(workbook.sheetnames)} sheets ✓")
+
+# 3. Lightweight HTML export (plotly_mode=none)
+print("\n3. Lightweight HTML export (plotly_mode=none) ...")
 t_light = time.time()
 from scripts.export_research_pack_html import build_html
 html_str, filename = build_html(include_plotlyjs=False, plotly_mode="none")
@@ -35,8 +66,8 @@ assert "Plotly.newPlot" not in html_str, "lightweight mode must not embed Plotly
 assert "<script>" not in html_str.split("</head>")[0], "lightweight mode must not include Plotly JS"
 print(f"   lightweight: {len(html_str):,} chars in {elapsed_light:.2f}s ✓")
 
-# 3. Complete PDF export
-print("\n3. Complete linked PDF export ...")
+# 4. Complete PDF export
+print("\n4. Complete linked PDF export ...")
 from scripts.export_research_pack_pdf import build_pdf
 pdf_bytes, pdf_name = build_pdf()
 assert pdf_bytes.startswith(b"%PDF-"), "PDF signature missing"
@@ -52,9 +83,25 @@ try:
 except ImportError:
     print(f"   PDF: {len(pdf_bytes):,} bytes ✓ (pypdf structure check skipped)")
 
-# 4. Full inline Plotly export (opt-in via env var)
+# 5. CTA CSV/HTML report export
+print("\n5. CTA backtest CSV/HTML export ...")
+cta_result = subprocess.run(
+    [sys.executable, "scripts/run_cta_score_backtest.py"],
+    capture_output=True, text=True, timeout=120,
+)
+assert cta_result.returncode == 0, cta_result.stderr[:500]
+cta_paths = [Path(line.strip()) for line in cta_result.stdout.splitlines() if line.strip()]
+assert len(cta_paths) == 3 and all(path.exists() for path in cta_paths), cta_paths
+import pandas as pd
+equity_csv = next(path for path in cta_paths if "equity" in path.name)
+rates_csv = next(path for path in cta_paths if "rates" in path.name)
+assert len(pd.read_csv(equity_csv)) == len(snap_data["cta_score_backtest"]["equity_periods"])
+assert len(pd.read_csv(rates_csv)) == len(snap_data["cta_score_backtest"]["rates_periods"])
+print(f"   CTA: {equity_csv.name} + {rates_csv.name} + HTML ✓")
+
+# 6. Full inline Plotly export (opt-in via env var)
 if os.environ.get("FULL_EXPORT_SMOKE") == "1":
-    print("\n4. FULL inline Plotly HTML export ...")
+    print("\n6. FULL inline Plotly HTML export ...")
     # Run the heavy inline build in a fresh process. Reusing the process after
     # lightweight mode can leave Plotly/module-level render state in a slow or
     # non-deterministic state in some headless environments.
@@ -73,7 +120,7 @@ if os.environ.get("FULL_EXPORT_SMOKE") == "1":
     elapsed_full = time.time() - t_full
     print(f"   full: {full_len:,} chars in {elapsed_full:.2f}s ✓")
 else:
-    print("\n4. FULL inline Plotly test SKIPPED (set FULL_EXPORT_SMOKE=1 to enable)")
+    print("\n6. FULL inline Plotly test SKIPPED (set FULL_EXPORT_SMOKE=1 to enable)")
 
 print(f"\nALL EXPORT TESTS PASSED ✓")
 print(f"Total elapsed: {time.time() - _t0:.2f}s")

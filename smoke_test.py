@@ -1,6 +1,6 @@
 """Headless smoke test — verifies the package builds the index without a
 Streamlit server. Run: python smoke_test.py"""
-import sys, time, os
+import ast, sys, time, os
 from pathlib import Path
 _t0 = time.time()
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -35,6 +35,33 @@ except Exception:
     _HAS_STREAMLIT_PAGES = False
     print("   (Streamlit not available; skipping page import checks)")
 print("   all imports OK")
+
+# Deployment/UI contracts: user-facing pages may not silently swallow errors,
+# and KPI subtitles are plain text because render_kpi_card escapes them.
+_ui_files = [Path("app.py"), *sorted(Path("charts/pages").glob("*.py"))]
+_silent_handlers = []
+_html_kpi_subtitles = []
+for _ui_path in _ui_files:
+    _tree = ast.parse(_ui_path.read_text(encoding="utf-8"), filename=str(_ui_path))
+    for _node in ast.walk(_tree):
+        if isinstance(_node, ast.ExceptHandler):
+            _is_exception = isinstance(_node.type, ast.Name) and _node.type.id == "Exception"
+            if _is_exception and len(_node.body) == 1 and isinstance(_node.body[0], ast.Pass):
+                _silent_handlers.append(f"{_ui_path}:{_node.lineno}")
+        if isinstance(_node, ast.Dict):
+            for _key, _value in zip(_node.keys, _node.values):
+                if isinstance(_key, ast.Constant) and _key.value == "sub":
+                    fragments = [
+                        part.value for part in ast.walk(_value)
+                        if isinstance(part, ast.Constant) and isinstance(part.value, str)
+                    ]
+                    if any("<" in fragment or ">" in fragment for fragment in fragments):
+                        _html_kpi_subtitles.append(f"{_ui_path}:{_node.lineno}")
+assert not _silent_handlers, f"silent user-facing exception handlers: {_silent_handlers}"
+assert not _html_kpi_subtitles, f"HTML found in escaped KPI subtitles: {_html_kpi_subtitles}"
+_requirements = Path("requirements.txt").read_text(encoding="utf-8")
+assert "streamlit==1.56.0" in _requirements and "pandas==2.3.3" in _requirements
+print("   deployment contracts OK: pinned runtime · no silent page failures · no escaped KPI HTML")
 
 # Registry / theme sanity — Phase 1 shell must be internally consistent.
 assert len(PAGES) == 18, f"expected 18 registered pages, got {len(PAGES)}"

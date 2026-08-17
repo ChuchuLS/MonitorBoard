@@ -118,9 +118,6 @@ def render(ctx: PageContext) -> None:
         "forward-fill audit and methodology parameters.",
     )
 
-    # Build export bytes lazily — only if the user is on this page.
-    export_bytes = ctx.export_builder() if ctx.export_builder else None
-
     # The research-pack shell above already renders level and horizon changes.
     # Keep only the contributor cards here so the four headline KPIs appear
     # exactly once on the page.
@@ -128,7 +125,7 @@ def render(ctx: PageContext) -> None:
     st.markdown("<div style='height:0.8rem;'></div>", unsafe_allow_html=True)
     render_index_page(
         ctx.df, ctx.dff, r, ctx.audit_bundle,
-        export_bytes=export_bytes,
+        export_bytes=ctx.export_builder,
         export_name=ctx.export_name,
     )
 
@@ -210,8 +207,13 @@ def render(ctx: PageContext) -> None:
                     "the correlation charts."
                 ),
             )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.exception("Failed to render CLI rolling correlations")
+        st.warning(
+            "CLI rolling correlations are unavailable because their calculation "
+            f"failed ({type(exc).__name__}). No missing result was replaced with "
+            "zero or a proxy."
+        )
 
     # ── Q-list Answering Panel ──
     try:
@@ -249,7 +251,11 @@ def render(ctx: PageContext) -> None:
                         st.markdown(f"<div style='font-size:11px;color:#aaa;"
                                     f"margin-left:12px;'>• {d}</div>",
                                     unsafe_allow_html=True)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.exception("Failed to render dashboard Q&A")
+        st.warning(
+            "Dashboard Q&A is unavailable because its evidence build failed "
+            f"({type(exc).__name__}). The analytical panels above are unaffected."
+        )
 
     render_section_footer(page)
