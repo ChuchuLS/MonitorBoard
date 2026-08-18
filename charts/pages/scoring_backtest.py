@@ -124,7 +124,113 @@ def _render_period_table(periods: pd.DataFrame, unit: str) -> None:
     )
 
 
-def _render_market_tab(periods: pd.DataFrame, summary: dict, market: str) -> None:
+def _render_chronological_stability(frame: pd.DataFrame, unit: str) -> None:
+    st.markdown("#### Chronological stability")
+    if frame is None or frame.empty:
+        st.info("At least eight usable periods are required for two four-period slices.")
+        return
+    table = frame.copy()
+    table["window"] = (
+        table["first_signal_date"].astype(str)
+        + " → "
+        + table["last_outcome_date"].astype(str)
+    )
+    table["average_top_minus_bottom"] = table["average_top_minus_bottom"].map(
+        lambda value: f"{value:+.3f} {unit}" if pd.notna(value) else "—"
+    )
+    table["median_top_minus_bottom"] = table["median_top_minus_bottom"].map(
+        lambda value: f"{value:+.3f} {unit}" if pd.notna(value) else "—"
+    )
+    table["hit_rate_pct"] = table["hit_rate_pct"].map(
+        lambda value: f"{value:.1f}%" if pd.notna(value) else "—"
+    )
+    table["mean_rank_ic"] = table["mean_rank_ic"].map(
+        lambda value: f"{value:+.3f}" if pd.notna(value) else "—"
+    )
+    table = table[[
+        "slice", "window", "periods", "average_top_minus_bottom",
+        "median_top_minus_bottom", "hit_rate_pct", "mean_rank_ic",
+    ]].rename(columns={
+        "slice": "Slice",
+        "window": "Observed window",
+        "periods": "Periods",
+        "average_top_minus_bottom": "Average spread",
+        "median_top_minus_bottom": "Median spread",
+        "hit_rate_pct": "Positive spread",
+        "mean_rank_ic": "Mean rank IC",
+    })
+    st.dataframe(table, hide_index=True, use_container_width=True)
+    st.caption(
+        "The split compares two contiguous halves. It is not a train/test or "
+        "historical-vintage out-of-sample test."
+    )
+
+
+def _render_leave_one_out(diagnostic: dict, unit: str) -> None:
+    if diagnostic.get("status") != "Available":
+        return
+    low = diagnostic.get("leave_one_out_mean_min")
+    high = diagnostic.get("leave_one_out_mean_max")
+    sign_text = "unchanged" if diagnostic.get("mean_sign_stable") else "changed"
+    st.info(
+        "Single-period dependence check: after removing each observed week in turn, "
+        f"the average spread ranges from {_fmt(low, '+.3f', f' {unit}')} to "
+        f"{_fmt(high, '+.3f', f' {unit}')}; its sign is {sign_text}. This only "
+        "tests dependence on one week within the primary specification."
+    )
+
+
+def _render_sensitivity(frame: pd.DataFrame, unit: str) -> None:
+    st.markdown("#### Fixed-specification sensitivity")
+    if frame is None or frame.empty:
+        st.info("Sensitivity diagnostics are unavailable.")
+        return
+    table = frame.copy()
+    table["specification"] = table.apply(
+        lambda row: (
+            f"{row['specification']} (primary)"
+            if row["is_primary"] else row["specification"]
+        ),
+        axis=1,
+    )
+    table["average_top_minus_bottom"] = table["average_top_minus_bottom"].map(
+        lambda value: f"{value:+.3f} {unit}" if pd.notna(value) else "—"
+    )
+    table["median_top_minus_bottom"] = table["median_top_minus_bottom"].map(
+        lambda value: f"{value:+.3f} {unit}" if pd.notna(value) else "—"
+    )
+    table["hit_rate_pct"] = table["hit_rate_pct"].map(
+        lambda value: f"{value:.1f}%" if pd.notna(value) else "—"
+    )
+    table["mean_rank_ic"] = table["mean_rank_ic"].map(
+        lambda value: f"{value:+.3f}" if pd.notna(value) else "—"
+    )
+    table = table[[
+        "specification", "periods", "average_top_minus_bottom",
+        "median_top_minus_bottom", "hit_rate_pct", "mean_rank_ic",
+    ]].rename(columns={
+        "specification": "Pre-declared variant",
+        "periods": "Periods",
+        "average_top_minus_bottom": "Average spread",
+        "median_top_minus_bottom": "Median spread",
+        "hit_rate_pct": "Positive spread",
+        "mean_rank_ic": "Mean rank IC",
+    })
+    st.dataframe(table, hide_index=True, use_container_width=True)
+    st.caption(
+        "These five variants are reported together and are not used to select a "
+        "winning specification. The production Score remains 50/50 and Top 3."
+    )
+
+
+def _render_market_tab(
+    periods: pd.DataFrame,
+    summary: dict,
+    market: str,
+    chronological: pd.DataFrame,
+    leave_one_out: dict,
+    sensitivity: pd.DataFrame,
+) -> None:
     if periods.empty:
         render_missing_data_warning(
             required=["90-day factor lookback", "score inputs", "next-period outcome"],
@@ -181,6 +287,9 @@ def _render_market_tab(periods: pd.DataFrame, summary: dict, market: str) -> Non
         )
 
     _render_period_charts(periods, unit, market.lower())
+    _render_chronological_stability(chronological, unit)
+    _render_leave_one_out(leave_one_out, unit)
+    _render_sensitivity(sensitivity, unit)
     st.markdown("#### Period detail")
     _render_period_table(periods, unit)
     st.download_button(
@@ -219,15 +328,32 @@ def render(ctx: PageContext) -> None:
         "The available high-frequency factor history begins on 2026-02-16. "
         "Macro observations are revised rather than historical vintages, equity "
         "returns are cash-index price returns, rates use a yield-change proxy, and "
-        "transaction costs are not included. Sharpe ratio, drawdown and cumulative "
-        "portfolio P&L are therefore intentionally not presented."
+        "transaction costs are not included. The current workbook provides "
+        f"{result['equity_summary'].get('periods', 0)} equity and "
+        f"{result['rates_summary'].get('periods', 0)} rates weekly observations; "
+        "fewer than 26 remains an insufficient sample. Sharpe ratio, drawdown and "
+        "cumulative portfolio P&L are therefore intentionally not presented."
     )
 
     tab_equity, tab_rates = st.tabs(["Equity Score", "Rates Score"])
     with tab_equity:
-        _render_market_tab(equity, result["equity_summary"], "Equity")
+        _render_market_tab(
+            equity,
+            result["equity_summary"],
+            "Equity",
+            result["equity_chronological_stability"],
+            result["equity_leave_one_out"],
+            result["equity_sensitivity"],
+        )
     with tab_rates:
-        _render_market_tab(rates, result["rates_summary"], "Rates")
+        _render_market_tab(
+            rates,
+            result["rates_summary"],
+            "Rates",
+            result["rates_chronological_stability"],
+            result["rates_leave_one_out"],
+            result["rates_sensitivity"],
+        )
 
     render_model_note(
         "Primary specification and limitations",
@@ -236,7 +362,9 @@ def render(ctx: PageContext) -> None:
         "0%. <b>Rates:</b> Macro 50% + Markets 50%. <b>Portfolio test:</b> equal-weight "
         "Top 3 minus equal-weight Bottom 3 for the immediately following weekly "
         "observation. <b>Limitations:</b> revised macro data, limited history, gross "
-        "returns and no investable sovereign total-return series.",
+        "returns and no investable sovereign total-return series. The chronological, "
+        "leave-one-period-out and fixed-grid panels are robustness diagnostics; they "
+        "do not turn the current sample into a validated or vintage-safe backtest.",
     )
     render_data_source_note(
         "DATA.xlsx / scoring sheets",

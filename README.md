@@ -107,7 +107,7 @@ page mirrors the front matter of an institutional chart pack.
 | 07  | FX Rate Differential Monitor    | **Live**             | DATA.xlsx / Sheet1 | EURUSD / USDJPY / GBPUSD / AUDUSD rate-differential monitor plus the full EUR / JPY / AUD / GBP / CAD 3M and 12M cross-currency basis dashboard. Descriptive, not causal attribution or fair value. |
 | 08  | Data Quality & Methodology      | **Live**             | DATA.xlsx (all sections) | Source-of-truth trust chain, ticker coverage, scoring-sheet audit, methodology. |
 | A1  | Global Scoring (Appendix)       | **Live** | DATA.xlsx / scoring sheets | Cross-sectional scoring for 10 rates and 18 requested equities. Equity ranking uses four-factor Macro + EPS; regional FCI is context only. |
-| A2  | CTA Score Backtest              | **Partial — limited sample** | DATA.xlsx / scoring sheets | Fixed weekly Top 3 minus Bottom 3 evaluation for Equity and Rates Scores. Shows all usable periods and limitations; it is not validated strategy P&L. |
+| A2  | CTA Score Backtest              | **Partial — insufficient sample** | DATA.xlsx / scoring sheets | Fixed weekly Top 3 minus Bottom 3 evaluation plus chronological, leave-one-period-out and pre-declared specification-sensitivity diagnostics. It is not validated strategy P&L. |
 | 09  | Model Roadmap & Content Gap     | **Live**             | DATA.xlsx (all sections) | Content gap analysis vs reference PDF — what is implemented, missing, and next. |
 
 ### Implemented now
@@ -129,7 +129,10 @@ page mirrors the front matter of an institutional chart pack.
   lookback, excludes future rows and Partial equity scores, and reports gross
   results without invented transaction costs. Because high-frequency scoring
   inputs begin on 2026-02-16 and macro vintages are not archived, the output is
-  explicitly a limited-sample signal check rather than strategy validation.
+  explicitly an insufficient-sample signal check rather than strategy
+  validation. The Board also reports two contiguous time slices,
+  leave-one-period-out means and a fixed five-variant sensitivity grid. These
+  diagnostics do not optimise or change the primary 50/50 Top 3 specification.
   Equity Macro uses GDP, inverted CPI, fiscal balance and terms-of-trade
   momentum only. At the default 50% Macro / 50% EPS weights, each Macro factor
   contributes 12.5% of the total score. The four supplied regional FCI series

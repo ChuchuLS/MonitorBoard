@@ -9,6 +9,12 @@ evaluation, not a claim of a production trading strategy:
 * signals are formed only from rows dated on or before the signal date;
 * a full 90-calendar-day factor lookback is required before a period is used;
 * results are gross of costs and exclude equity rows not marked ``Ready``.
+
+The diagnostics deliberately avoid optimising the production specification.
+They split the observed periods chronologically, remove one period at a time,
+and run a small pre-declared sensitivity grid around the fixed Board defaults.
+These are robustness checks only; the revised macro history prevents a true
+historical-vintage or research-independent out-of-sample claim.
 """
 from __future__ import annotations
 
@@ -21,6 +27,8 @@ from models.scoring.engine import score_equity, score_rates
 
 
 MIN_FACTOR_LOOKBACK_DAYS = 90
+MIN_VALIDATION_PERIODS = 26
+MIN_CHRONOLOGICAL_SLICE_PERIODS = 4
 
 
 @dataclass(frozen=True)
@@ -180,7 +188,11 @@ def summarize_score_backtest(periods: pd.DataFrame, config: BacktestConfig | Non
     spread = pd.to_numeric(periods["top_minus_bottom"], errors="coerce")
     ic = pd.to_numeric(periods["rank_ic"], errors="coerce")
     return {
-        "status": "Limited sample" if len(periods) < 26 else "Available",
+        "status": (
+            "Insufficient sample"
+            if len(periods) < MIN_VALIDATION_PERIODS
+            else "Preliminary only"
+        ),
         "periods": int(len(periods)),
         "rebalance": cfg.rebalance,
         "top_n": cfg.top_n,
@@ -193,7 +205,139 @@ def summarize_score_backtest(periods: pd.DataFrame, config: BacktestConfig | Non
         "outcome_unit": str(periods["outcome_unit"].iloc[0]),
         "costs_included": False,
         "macro_vintage_safe": False,
+        "minimum_validation_periods": MIN_VALIDATION_PERIODS,
     }
+
+
+def chronological_stability(
+    periods: pd.DataFrame,
+    min_slice_periods: int = MIN_CHRONOLOGICAL_SLICE_PERIODS,
+) -> pd.DataFrame:
+    """Summarise two contiguous halves without fitting or selecting a model.
+
+    The split is descriptive rather than a true train/test exercise.  It is
+    only returned when both halves contain at least ``min_slice_periods``.
+    """
+    columns = [
+        "slice", "first_signal_date", "last_outcome_date", "periods",
+        "average_top_minus_bottom", "median_top_minus_bottom",
+        "hit_rate_pct", "mean_rank_ic", "outcome_unit",
+    ]
+    if periods is None or periods.empty or min_slice_periods < 1:
+        return pd.DataFrame(columns=columns)
+    ordered = periods.sort_values("signal_date").reset_index(drop=True)
+    split = len(ordered) // 2
+    if split < min_slice_periods or len(ordered) - split < min_slice_periods:
+        return pd.DataFrame(columns=columns)
+
+    rows = []
+    for label, frame in (
+        ("Earlier half", ordered.iloc[:split]),
+        ("Recent half", ordered.iloc[split:]),
+    ):
+        spread = pd.to_numeric(frame["top_minus_bottom"], errors="coerce")
+        ic = pd.to_numeric(frame["rank_ic"], errors="coerce")
+        rows.append({
+            "slice": label,
+            "first_signal_date": pd.Timestamp(frame["signal_date"].min()).date(),
+            "last_outcome_date": pd.Timestamp(frame["outcome_date"].max()).date(),
+            "periods": int(len(frame)),
+            "average_top_minus_bottom": float(spread.mean()),
+            "median_top_minus_bottom": float(spread.median()),
+            "hit_rate_pct": float((spread > 0).mean() * 100.0),
+            "mean_rank_ic": float(ic.mean()),
+            "outcome_unit": str(frame["outcome_unit"].iloc[0]),
+        })
+    return pd.DataFrame(rows, columns=columns)
+
+
+def leave_one_period_out_stability(periods: pd.DataFrame) -> dict:
+    """Measure whether the full-sample mean depends on one observed period."""
+    if periods is None or periods.empty or len(periods) < 3:
+        return {
+            "status": "Insufficient sample",
+            "periods": 0 if periods is None else int(len(periods)),
+        }
+    ordered = periods.sort_values("signal_date").reset_index(drop=True)
+    spread = pd.to_numeric(ordered["top_minus_bottom"], errors="coerce")
+    loo_means = pd.Series(
+        [spread.drop(index=i).mean() for i in range(len(spread))],
+        dtype=float,
+    )
+    full_mean = float(spread.mean())
+    all_positive = bool((loo_means > 0).all())
+    all_negative = bool((loo_means < 0).all())
+    return {
+        "status": "Available",
+        "periods": int(len(ordered)),
+        "full_sample_mean": full_mean,
+        "leave_one_out_mean_min": float(loo_means.min()),
+        "leave_one_out_mean_max": float(loo_means.max()),
+        "mean_sign_stable": bool(all_positive or all_negative),
+        "outcome_unit": str(ordered["outcome_unit"].iloc[0]),
+    }
+
+
+def _sensitivity_configs(kind: str, base: BacktestConfig) -> list[tuple[str, BacktestConfig]]:
+    """Return a fixed, non-optimised grid around the Board specification."""
+    if kind == "equity":
+        weight_field = "equity_weights"
+        tilts = (
+            ("Macro 40% / EPS 60%", (("macro", 0.4), ("eps", 0.6))),
+            ("Macro 60% / EPS 40%", (("macro", 0.6), ("eps", 0.4))),
+        )
+    elif kind == "rates":
+        weight_field = "rates_weights"
+        tilts = (
+            ("Macro 40% / Markets 60%", (("macro", 0.4), ("markets", 0.6))),
+            ("Macro 60% / Markets 40%", (("macro", 0.6), ("markets", 0.4))),
+        )
+    else:
+        raise ValueError("kind must be 'equity' or 'rates'")
+
+    def changed(**updates) -> BacktestConfig:
+        values = {
+            "rebalance": base.rebalance,
+            "top_n": base.top_n,
+            "min_factor_lookback_days": base.min_factor_lookback_days,
+            "equity_weights": base.equity_weights,
+            "rates_weights": base.rates_weights,
+        }
+        values.update(updates)
+        return BacktestConfig(**values)
+
+    configs = [
+        ("Primary · 50/50 · Top 3", base),
+        ("Narrow selection · Top 2", changed(top_n=2)),
+        ("Broad selection · Top 4", changed(top_n=4)),
+    ]
+    configs.extend((label, changed(**{weight_field: weights})) for label, weights in tilts)
+    return configs
+
+
+def build_sensitivity_analysis(
+    data: dict,
+    kind: str,
+    config: BacktestConfig | None = None,
+) -> pd.DataFrame:
+    """Evaluate a pre-declared local grid without choosing a winning variant."""
+    cfg = config or BacktestConfig()
+    rows = []
+    for order, (label, variant) in enumerate(_sensitivity_configs(kind, cfg)):
+        periods = run_score_backtest(data, kind, variant)
+        summary = summarize_score_backtest(periods, variant)
+        rows.append({
+            "specification": label,
+            "is_primary": order == 0,
+            "top_n": variant.top_n,
+            "periods": summary.get("periods", 0),
+            "average_top_minus_bottom": summary.get("average_top_minus_bottom", np.nan),
+            "median_top_minus_bottom": summary.get("median_top_minus_bottom", np.nan),
+            "hit_rate_pct": summary.get("hit_rate_pct", np.nan),
+            "mean_rank_ic": summary.get("mean_rank_ic", np.nan),
+            "outcome_unit": summary.get("outcome_unit", ""),
+        })
+    return pd.DataFrame(rows)
 
 
 def build_score_backtest(data: dict, config: BacktestConfig | None = None) -> dict:
@@ -206,4 +350,10 @@ def build_score_backtest(data: dict, config: BacktestConfig | None = None) -> di
         "rates_periods": rates,
         "equity_summary": summarize_score_backtest(equity, cfg),
         "rates_summary": summarize_score_backtest(rates, cfg),
+        "equity_chronological_stability": chronological_stability(equity),
+        "rates_chronological_stability": chronological_stability(rates),
+        "equity_leave_one_out": leave_one_period_out_stability(equity),
+        "rates_leave_one_out": leave_one_period_out_stability(rates),
+        "equity_sensitivity": build_sensitivity_analysis(data, "equity", cfg),
+        "rates_sensitivity": build_sensitivity_analysis(data, "rates", cfg),
     }

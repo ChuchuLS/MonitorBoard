@@ -56,6 +56,53 @@ def _period_table(periods: pd.DataFrame, unit: str) -> str:
     return view.to_html(index=False, border=0, float_format=lambda x: f"{x:+.3f}")
 
 
+def _diagnostic_table(frame: pd.DataFrame, unit: str) -> str:
+    if frame is None or frame.empty:
+        return "<p>Insufficient periods for chronological stability slices.</p>"
+    view = frame[[
+        "slice", "first_signal_date", "last_outcome_date", "periods",
+        "average_top_minus_bottom", "median_top_minus_bottom",
+        "hit_rate_pct", "mean_rank_ic",
+    ]].copy()
+    view = view.rename(columns={
+        "slice": "Slice", "first_signal_date": "First signal",
+        "last_outcome_date": "Last outcome", "periods": "Periods",
+        "average_top_minus_bottom": f"Average spread ({unit})",
+        "median_top_minus_bottom": f"Median spread ({unit})",
+        "hit_rate_pct": "Positive spread (%)", "mean_rank_ic": "Mean rank IC",
+    })
+    return view.to_html(index=False, border=0, float_format=lambda x: f"{x:+.3f}")
+
+
+def _sensitivity_table(frame: pd.DataFrame, unit: str) -> str:
+    if frame is None or frame.empty:
+        return "<p>Sensitivity diagnostics unavailable.</p>"
+    view = frame[[
+        "specification", "periods", "average_top_minus_bottom",
+        "median_top_minus_bottom", "hit_rate_pct", "mean_rank_ic",
+    ]].copy()
+    view = view.rename(columns={
+        "specification": "Pre-declared variant", "periods": "Periods",
+        "average_top_minus_bottom": f"Average spread ({unit})",
+        "median_top_minus_bottom": f"Median spread ({unit})",
+        "hit_rate_pct": "Positive spread (%)", "mean_rank_ic": "Mean rank IC",
+    })
+    return view.to_html(index=False, border=0, float_format=lambda x: f"{x:+.3f}")
+
+
+def _leave_one_out_note(diagnostic: dict) -> str:
+    if diagnostic.get("status") != "Available":
+        return "Insufficient periods for leave-one-period-out analysis."
+    unit = diagnostic.get("outcome_unit", "")
+    low = diagnostic.get("leave_one_out_mean_min")
+    high = diagnostic.get("leave_one_out_mean_max")
+    sign = "unchanged" if diagnostic.get("mean_sign_stable") else "changed"
+    return (
+        "Removing each week in turn produces an average spread between "
+        f"{low:+.3f} {unit} and {high:+.3f} {unit}; the sign is {sign}."
+    )
+
+
 def build_report(output_dir: Path | None = None) -> tuple[Path, Path, Path]:
     output_dir = output_dir or ROOT / "reports"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -83,10 +130,21 @@ th{{background:#13191c;color:#aab4ba}} td{{font-variant-numeric:tabular-nums}}
 <div class="note"><b>Interpretation limit.</b> The available high-frequency factor history starts on 2026-02-16. After requiring a full 90-calendar-day lookback, only {eq.get('periods', 0)} equity and {rt.get('periods', 0)} rates observations remain. The workbook contains revised macro observations rather than vintage snapshots. This is therefore a preliminary historical signal check, not a statistically validated or deployable strategy backtest.</div>
 {_summary_table('Equity score', eq)}
 <p>Outcome: next-week cash-index return. Only rows with all four scoring macro factors (GDP, CPI, fiscal and terms of trade) plus EPS and status Ready enter the ranking. FCI is context only and is not used. Gross of costs.</p>
+<h3>Equity chronological stability</h3>
+{_diagnostic_table(result['equity_chronological_stability'], '%')}
+<p>{html.escape(_leave_one_out_note(result['equity_leave_one_out']))}</p>
+<h3>Equity fixed sensitivity grid</h3>
+{_sensitivity_table(result['equity_sensitivity'], '%')}
 {_summary_table('Rates score', rt)}
 <p>Outcome: minus next-week 10Y yield change in basis points, used only as a bond-direction proxy. The workbook does not contain sovereign total-return indices, so this is not portfolio P&amp;L.</p>
+<h3>Rates chronological stability</h3>
+{_diagnostic_table(result['rates_chronological_stability'], 'bp')}
+<p>{html.escape(_leave_one_out_note(result['rates_leave_one_out']))}</p>
+<h3>Rates fixed sensitivity grid</h3>
+{_sensitivity_table(result['rates_sensitivity'], 'bp')}
 <h3>Equity periods</h3>{_period_table(result['equity_periods'], '%')}
 <h3>Rates periods</h3>{_period_table(result['rates_periods'], 'bp')}
+<div class="note"><b>Robustness interpretation.</b> The chronological split is descriptive, not a train/test or historical-vintage out-of-sample test. The fixed variants are all reported and are not used to choose a winning model. The production Score remains 50/50 and Top 3.</div>
 <div class="note"><b>No-fabrication controls.</b> No forward observation enters signal construction; no missing scoring factor, price, EPS, yield or return is replaced by a proxy or zero; FCI has no effect on the equity signal; no transaction-cost assumption is invented.</div>
 </body></html>"""
     report_path.write_text(report, encoding="utf-8")

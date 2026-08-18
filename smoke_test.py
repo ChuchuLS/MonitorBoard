@@ -2259,6 +2259,8 @@ from models.scoring.backtest import (
     BacktestConfig as _BtCfg,
     _spearman_rank_correlation as _spearman_rho,
     build_score_backtest as _build_bt,
+    chronological_stability as _chronological_stability,
+    leave_one_period_out_stability as _leave_one_out_stability,
 )
 assert abs(_spearman_rho(pd.Series([1, 2, 2, 4]), pd.Series([4, 3, 3, 1])) + 1.0) < 1e-12
 assert np.isnan(_spearman_rho(pd.Series([1.0]), pd.Series([2.0])))
@@ -2267,7 +2269,8 @@ for _kind in ("equity", "rates"):
     _periods = _bt[f"{_kind}_periods"]
     _summary = _bt[f"{_kind}_summary"]
     assert 10 <= len(_periods) < 26
-    assert _summary["status"] == "Limited sample"
+    assert _summary["status"] == "Insufficient sample"
+    assert _summary["minimum_validation_periods"] == 26
     assert _summary["costs_included"] is False
     assert _summary["macro_vintage_safe"] is False
     assert (_periods["signal_date"] < _periods["outcome_date"]).all()
@@ -2275,6 +2278,26 @@ for _kind in ("equity", "rates"):
         assert set(_bt_row["top_codes"].split(", ")).isdisjoint(
             set(_bt_row["bottom_codes"].split(", "))
         )
+    _time_slices = _bt[f"{_kind}_chronological_stability"]
+    assert list(_time_slices["slice"]) == ["Earlier half", "Recent half"]
+    assert list(_time_slices["periods"]) == [6, 6]
+    _loo = _bt[f"{_kind}_leave_one_out"]
+    assert _loo["status"] == "Available" and _loo["periods"] == 12
+    assert _loo["leave_one_out_mean_min"] <= _loo["leave_one_out_mean_max"]
+    _sensitivity = _bt[f"{_kind}_sensitivity"]
+    assert len(_sensitivity) == 5 and _sensitivity["is_primary"].sum() == 1
+    _primary = _sensitivity.loc[_sensitivity["is_primary"]].iloc[0]
+    assert abs(
+        _primary["average_top_minus_bottom"]
+        - _summary["average_top_minus_bottom"]
+    ) < 1e-12
+assert _chronological_stability(_bt["equity_periods"].head(7)).empty
+_synthetic_periods = _bt["equity_periods"].head(3).copy()
+_synthetic_periods["top_minus_bottom"] = [1.0, 2.0, 3.0]
+_synthetic_loo = _leave_one_out_stability(_synthetic_periods)
+assert _synthetic_loo["mean_sign_stable"] is True
+assert _synthetic_loo["leave_one_out_mean_min"] == 1.5
+assert _synthetic_loo["leave_one_out_mean_max"] == 2.5
 _min_bt_date = max(
     _scoring_feedback_data["tot"].index.min(),
     _scoring_feedback_data["eps"].index.min(),
@@ -2301,13 +2324,19 @@ assert next(p for p in PAGES if p["id"] == "scoring")["next"] == "scoring_backte
 _bt_page_src = open("charts/pages/scoring_backtest.py").read()
 assert "build_score_backtest" in _bt_page_src
 assert "st.slider" not in _bt_page_src and "st.number_input" not in _bt_page_src
-assert "Sharpe ratio, drawdown and cumulative" in _bt_page_src
+assert "Sharpe ratio, drawdown and " in _bt_page_src
+assert "cumulative portfolio P&L" in _bt_page_src
 assert "FCI contributes" in _bt_page_src
+assert "Chronological stability" in _bt_page_src
+assert "Fixed-specification sensitivity" in _bt_page_src
+assert "st.slider" not in _bt_page_src and "st.number_input" not in _bt_page_src
 assert "scoring_backtest" in open("charts/pages/__init__.py").read()
 assert "cta_score_backtest" in _shared_snapshot
 assert _shared_snapshot["cta_score_backtest"]["specification"]["fci_used"] is False
 assert len(_shared_snapshot["cta_score_backtest"]["equity_periods"]) == 12
-print("    E4. A2 CTA backtest page shows all 12 strict weekly periods for 18 equities; fixed specification ignores FCI/future rows and withholds unsupported P&L metrics ✓")
+assert len(_shared_snapshot["cta_score_backtest"]["equity_sensitivity"]) == 5
+assert len(_shared_snapshot["cta_score_backtest"]["equity_chronological_stability"]) == 2
+print("    E4. A2 shows all 12 strict weekly periods plus chronological, leave-one-out and fixed-grid robustness diagnostics; it ignores FCI/future rows and withholds unsupported P&L metrics ✓")
 
 _dq_feedback = open("charts/pages/data_quality.py").read()
 assert "SOFR Futures Strip &amp; Calendar Spreads" in _dq_feedback

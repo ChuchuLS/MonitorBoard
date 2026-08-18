@@ -408,8 +408,12 @@ def build_snapshot() -> dict:
             if frame is None or frame.empty:
                 return []
             view = frame.copy()
-            for column in ("signal_date", "outcome_date"):
-                view[column] = view[column].astype(str)
+            for column in (
+                "signal_date", "outcome_date", "first_signal_date",
+                "last_outcome_date",
+            ):
+                if column in view.columns:
+                    view[column] = view[column].astype(str)
             return view.to_dict(orient="records")
 
         snap["cta_score_backtest"] = {
@@ -426,6 +430,16 @@ def build_snapshot() -> dict:
             "rates_summary": _summary_record(bt["rates_summary"]),
             "equity_periods": _period_records(bt["equity_periods"]),
             "rates_periods": _period_records(bt["rates_periods"]),
+            "equity_chronological_stability": _period_records(
+                bt["equity_chronological_stability"]
+            ),
+            "rates_chronological_stability": _period_records(
+                bt["rates_chronological_stability"]
+            ),
+            "equity_leave_one_out": bt["equity_leave_one_out"],
+            "rates_leave_one_out": bt["rates_leave_one_out"],
+            "equity_sensitivity": _period_records(bt["equity_sensitivity"]),
+            "rates_sensitivity": _period_records(bt["rates_sensitivity"]),
         }
     except Exception as exc:
         _record_export_error(snap, "cta_score_backtest", exc)

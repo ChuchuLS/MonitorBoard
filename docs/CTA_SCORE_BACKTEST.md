@@ -25,6 +25,27 @@ python scripts/run_cta_score_backtest.py
 - No future-dated row enters signal construction.
 - Gross results; no transaction-cost assumption is invented.
 
+## Robustness diagnostics
+
+The A2 page keeps the 50/50, Top 3 specification as the only primary result.
+It now adds three descriptive checks without selecting a better-looking model:
+
+- **Chronological stability:** the usable observations are split into two
+  contiguous halves. Both halves must contain at least four periods. This is a
+  time-stability comparison, not a train/test or macro-vintage-safe
+  out-of-sample test.
+- **Leave-one-period-out stability:** each observed week is removed once and
+  the primary average spread is recalculated. This shows whether one week alone
+  determines the sign of the reported mean.
+- **Fixed sensitivity grid:** the primary 50/50 Top 3 result is shown alongside
+  Top 2, Top 4, 40/60 and 60/40 variants. All five are reported together. The
+  variants are not searched, ranked or used to change the production Score.
+
+The page requires at least 26 usable periods before the sample is no longer
+labelled `Insufficient sample`. Crossing that threshold would still leave the
+result `Preliminary only`, because revised macro history and non-investable
+rates outcomes remain unresolved.
+
 ## Important limitations
 
 `Rates_10Y`, `Equity_ToT`, and `Equity_EPS` begin on 2026-02-16. After enforcing
