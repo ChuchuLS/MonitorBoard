@@ -46,8 +46,32 @@ def build_snapshot() -> dict:
         "index": {
             "level": round(float(r.latest), 2) if not __import__("math").isnan(r.latest) else None,
             "regime": r.latest_regime,
+            "status": "Official" if r.latest_date is not None else "Unavailable",
+            "as_of": str(r.latest_date.date()) if r.latest_date is not None else None,
             "changes": {k: round(float(v), 2) for k, v in changes.items()
                         if not __import__("math").isnan(v)},
+            "preliminary": (
+                {
+                    "level": round(float(r.preliminary_latest), 2),
+                    "regime": r.preliminary_regime,
+                    "as_of": str(r.preliminary_date.date()),
+                    "available_buckets": int(
+                        r.available_bucket_count.loc[r.preliminary_date]
+                    ),
+                    "available_components": int(
+                        r.available_component_count.loc[r.preliminary_date]
+                    ),
+                    "normal_component_target": (
+                        int(r.normal_component_target.loc[r.preliminary_date])
+                        if __import__("pandas").notna(
+                            r.normal_component_target.loc[r.preliminary_date]
+                        ) else None
+                    ),
+                }
+                if r.preliminary_date is not None
+                and not __import__("math").isnan(r.preliminary_latest)
+                else None
+            ),
         },
         "pages": [],
         "export_errors": [],

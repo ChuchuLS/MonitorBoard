@@ -22,6 +22,8 @@ assert Path("data/snapshot.json").exists()
 import json
 snap_data = json.loads(Path("data/snapshot.json").read_text())
 assert "index" in snap_data and "pages" in snap_data
+assert snap_data["index"].get("status") == "Official"
+assert snap_data["index"].get("as_of"), "snapshot official as-of date missing"
 assert snap_data.get("export_errors") == [], \
     f"snapshot sections failed: {snap_data.get('export_errors')}"
 print(f"   snapshot.json: index={snap_data['index']['level']}, {len(snap_data['pages'])} pages ✓")
@@ -53,6 +55,10 @@ expected_sheets = {
     "Latest_components", "Reconciliation", "Forward_fill_audit", "Methodology",
 }
 assert expected_sheets.issubset(workbook.sheetnames), workbook.sheetnames
+index_headers = [cell.value for cell in next(workbook["Index"].iter_rows(min_row=1, max_row=1))]
+for required in ("index", "analytical_index", "preliminary_index",
+                 "normal_component_target", "complete_coverage", "published"):
+    assert required in index_headers, f"Index export missing {required}"
 print(f"   Excel: {len(xlsx_bytes):,} bytes, {len(workbook.sheetnames)} sheets ✓")
 
 # 3. Lightweight HTML export (plotly_mode=none)

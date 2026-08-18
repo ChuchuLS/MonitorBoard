@@ -38,6 +38,7 @@ from index.components import BUCKETS
 from index.composite import (
     IndexResult, HORIZONS, INDEX_CENTER, regime_label,
     MIN_AVAILABLE_BUCKETS, MIN_AVAILABLE_COMPONENTS, MIN_COMPONENTS_PER_BUCKET,
+    HEADLINE_REQUIRED_BUCKETS, HEADLINE_COMPONENT_LOOKBACK,
 )
 from index.validation import (
     BENCHMARKS, correlation_table, rolling_correlation,
@@ -165,15 +166,19 @@ def render_driver_cards(result: IndexResult) -> None:
 # ===========================================================================
 # Index line chart with regime bands
 # ===========================================================================
-def index_line_chart(index: pd.Series, height: int = 460) -> go.Figure:
-    """Liquidity index over time with shaded Loose/Neutral/Tight/Stress bands."""
+def index_line_chart(index: pd.Series, height: int = 460,
+                     preliminary: pd.Series | None = None) -> go.Figure:
+    """Liquidity history with an optional dashed preliminary tail."""
     s = index.dropna()
+    p = (preliminary.dropna() if preliminary is not None
+         else pd.Series(dtype=float))
     fig = go.Figure()
 
     # Determine the visible y-range, always keeping the neutral 50 line in view.
-    if len(s):
-        lo = min(s.min(), 45.0)
-        hi = max(s.max(), 60.0)
+    plotted = pd.concat([s, p]).sort_index()
+    if len(plotted):
+        lo = min(plotted.min(), 45.0)
+        hi = max(plotted.max(), 60.0)
         pad = (hi - lo) * 0.08 or 1.0
         y_lo, y_hi = lo - pad, hi + pad
     else:
@@ -198,6 +203,7 @@ def index_line_chart(index: pd.Series, height: int = 460) -> go.Figure:
         fig.add_trace(go.Scatter(
             x=s.index, y=s.values, mode="lines",
             line=dict(color=LINE_WHITE, width=1.4),
+            name="Official / historical",
             hovertemplate="%{x|%Y-%m-%d}: %{y:.1f}<extra></extra>",
         ))
         fig.add_trace(go.Scatter(
@@ -207,9 +213,23 @@ def index_line_chart(index: pd.Series, height: int = 460) -> go.Figure:
             hoverinfo="skip", showlegend=False,
         ))
 
+    if len(p):
+        # Connect the preliminary tail to the last official point without
+        # relabelling that official observation as preliminary.
+        bridge = pd.concat([s.iloc[-1:], p]).sort_index() if len(s) else p
+        fig.add_trace(go.Scatter(
+            x=bridge.index, y=bridge.values, mode="lines+markers",
+            line=dict(color=ACCENT_AMBER, width=1.4, dash="dash"),
+            marker=dict(color=ACCENT_AMBER, size=6),
+            name="Preliminary",
+            hovertemplate="Preliminary<br>%{x|%Y-%m-%d}: %{y:.1f}<extra></extra>",
+        ))
+
     fig.update_layout(
-        **DARK_LAYOUT, height=height,
+        **{**DARK_LAYOUT, "showlegend": bool(len(p))}, height=height,
         margin=dict(l=55, r=60, t=20, b=30),
+        legend=dict(orientation="h", y=1.02, x=0,
+                    bgcolor="rgba(0,0,0,0)", font=dict(size=10, color="#ccc")),
     )
     fig.update_xaxes(showgrid=False, tickfont=dict(size=10, color="#bbb"), linecolor="#222")
     fig.update_yaxes(showgrid=True, gridcolor=GRID, zeroline=False, range=[y_lo, y_hi],
@@ -441,12 +461,16 @@ def effective_weights_chart(eff: pd.DataFrame, height: int = 280) -> go.Figure:
     return fig
 
 
-def raw_index_chart(index: pd.Series, smooth: int = 1, height: int = 360) -> go.Figure:
+def raw_index_chart(index: pd.Series, smooth: int = 1, height: int = 360,
+                    preliminary: pd.Series | None = None) -> go.Figure:
     """The published 50-centred index itself (optionally smoothed for display)."""
     s = index.dropna()
     if smooth and smooth > 1:
         s = s.rolling(smooth, min_periods=1).mean()
-    fig = index_line_chart(s, height=height)
+    p = preliminary
+    if p is not None and smooth and smooth > 1:
+        p = p.rolling(smooth, min_periods=1).mean()
+    fig = index_line_chart(s, height=height, preliminary=p)
     return fig
 
 
@@ -495,27 +519,39 @@ def render_index_page(df: pd.DataFrame, dff: pd.DataFrame, result: IndexResult,
             "are present in the data. See the Data Quality section for details."
         )
         return
+    if result.headline_index.dropna().empty:
+        st.warning(
+            "No official headline is available because no date meets the full "
+            "five-bucket and normal-component-coverage rule. Partial analytical "
+            "observations remain visible only for diagnostics."
+        )
 
     # --- Index level + regime line ----------------------------------------
     start, end = (dff.index.min(), dff.index.max()) if len(dff) else (df.index.min(), df.index.max())
 
-    # Warn if the chosen lookback reaches into the unpublished low-coverage era.
+    # Warn if the chosen lookback reaches into the unavailable analytical era.
     fp = result.first_published_date
     if fp is not None and start < fp:
         st.warning(
-            f"The selected lookback starts {start.date()}, but the index is only "
-            f"published from **{fp.date()}** — earlier dates fail the minimum "
+            f"The selected lookback starts {start.date()}, but analytical history is "
+            f"available from **{fp.date()}** — earlier dates fail the minimum "
             f"coverage rules (too few buckets / single-component buckets) and are "
             f"left blank. See *Coverage & reliability* below."
         )
 
-    idx_window = result.index.loc[(result.index.index >= start) & (result.index.index <= end)]
-    st.plotly_chart(index_line_chart(idx_window), use_container_width=True,
+    idx_window = result.index.loc[(result.index.index >= start) & (result.index.index <= end)].copy()
+    preliminary_window = result.preliminary_index.loc[
+        (result.preliminary_index.index >= start) & (result.preliminary_index.index <= end)
+    ]
+    if result.latest_date is not None:
+        idx_window.loc[idx_window.index > result.latest_date] = np.nan
+    st.plotly_chart(index_line_chart(idx_window, preliminary=preliminary_window), use_container_width=True,
                     key="liq_index_line", config={"displayModeBar": False})
     fp_txt = f" · reliable from {fp.date()}" if fp is not None else ""
     st.caption(
         "Bands: green = Loose (≥60) · grey = Neutral (45–60) · "
-        "amber = Tight (35–45) · red = Stress (<35)." + fp_txt
+        "amber = Tight (35–45) · red = Stress (<35). Dashed amber observations "
+        "are preliminary and excluded from headline changes." + fp_txt
     )
 
     # --- Sub-indices + contribution decomposition -------------------------
@@ -587,11 +623,14 @@ def _render_coverage_block(result: IndexResult) -> None:
                         color:#ccc;line-height:1.6;">
               The index is computable from <b>{fv.date() if fv is not None else '—'}</b>
               (once ~2y of history exists for the first indicators) but is only
-              <b style="color:{POS_GREEN};">published from {fp.date()}</b>, when at
+              <b style="color:{POS_GREEN};">available analytically from {fp.date()}</b>, when at
               least {MIN_AVAILABLE_BUCKETS} buckets — each with ≥
               {MIN_COMPONENTS_PER_BUCKET} live components — and ≥
               {MIN_AVAILABLE_COMPONENTS} components are available. Earlier dates are a
               <b>low-coverage / warm-up period</b> and are not shown as a valid signal.
+              The official headline uses the most recent date with all
+              {HEADLINE_REQUIRED_BUCKETS} buckets and at least the trailing
+              {HEADLINE_COMPONENT_LOOKBACK}-business-day median live-component count.
             </div>
             """,
             unsafe_allow_html=True)
@@ -616,10 +655,9 @@ def _render_coverage_block(result: IndexResult) -> None:
                         use_container_width=True, key="liq_effweights",
                         config={"displayModeBar": False})
     st.caption(
-        "When a bucket is missing, its weight is spread across the remaining "
-        "buckets — so before XCCY data begins (mid-2022) the other buckets carry "
-        "more. The index is only published once coverage is broad enough that this "
-        "renormalisation no longer rests on one or two fragile series.")
+        "Partial analytical dates may renormalise weights for diagnostics, but "
+        "they are never used for the official headline. The official value requires "
+        "all five buckets, so its effective weights remain the stated base weights.")
 
 
 def _render_driver_note(result: IndexResult, horizon: str) -> None:
@@ -678,6 +716,10 @@ def _render_benchmark_block(df: pd.DataFrame, result: IndexResult) -> None:
         )
         return
 
+    # Exclude any preliminary tail from validation statistics.
+    validated_index = (result.index.loc[:result.latest_date]
+                       if result.latest_date is not None else result.headline_index)
+
     # Display controls: Raw vs Smoothed (visual only — never changes the index).
     ctrl, _sp = st.columns([1.1, 2], gap="small")
     with ctrl:
@@ -693,7 +735,8 @@ def _render_benchmark_block(df: pd.DataFrame, result: IndexResult) -> None:
         "<div style='color:#888;font-size:11px;letter-spacing:0.08em;"
         "text-transform:uppercase;margin:0.4rem 0 0.2rem;'>Liquidity index "
         "(50-centred, higher = looser)</div>", unsafe_allow_html=True)
-    st.plotly_chart(raw_index_chart(result.index, smooth=smooth_win, height=320),
+    st.plotly_chart(raw_index_chart(validated_index, smooth=smooth_win, height=320,
+                                   preliminary=result.preliminary_index),
                     use_container_width=True, key="liq_raw50",
                     config={"displayModeBar": False})
 
@@ -702,7 +745,7 @@ def _render_benchmark_block(df: pd.DataFrame, result: IndexResult) -> None:
         "<div style='color:#888;font-size:11px;letter-spacing:0.08em;"
         "text-transform:uppercase;margin:0.5rem 0 0.2rem;'>Standardised overlay "
         "(all oriented so higher = looser)</div>", unsafe_allow_html=True)
-    overlay = standardized_overlay(result.index, df)
+    overlay = standardized_overlay(validated_index, df)
     if smooth_win > 1 and "Liquidity Index" in overlay.columns:
         overlay = overlay.copy()
         overlay["Liquidity Index"] = _smooth(overlay["Liquidity Index"], smooth_win)
@@ -723,7 +766,7 @@ def _render_benchmark_block(df: pd.DataFrame, result: IndexResult) -> None:
             "<div style='color:#888;font-size:11px;letter-spacing:0.08em;"
             "text-transform:uppercase;margin:0.5rem 0 0.2rem;'>Correlation with "
             "benchmarks</div>", unsafe_allow_html=True)
-        corr = correlation_table(result.index, df)
+        corr = correlation_table(validated_index, df)
         if not corr.empty:
             disp = corr.rename(columns={
                 "benchmark": "Benchmark", "corr_levels": "Corr (levels)",
@@ -740,7 +783,7 @@ def _render_benchmark_block(df: pd.DataFrame, result: IndexResult) -> None:
             "<div style='color:#888;font-size:11px;letter-spacing:0.08em;"
             "text-transform:uppercase;margin:0.5rem 0 0.2rem;'>Crisis-period "
             "behaviour</div>", unsafe_allow_html=True)
-        crisis = crisis_behaviour(result.index)
+        crisis = crisis_behaviour(validated_index)
         if not crisis.empty:
             crisis = crisis.copy()
             crisis["trough_date"] = pd.to_datetime(crisis["trough_date"]).dt.date.astype(str)
@@ -753,7 +796,7 @@ def _render_benchmark_block(df: pd.DataFrame, result: IndexResult) -> None:
             st.caption("The index should dip into Tight/Stress during these episodes.")
 
     # Rolling correlation + lead-lag.
-    roll = rolling_correlation(result.index, df)
+    roll = rolling_correlation(validated_index, df)
     if not roll.empty:
         rc_col, ll_col = st.columns(2, gap="medium")
         with rc_col:
@@ -770,7 +813,7 @@ def _render_benchmark_block(df: pd.DataFrame, result: IndexResult) -> None:
                 "<div style='color:#888;font-size:11px;letter-spacing:0.08em;"
                 f"text-transform:uppercase;margin:0.5rem 0 0.2rem;'>Lead-lag vs "
                 f"{primary}</div>", unsafe_allow_html=True)
-            ll = lead_lag(result.index, df, primary)
+            ll = lead_lag(validated_index, df, primary)
             if len(ll):
                 st.plotly_chart(lead_lag_chart(ll, primary), use_container_width=True,
                                 key="liq_leadlag", config={"displayModeBar": False})
@@ -904,7 +947,7 @@ def _render_reconciliation(rec: dict | None) -> None:
                     padding:0.7rem 0.9rem;margin:0.3rem 0 0.6rem;font-size:13px;
                     color:#ccc;line-height:1.8;">
           On <b>{d}</b>: legacy methodology = <b>{rec['legacy_index']:.2f}</b>,
-          current (v0.3) = <b>{rec['current_index']:.2f}</b>,
+          current (v0.4) = <b>{rec['current_index']:.2f}</b>,
           difference = <b style="color:{col};">{diff:+.2f}</b> index points
           (composite-z {rec['legacy_z']:.3f} → {rec['current_z']:.3f},
           Δ {rec['z_diff']:+.3f}). This is the change attributable to
@@ -985,17 +1028,28 @@ def _render_methodology_audit(result: IndexResult, audit: dict | None) -> None:
                 "Min available components": audit.get("min_available_components"),
                 "Min components per bucket": audit.get("min_components_per_bucket"),
                 "Warm-up (business days)": audit.get("warmup_days_after_first_valid"),
+                "Official required buckets": audit.get("headline_required_buckets"),
+                "Normal coverage lookback": audit.get("headline_component_lookback"),
                 "Bucket weights": ", ".join(f"{BUCKETS[b]['label']} {w:.0%}"
                                             for b, w in bw.items()),
                 "Latest DATA.xlsx hash": str(audit.get("data_hash"))[:16] + "…",
                 "Latest data date": str(getattr(audit.get("latest_data_date"), "date",
                                                  lambda: audit.get("latest_data_date"))()),
-                "Latest published date": str(getattr(audit.get("latest_published_date"),
-                                             "date", lambda: "n/a")()),
-                "Reliable from": str(getattr(audit.get("first_published_date"),
-                                     "date", lambda: "n/a")()),
+                "Latest official date": str(getattr(audit.get("latest_official_date"),
+                                            "date", lambda: "n/a")()),
+                "Latest preliminary date": str(getattr(audit.get("latest_preliminary_date"),
+                                               "date", lambda: "n/a")()),
+                "Analytical history from": str(getattr(audit.get("first_published_date"),
+                                              "date", lambda: "n/a")()),
                 "Components on latest date": audit.get("components_on_latest"),
                 "Buckets on latest date": audit.get("buckets_on_latest"),
+                "Components on official date": audit.get("components_on_official"),
+                "Buckets on official date": audit.get("buckets_on_official"),
+                "Components on preliminary date": audit.get("components_on_preliminary"),
+                "Buckets on preliminary date": audit.get("buckets_on_preliminary"),
+                "Preliminary normal target": audit.get(
+                    "normal_component_target_on_preliminary"
+                ),
                 "Latest index": f"{audit.get('latest_index'):.2f} "
                                 f"({audit.get('latest_regime')})",
             }
@@ -1021,7 +1075,10 @@ observations and the z is forward-filled ≤ 10 business days.
 qualifying buckets.
 **5. Index** — $50 + 10\times\text{composite}$.
 **6. Component contribution** — $10\,\tilde w_{b,t}\,z_{i,t}/n_{b,t}$, summing to index−50.
-**7. Coverage gate** — published only with ≥ 3 buckets, ≥ 8 components, past warm-up.
+**7. Coverage gates** — analytical history needs ≥ 3 buckets and ≥ 8 components.
+The official headline uses the latest date with all 5 buckets and at least the trailing
+63-business-day median component count from prior all-bucket dates. Later partial dates
+are Preliminary and do not affect the headline, regime, changes or contributions.
 **Benchmarks** (Bloomberg FCI, Chicago Fed NFCI) are validation only, never inputs.
             """
         )

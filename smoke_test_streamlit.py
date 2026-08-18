@@ -24,11 +24,22 @@ at.run(timeout=180)
 _assert_clean(at, "Contents page")
 print("1. Contents page + full renderer import registry ✓")
 
+# The current workbook has a later partial analytical observation.  It must be
+# visible as preliminary rather than replacing the official headline.
+assert any("Preliminary" in str(item.value) for item in at.markdown), \
+    "Contents page did not label the later partial liquidity reading"
+
 nav = next((widget for widget in at.sidebar.radio if widget.key == "nav_page"), None)
 assert nav is not None, "Sidebar SECTION navigation was not rendered"
+nav.set_value("00 · Liquidity").run(timeout=180)
+_assert_clean(at, "00 Liquidity page")
+assert any("Preliminary" in str(item.value) for item in at.warning), \
+    "Liquidity page did not show the preliminary coverage warning"
+print("2. Liquidity official/preliminary rendering ✓")
+
 nav.set_value("A2 · CTA Backtest").run(timeout=180)
 _assert_clean(at, "A2 CTA Backtest page")
 assert any("CTA Score Backtest" in str(item.value) for item in at.markdown), \
     "CTA Backtest page header was not rendered"
-print("2. A2 CTA Backtest page ✓")
+print("3. A2 CTA Backtest page ✓")
 print("ALL STREAMLIT RUNTIME TESTS PASSED ✓")

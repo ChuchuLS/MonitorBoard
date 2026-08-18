@@ -389,7 +389,9 @@ def _cover(p: PackCanvas, index_result):
            "CURRENT BOARD MODELS GENERATED FROM VERIFIED DATA.XLSX INPUTS",
            9, TEXT, "Helvetica-Bold")
     p.text(MARGIN_X + 30, 294,
-           f"COMPOSITE LIQUIDITY INDEX {_fmt(index_result.latest, '.1f')} | {index_result.latest_regime}",
+           f"COMPOSITE LIQUIDITY INDEX {_fmt(index_result.latest, '.1f')} | "
+           f"{index_result.latest_regime} | OFFICIAL "
+           f"{index_result.latest_date.date() if index_result.latest_date is not None else 'UNAVAILABLE'}",
            12, WHITE, "Helvetica-Bold")
     c.setStrokeColor(_hex(ORANGE)); c.setLineWidth(0.5)
     c.line(MARGIN_X, 145, PAGE_W - MARGIN_X, 145)
@@ -446,13 +448,16 @@ def _liquidity(p: PackCanvas, df, r):
     changes = r.changes()
     p.kpis([
         {"label": "COMPOSITE LIQUIDITY", "value": _fmt(r.latest, ".1f"),
-         "sub": r.latest_regime, "accent": GREEN},
+         "sub": (f"{r.latest_regime} | OFFICIAL {r.latest_date.date()}"
+                 if r.latest_date is not None else "UNAVAILABLE"), "accent": GREEN},
         {"label": "1 WEEK CHANGE", "value": _fmt(changes.get("1w"), "+.1f", " pts")},
         {"label": "1 MONTH CHANGE", "value": _fmt(changes.get("1m"), "+.1f", " pts")},
         {"label": "3 MONTH CHANGE", "value": _fmt(changes.get("3m"), "+.1f", " pts")},
     ])
-    p.line_chart(MARGIN_X, 280, 860, 210, r.index.dropna(),
-                 "COMPOSITE LIQUIDITY INDEX - PUBLISHED HISTORY", GREEN,
+    official_history = (r.index.loc[:r.latest_date].dropna()
+                        if r.latest_date is not None else r.headline_index.dropna())
+    p.line_chart(MARGIN_X, 280, 860, 210, official_history,
+                 "COMPOSITE LIQUIDITY INDEX - OFFICIAL THROUGH LATEST COMPLETE DATE", GREEN,
                  max_series=1, last_n=756)
     rows = []
     try:
@@ -464,8 +469,18 @@ def _liquidity(p: PackCanvas, df, r):
     p.table(960, 472, 420, rows,
             [("bucket", "BUCKET", .65), ("contribution", "CONTRIBUTION", .35)],
             max_rows=8, title="CURRENT BUCKET CONTRIBUTIONS", color=GREEN)
+    preliminary_note = ""
+    if r.preliminary_date is not None:
+        d = r.preliminary_date
+        preliminary_note = (
+            f" Preliminary {d.date()}: {r.preliminary_latest:.1f} "
+            f"({int(r.available_bucket_count.loc[d])}/5 buckets, "
+            f"{int(r.available_component_count.loc[d])} components); excluded from headline."
+        )
     p.note(960, 280, 420, 140, "MODEL NOTE",
-           "Rolling z-score composite across five buckets. 50 is neutral and higher values indicate looser conditions. Publication remains coverage-gated; missing inputs are not replaced with zero.", GREEN)
+           "Rolling z-score composite across five buckets. The official headline "
+           "uses the most recent fully covered date; missing inputs are not replaced "
+           "with zero." + preliminary_note, GREEN)
 
 
 def _policy(p: PackCanvas, df):

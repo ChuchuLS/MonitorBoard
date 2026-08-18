@@ -181,16 +181,24 @@ with st.sidebar:
     if not pd.isna(index_result.latest):
         reg = index_result.latest_regime
         reg_color = REGIME_COLORS.get(reg, TEXT_DIM)
+        official_date = index_result.latest_date
         st.divider()
         st.markdown(
             f"""
             <div style="font-size:10px;color:#888;letter-spacing:0.1em;
-                        text-transform:uppercase;">Liquidity now</div>
+                        text-transform:uppercase;">Liquidity official</div>
             <div style="font-size:26px;font-weight:700;color:{reg_color};
                         line-height:1.1;">{index_result.latest:.1f}</div>
             <div style="font-size:11px;color:{reg_color};font-weight:700;
                         text-transform:uppercase;letter-spacing:0.06em;">{reg}</div>
+            <div style="font-size:9px;color:#777;margin-top:3px;">
+              AS OF {official_date.date() if official_date is not None else '—'}</div>
             """, unsafe_allow_html=True)
+        if index_result.preliminary_date is not None:
+            st.caption(
+                f"Preliminary {index_result.preliminary_date.date()}: "
+                f"{index_result.preliminary_latest:.1f} · excluded from headline"
+            )
 
     st.divider()
     try:

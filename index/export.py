@@ -8,8 +8,8 @@ built at most once per DATA.xlsx version.
 
 Sheets
 ------
-1. Index               full B-day series: published index, raw_index, composite-z,
-                       regime, available buckets/components, published flag.
+1. Index               full B-day series: official headline index, analytical and
+                       preliminary observations, raw index, coverage and status flags.
 2. Buckets             per-bucket sub-z, effective weight, contribution by date.
 3. Component_z         date x component z-scores.
 4. Component_contrib   date x component contribution to (index-50);
@@ -32,19 +32,31 @@ def _index_sheet(result: IndexResult) -> pd.DataFrame:
     if result.raw_index.empty:
         return pd.DataFrame()
     dates = result.raw_index.index
-    pub = result.index.reindex(dates)
+    analytical = result.index.reindex(dates)
+    official = result.headline_index.reindex(dates)
+    preliminary = analytical.where(
+        result.published_mask.reindex(dates).fillna(False)
+        & ~result.headline_mask.reindex(dates).fillna(False)
+    )
     return pd.DataFrame({
         "date": dates,
-        "index": pub.values,                                    # NaN if not published
+        "index": official.values,                     # official headline series
+        "analytical_index": analytical.values,        # broad coverage-gated history
+        "preliminary_index": preliminary.values,      # not an official headline
         "raw_index": result.raw_index.values,                   # NaN if not computable
         "composite_z": result.composite_z.reindex(dates).values,
-        "regime": [regime_label(v) if pd.notna(v) else "" for v in pub.values],
+        "regime": [regime_label(v) if pd.notna(v) else "" for v in official.values],
         "available_buckets": result.available_bucket_count
                                   .reindex(dates).fillna(0).astype(int).values,
         "available_components": result.available_component_count
                                   .reindex(dates).fillna(0).astype(int).values,
-        "published": result.published_mask.reindex(dates).fillna(False)
-                            .astype(bool).values,
+        "normal_component_target": result.normal_component_target.reindex(dates).values,
+        "analytical_gate_pass": result.published_mask.reindex(dates).fillna(False)
+                                      .astype(bool).values,
+        "complete_coverage": result.complete_coverage_ok.reindex(dates).fillna(False)
+                                   .astype(bool).values,
+        "published": result.headline_mask.reindex(dates).fillna(False)
+                           .astype(bool).values,
     })
 
 
@@ -163,7 +175,7 @@ def build_index_workbook(result: IndexResult, audit: dict,
 
 def export_filename(audit: dict | None) -> str:
     """Stable, informative filename for the download."""
-    version = (audit or {}).get("methodology", {}).get("version", "v0.3")
+    version = (audit or {}).get("methodology", {}).get("version", "v0.4")
     latest = (audit or {}).get("methodology", {}).get("latest_data_date")
     stamp = latest.date().isoformat() if isinstance(latest, pd.Timestamp) else "latest"
     return f"liquidity_index_{version}_{stamp}.xlsx"

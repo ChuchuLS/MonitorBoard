@@ -36,18 +36,19 @@ from index.components import (
 from index.composite import (
     IndexResult, compute_index, INDEX_SCALE, INDEX_CENTER, HORIZONS,
     MIN_AVAILABLE_BUCKETS, MIN_AVAILABLE_COMPONENTS, MIN_COMPONENTS_PER_BUCKET,
-    WARMUP_DAYS_AFTER_FIRST_VALID,
+    WARMUP_DAYS_AFTER_FIRST_VALID, HEADLINE_REQUIRED_BUCKETS,
+    HEADLINE_COMPONENT_LOOKBACK,
 )
 
 # ---------------------------------------------------------------------------
 # 1. Methodology version (single source of truth)
 # ---------------------------------------------------------------------------
-INDEX_VERSION = "v0.3"
+INDEX_VERSION = "v0.4"
 
 INDEX_METHODOLOGY: dict = {
     "version": INDEX_VERSION,
-    "description": "Coverage-gated rolling z-score composite liquidity index "
-                   "with low-variation guard and weekly true-observation z-scoring",
+    "description": "Rolling z-score composite liquidity index with a fully-covered "
+                   "official headline and explicitly preliminary later observations",
     "z_window": Z_WINDOW,
     "z_min_periods": Z_MIN_PERIODS,
     "z_clip": Z_CLIP,
@@ -56,6 +57,14 @@ INDEX_METHODOLOGY: dict = {
     "min_available_components": MIN_AVAILABLE_COMPONENTS,
     "min_components_per_bucket": MIN_COMPONENTS_PER_BUCKET,
     "warmup_days_after_first_valid": WARMUP_DAYS_AFTER_FIRST_VALID,
+    "headline_required_buckets": HEADLINE_REQUIRED_BUCKETS,
+    "headline_component_lookback": HEADLINE_COMPONENT_LOOKBACK,
+    "headline_component_rule": (
+        "live components >= trailing median on prior all-bucket dates"
+    ),
+    "preliminary_rule": (
+        "later analytical observations never drive official level, regime, changes, or contributions"
+    ),
     "bucket_weights": {b: BUCKETS[b]["weight"] for b in BUCKETS},
     "ticker_corrections": [
         {
@@ -86,17 +95,40 @@ def methodology_audit(result: IndexResult, df: pd.DataFrame,
         if latest is not None and latest in series.index:
             return int(series.loc[latest])
         return int(series.dropna().iloc[-1]) if series.notna().any() else 0
+    official_date = result.latest_date
+    preliminary_date = result.preliminary_date
+
+    def _at_date(series: pd.Series, date) -> int | None:
+        if date is None or series is None or series.empty or date not in series.index:
+            return None
+        value = series.loc[date]
+        return int(value) if pd.notna(value) else None
+
+    analytical = result.index.dropna()
     return {
         **INDEX_METHODOLOGY,
         "data_hash": data_hash or "n/a",
         "latest_data_date": latest,
-        "latest_published_date": (result.index.dropna().index[-1]
-                                  if result.index.notna().any() else None),
+        "latest_published_date": official_date,
+        "latest_official_date": official_date,
+        "latest_analytical_date": analytical.index[-1] if len(analytical) else None,
+        "latest_preliminary_date": preliminary_date,
         "first_published_date": result.first_published_date,
+        "first_official_date": result.first_headline_date,
         "components_on_latest": _at(result.available_component_count),
         "buckets_on_latest": _at(result.available_bucket_count),
+        "components_on_official": _at_date(result.available_component_count, official_date),
+        "buckets_on_official": _at_date(result.available_bucket_count, official_date),
+        "components_on_preliminary": _at_date(result.available_component_count, preliminary_date),
+        "buckets_on_preliminary": _at_date(result.available_bucket_count, preliminary_date),
+        "normal_component_target_on_preliminary": _at_date(
+            result.normal_component_target, preliminary_date
+        ),
         "latest_index": result.latest,
         "latest_regime": result.latest_regime,
+        "preliminary_index": (result.preliminary_latest
+                              if pd.notna(result.preliminary_latest) else None),
+        "preliminary_regime": result.preliminary_regime,
     }
 
 
@@ -130,11 +162,11 @@ def reconciliation(current: IndexResult, legacy: IndexResult,
     Returns a dict with headline numbers, a per-bucket DataFrame, and the three
     reconciliation identities (which should each hold to ~1e-9).
     """
-    if current.index.dropna().empty:
+    if current.headline_index.dropna().empty:
         return {}
-    date = current.index.dropna().index[-1]
+    date = current.headline_index.dropna().index[-1]
 
-    cur_idx = _value_at(current.index, date)
+    cur_idx = _value_at(current.headline_index, date)
     leg_idx = _value_at(legacy.index, date)
     if np.isnan(leg_idx):
         leg_idx = _value_at(legacy.raw_index, date)
@@ -240,7 +272,7 @@ def component_contribution_table(result: IndexResult, df: pd.DataFrame) -> pd.Da
     """One row per DEFINED component with its latest contribution + change terms
     and a live/excluded reason. Live components' contributions sum to index-50."""
     raw, _ = build_components(df)
-    published = result.index.dropna()
+    published = result.headline_index.dropna()
     latest = published.index[-1] if len(published) else df.index.max()
 
     level = result.component_level_contributions()
@@ -249,8 +281,9 @@ def component_contribution_table(result: IndexResult, df: pd.DataFrame) -> pd.Da
     rows = []
     for comp_id, label, bucket, direction, spec in COMPONENTS:
         live, reason = _component_status(comp_id, result, raw, df, asof=latest)
-        rseries = raw.get(comp_id, pd.Series(dtype=float)).dropna()
-        raw_latest = float(rseries.iloc[-1]) if not rseries.empty else np.nan
+        rseries = raw.get(comp_id, pd.Series(dtype=float)).dropna().sort_index()
+        raw_asof = rseries.loc[:latest]
+        raw_latest = float(raw_asof.iloc[-1]) if not raw_asof.empty else np.nan
         z = result.z_scores[comp_id] if comp_id in result.z_scores.columns else pd.Series(dtype=float)
         z_latest = (z.reindex([latest]).iloc[0] if latest in z.index
                     else (z.dropna().iloc[-1] if z.notna().any() else np.nan))

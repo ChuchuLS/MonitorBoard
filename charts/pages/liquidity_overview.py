@@ -25,6 +25,7 @@ from charts.common import (
 from charts.liquidity import render_driver_cards, render_index_page
 from charts.funding import render_xccy_summary
 from data.loader import source_signature
+from index.composite import HEADLINE_REQUIRED_BUCKETS
 from index.methodology import INDEX_METHODOLOGY
 
 from ._context import PageContext
@@ -38,8 +39,9 @@ def render(ctx: PageContext) -> None:
 
     render_top_tabs(page["id"])
     r = ctx.index_result
-    published = r.index.dropna()
+    published = r.headline_index.dropna()
     published_date = published.index[-1] if len(published) else None
+    preliminary_date = r.preliminary_date
     raw_latest_date = ctx.df.index.max() if len(ctx.df) else None
     latest = (published_date.strftime("%b %d, %Y").upper()
               if published_date is not None else "—")
@@ -61,7 +63,8 @@ def render(ctx: PageContext) -> None:
     kpi_cards = [
         {"label": "Composite Liquidity Index",
          "value": f"{r.latest:.1f}" if pd.notna(r.latest) else "—",
-         "sub": f"50 = neutral · regime: {regime}",
+         "sub": (f"Official {published_date.date()} · regime: {regime}"
+                 if published_date is not None else "No complete date available"),
          "accent": color},
         {"label": "1-week change",
          "value": _fmt_change(changes.get("1w")),
@@ -74,6 +77,20 @@ def render(ctx: PageContext) -> None:
          "sub": "vs 63 business days ago"},
     ]
     render_kpi_strip(kpi_cards)
+
+    if preliminary_date is not None and pd.notna(r.preliminary_latest):
+        buckets = int(r.available_bucket_count.loc[preliminary_date])
+        components = int(r.available_component_count.loc[preliminary_date])
+        target_value = r.normal_component_target.loc[preliminary_date]
+        target = int(target_value) if pd.notna(target_value) else None
+        target_text = str(target) if target is not None else "unavailable"
+        st.warning(
+            f"Preliminary {preliminary_date.date()}: {r.preliminary_latest:.1f} "
+            f"({buckets}/{HEADLINE_REQUIRED_BUCKETS} buckets, {components} live "
+            f"components; normal coverage "
+            f"target {target_text}). It is excluded from the official headline, "
+            "regime, changes and contribution calculations until coverage is complete."
+        )
 
     contribution_sum = None
     if getattr(r, "bucket_terms", None) is not None and published_date is not None:
@@ -92,17 +109,17 @@ def render(ctx: PageContext) -> None:
     )
     render_explanation_box(
         "Version and data-update reconciliation",
-        f"<b>Methodology:</b> {INDEX_METHODOLOGY['version']} — unchanged in this update. "
-        f"<b>Published model date:</b> {published_date.date() if published_date is not None else '—'}. "
+        f"<b>Methodology:</b> {INDEX_METHODOLOGY['version']} — complete-date headline rule active. "
+        f"<b>Official model date:</b> {published_date.date() if published_date is not None else '—'}. "
+        f"<b>Preliminary model date:</b> {preliminary_date.date() if preliminary_date is not None else '—'}. "
         f"<b>Raw workbook latest row:</b> {raw_latest_date.date() if raw_latest_date is not None else '—'}. "
         f"<b>Source hash:</b> <code>{source_signature()[:12]}</code>. "
         f"<b>Bucket reconciliation gap:</b> {reconciliation_text}."
     )
     st.caption(
-        "The calculation formula and methodology version are unchanged. Updating or "
-        "revising Bloomberg source observations can change recent index values and can "
-        "advance the latest published model date; this is a data-vintage effect, not a "
-        "silent formula change."
+        "The z-score formula and bucket weights are unchanged. Methodology v0.4 changes "
+        "headline selection: only the most recent fully covered date is official; later "
+        "partial observations remain preliminary and cannot rewrite headline changes."
     )
 
     render_explanation_box(
@@ -110,7 +127,8 @@ def render(ctx: PageContext) -> None:
         "A raw-indicator liquidity gauge, z-scored across five buckets "
         "(money-market funding, dollar funding, credit, central-bank reserves, "
         "market liquidity) and rescaled so <b>50 = neutral</b> and higher = "
-        "looser. The panels below decompose today's reading into bucket and "
+        "looser. The headline automatically steps back to the latest fully "
+        "covered date. The panels below decompose that official reading into bucket and "
         "component contributions, benchmark it against Bloomberg FCI and the "
         "Chicago Fed NFCI, and expose the full methodology audit trail. "
         "The <b>Export to Excel</b> button ships a multi-sheet workbook of "

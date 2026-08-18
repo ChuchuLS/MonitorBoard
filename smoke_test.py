@@ -118,9 +118,29 @@ print(f"   computed in {dt:.2f}s")
 assert dt < 5, "index computation too slow"
 
 latest = res.latest
-print(f"   latest index = {latest:.2f}  regime = {res.latest_regime}")
+print(f"   official index = {latest:.2f} on {res.latest_date.date()}  regime = {res.latest_regime}")
 assert 0 < latest < 100, "index out of expected range"
 assert res.latest_regime in ("Loose", "Neutral", "Tight", "Stress")
+official_date = res.latest_date
+assert official_date is not None, "official headline date must be available"
+assert int(res.available_bucket_count.loc[official_date]) == len(BUCKETS), \
+    "official headline must contain every bucket"
+assert res.available_component_count.loc[official_date] >= \
+       res.normal_component_target.loc[official_date], \
+    "official headline must meet normal component coverage"
+assert bool(res.headline_mask.loc[official_date])
+official_weights = res.effective_weights.loc[official_date].dropna()
+assert np.allclose(official_weights.sort_index(),
+                   res.weights.reindex(official_weights.index).sort_index()), \
+    "official headline must use base weights without missing-bucket redistribution"
+if res.preliminary_date is not None:
+    pd_date = res.preliminary_date
+    assert pd_date > official_date
+    assert not bool(res.headline_mask.loc[pd_date])
+    assert pd.notna(res.preliminary_latest)
+    print(f"   preliminary = {res.preliminary_latest:.2f} on {pd_date.date()} · "
+          f"{int(res.available_bucket_count.loc[pd_date])}/{len(BUCKETS)} buckets · "
+          "excluded from headline")
 
 print("5. Changes:", {k: round(v, 2) for k, v in res.changes().items()})
 
@@ -167,7 +187,7 @@ rep = validate_data(df, TICKERS)
 print("   summary:", quality_summary(rep))
 
 # ---------------------------------------------------------------------------
-# v0.3 audit / methodology / reconciliation checks (requirement #6)
+# v0.4 audit / methodology / reconciliation checks
 # ---------------------------------------------------------------------------
 from index.methodology import (
     compute_legacy_index, reconciliation, component_contribution_table,
@@ -225,6 +245,9 @@ aud = methodology_audit(res, df, data_hash=source_signature())
 assert aud["version"] == INDEX_METHODOLOGY["version"]
 print(f"    methodology {aud['version']} · {aud['components_on_latest']} components, "
       f"{aud['buckets_on_latest']} buckets on latest date")
+assert aud["latest_official_date"] == res.latest_date
+assert aud["components_on_official"] >= aud["normal_component_target_on_preliminary"] \
+       if aud["normal_component_target_on_preliminary"] is not None else True
 
 
 # ---------------------------------------------------------------------------
@@ -236,7 +259,7 @@ r1 = compute_index(df)
 r2 = compute_index(df)
 assert abs(r1.latest - r2.latest) < 1e-12, "compute_index is non-deterministic"
 assert r1.latest == res.latest, "index result drift within one run"
-print(f"    compute_index is deterministic and unchanged "
+print(f"    compute_index is deterministic "
       f"(latest = {res.latest:.4f})")
 
 # All page modules import cleanly
@@ -645,8 +668,8 @@ from index.composite import compute_index as _ci_reg
 r_reg = _ci_reg(df)
 assert 0 < r_reg.latest < 100, f"CLI out of range: {r_reg.latest:.1f}"
 assert abs(r_reg.level_contributions().sum() - (r_reg.latest - 50.0)) < 1e-6
-assert INDEX_METHODOLOGY["version"] == "v0.3"
-print(f"    CLI: {r_reg.latest:.2f} ({r_reg.latest_regime}) — v0.3 formula + reconciliation OK ✓")
+assert INDEX_METHODOLOGY["version"] == "v0.4"
+print(f"    CLI: {r_reg.latest:.2f} ({r_reg.latest_regime}) — v0.4 headline gate + reconciliation OK ✓")
 
 # Methodology audit note exists
 from index.methodology import INDEX_METHODOLOGY
@@ -2292,7 +2315,7 @@ assert "joined by Date" in _dq_feedback
 assert "_SFR_CONTRACTS" in _dq_feedback
 print("    F. Production policy-futures audit follows the eight fixed quarterly contracts ✓")
 
-print(f"    CLI latest: {res.latest:.4f} on {res.index.dropna().index[-1].date()} · methodology unchanged ✓")
+print(f"    CLI official: {res.latest:.4f} on {res.latest_date.date()} · complete-date rule ✓")
 
 # Move final marker after all phases.
 

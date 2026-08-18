@@ -41,6 +41,7 @@ def render(ctx: PageContext) -> None:
 
     r = ctx.index_result
     from config.theme import REGIME_COLORS
+    from index.composite import HEADLINE_REQUIRED_BUCKETS
     regime = getattr(r, "latest_regime", "—")
     regime_color = REGIME_COLORS.get(regime, "#888")
     changes = r.changes() if callable(getattr(r, "changes", None)) else {}
@@ -54,8 +55,19 @@ def render(ctx: PageContext) -> None:
 
     # Liquidity
     if pd.notna(r.latest):
-        readings.append(("Composite Liquidity Index",
-                         f"<span style='color:{regime_color};'>{r.latest:.1f} ({regime})</span>"))
+        official_suffix = f" · {r.latest_date.date()}" if r.latest_date is not None else ""
+        readings.append(("Composite Liquidity Index — Official",
+                         f"<span style='color:{regime_color};'>{r.latest:.1f} "
+                         f"({regime}){official_suffix}</span>"))
+        if r.preliminary_date is not None and pd.notna(r.preliminary_latest):
+            prelim_buckets = int(r.available_bucket_count.loc[r.preliminary_date])
+            prelim_components = int(r.available_component_count.loc[r.preliminary_date])
+            readings.append((
+                "Composite Liquidity Index — Preliminary",
+                f"{r.preliminary_latest:.1f} · {r.preliminary_date.date()} · "
+                f"{prelim_buckets}/{HEADLINE_REQUIRED_BUCKETS} buckets · "
+                f"{prelim_components} components",
+            ))
         for h in ("1w", "1m", "3m"):
             v = changes.get(h)
             if v is not None and pd.notna(v):

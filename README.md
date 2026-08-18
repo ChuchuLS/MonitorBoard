@@ -91,7 +91,7 @@ page mirrors the front matter of an institutional chart pack.
 
 | No. | Section                         | Status               | Data source | What it shows |
 |----:|:--------------------------------|:---------------------|:------------|:--------------|
-| 00  | Liquidity Overview              | **Live**             | DATA.xlsx | Composite Liquidity Index (v0.3) with bucket & component contributions, benchmark validation, methodology audit, one-click Excel export, and a compact latest-value XCCY basis summary. |
+| 00  | Liquidity Overview              | **Live**             | DATA.xlsx | Composite Liquidity Index (v0.4) with a latest-complete-date official headline, explicit preliminary readings, bucket & component contributions, benchmark validation, methodology audit, and one-click Excel export. |
 | 01  | Policy & Short Rates            | **Live**             | DATA.xlsx | Confirmed SOFR / EFFR / IORB and repo-rate spreads, funding-pressure diagnostics, and weekly H.4.1 context. The fixed-contract SOFR strip is a separate live page; the meeting-by-meeting FOMC path remains unimplemented. |
 | 01b | SOFR Futures Strip & Calendar Spreads | **Live** | DATA.xlsx / Policy_Futures | Eight fixed quarterly SFR contracts from Sep 2026 through Jun 2028. Shows implied rates, 1D/5D/1M changes, 3M/6M/12M calendar spreads and terminal diagnostics. Not a meeting-by-meeting FOMC probability model. |
 | 02  | Rate Decomposition              | **Live**             | DATA.xlsx / Sheet1 | US curve complex, selectable-tenor rolling rate attribution, and 2s10s curve decomposition using breakeven identity. |
@@ -111,7 +111,8 @@ page mirrors the front matter of an institutional chart pack.
 | 09  | Model Roadmap & Content Gap     | **Live**             | DATA.xlsx (all sections) | Content gap analysis vs reference PDF — what is implemented, missing, and next. |
 
 ### Implemented now
-- Composite Liquidity Index (**v0.3, unchanged**): five buckets, coverage gate,
+- Composite Liquidity Index (**v0.4**): five buckets, a latest-complete-date
+  official headline, explicit preliminary later observations, coverage gate,
   weekly true-observation z-scoring, methodology versioning, legacy reconciliation,
   component contributions, forward-fill audit, multi-sheet Excel export.
 - PDF-style 8-regime directional Cross-Asset Timeline (SPX / UST 10Y / DXY,
@@ -196,7 +197,7 @@ no row-position merge or inferred calendar shift is used. See
 ### Research pack structure
 
 **Core live pages** — fully implemented on real data, tested:
-- 00 Liquidity Overview (Composite Liquidity Index v0.3)
+- 00 Liquidity Overview (Composite Liquidity Index v0.4)
 - 01 Policy & Short Rates (spot rates + funding plumbing)
 - 01b SOFR Futures Strip & Calendar Spreads (eight fixed quarterly contracts; not an FOMC probability path)
 - 02 Rate Decomposition (breakeven identity: nominal = real + inflation)
@@ -281,7 +282,7 @@ the **Contents** page inside the "Export research pack" expander.
 
 ---
 
-## The Composite Liquidity Index — methodology (v0.3)
+## The Composite Liquidity Index — methodology (v0.4)
 
 ---
 
@@ -337,11 +338,16 @@ concentration is transparent.
 
 **5. Scaling.** `liquidity_index = 50 + 10 × composite_z`.
 
-**6. Coverage gate.** A date is **published** only with **≥3 qualifying buckets**
-and **≥8 contributing components**, past the rolling-z warm-up (126 business days).
-With the current data the index is computable from 2016 but reliable/published from
-**2019-08-19**, when the SOFR plumbing begins and a third well-populated bucket
-exists. (Earlier dates are NaN, which is what removed the 2016–2018 oscillations.)
+**6. Coverage and official-headline gates.** A date enters the broad analytical
+history with **≥3 qualifying buckets** and **≥8 contributing components**, past the
+rolling-z warm-up (126 business days). The official headline is stricter: it steps
+back to the most recent date on which **all five buckets** qualify and the live
+component count is at least the trailing 63-business-day median observed on prior
+all-bucket dates. Later partial dates are labelled **Preliminary** and cannot drive
+the official level, regime, horizon changes or contribution calculations. Because
+all buckets are present on an official date, their effective weights equal the
+stated 30% / 20% / 20% / 20% / 10% base weights; no missing-bucket weight is
+redistributed in the headline.
 
 **7. Contribution decomposition (bucket and component).** Bucket contributions sum
 *exactly* to `index − 50`; **component** contributions also sum to `index − 50` via
@@ -352,7 +358,7 @@ lists every excluded component with a reason (Missing data / Stale (capped
 forward-fill) / Failed low-unique-observation guard / Bucket has <2 live components
 / Coverage gate / Insufficient rolling history).
 
-**8. Methodology versioning & reconciliation (new in v0.3).** The index carries a
+**8. Methodology versioning & reconciliation.** The index carries a
 formal version. The **Index Methodology Reconciliation** section recomputes a
 **legacy** index (no coverage gate, no min-2-per-bucket, no low-unique guard,
 unlimited forward-fill, daily treatment of weekly data) on the *same* latest data

@@ -15,11 +15,14 @@ Pipeline
    across whichever buckets qualify that day. The renormalised (effective)
    weights are exposed so the concentration is transparent.
 4. Rescale: ``liquidity_index = 50 + 10 * composite_z`` (50 neutral).
-5. COVERAGE GATE: a date is only PUBLISHED if it has >= ``min_buckets``
-   qualifying buckets and >= ``min_components`` contributing components, and is
-   past the rolling-z warm-up. Dates failing the gate are set to NaN in the
-   published ``index`` (the unmasked ``raw_index`` is retained for diagnostics).
-6. Regime label, period changes, and an additive bucket contribution
+5. ANALYTICAL COVERAGE GATE: a date enters the historical analytical series if
+   it has >= ``min_buckets`` qualifying buckets and >= ``min_components``
+   contributing components, and is past the rolling-z warm-up.
+6. OFFICIAL HEADLINE GATE: the headline uses the most recent date on which all
+   five buckets qualify and the live-component count is at least its trailing
+   normal level. A later analytical observation is exposed as preliminary and
+   never drives the official level, changes, regime, or contributions.
+7. Regime label, period changes, and an additive bucket contribution
    decomposition (terms sum exactly to index-50, so the decomposition always
    reconciles).
 """
@@ -61,6 +64,13 @@ MIN_AVAILABLE_COMPONENTS = 8
 # After the index first becomes computable, skip this many business days so the
 # rolling z-scores are past their warm-up before we publish.
 WARMUP_DAYS_AFTER_FIRST_VALID = 126
+# The official headline must contain every configured bucket.  This prevents a
+# missing bucket from being silently redistributed over the remaining buckets.
+HEADLINE_REQUIRED_BUCKETS = len(BUCKETS)
+# "Normal" live-component coverage is the trailing median on dates where all
+# buckets qualify.  A rolling, data-derived target adapts when the production
+# component universe genuinely changes without hard-coding today's count.
+HEADLINE_COMPONENT_LOOKBACK = 63
 
 
 def regime_label(value: float) -> str:
@@ -75,7 +85,8 @@ def regime_label(value: float) -> str:
 @dataclass
 class IndexResult:
     """Everything the dashboard needs to render the index, in one object."""
-    index: pd.Series             # PUBLISHED 50-centred index (low-coverage -> NaN)
+    index: pd.Series             # analytical history (broad coverage gate)
+    headline_index: pd.Series    # OFFICIAL series (all buckets + normal coverage)
     raw_index: pd.Series         # index before the coverage/warm-up mask (diagnostics)
     composite_z: pd.Series       # weighted-average z (raw_index = 50 + 10*z)
     sub_indices: pd.DataFrame    # date x bucket sub-index z-scores (min_per_bucket applied)
@@ -89,24 +100,71 @@ class IndexResult:
     available_bucket_count: pd.Series     # qualifying buckets per day
     coverage_ok: pd.Series       # bool: meets min bucket/component rules
     published_mask: pd.Series    # bool: coverage_ok AND past warm-up
+    complete_coverage_ok: pd.Series  # bool: all buckets + normal component count
+    headline_mask: pd.Series     # bool: complete_coverage_ok AND past warm-up
+    normal_component_target: pd.Series  # trailing normal live-component count
     meta: pd.DataFrame           # per-component availability metadata
     first_valid_date: pd.Timestamp | None = None      # first computable date
     first_published_date: pd.Timestamp | None = None  # first reliable/published date
+    first_headline_date: pd.Timestamp | None = None   # first fully-covered date
 
-    # ------- convenience accessors (operate on the PUBLISHED index) ----------
+    # ------- convenience accessors (operate on the OFFICIAL headline) --------
+    @property
+    def latest_date(self) -> pd.Timestamp | None:
+        s = self.headline_index.dropna()
+        return s.index[-1] if len(s) else None
+
     @property
     def latest(self) -> float:
-        return float(self.index.dropna().iloc[-1]) if self.index.notna().any() else float("nan")
+        s = self.headline_index.dropna()
+        return float(s.iloc[-1]) if len(s) else float("nan")
 
     @property
     def latest_regime(self) -> str:
         return regime_label(self.latest)
 
-    def changes(self) -> dict[str, float]:
+    @property
+    def preliminary_index(self) -> pd.Series:
+        """Analytical observations later than the latest official headline."""
         s = self.index.dropna()
+        if s.empty:
+            return s
+        latest_official = self.latest_date
+        return s if latest_official is None else s.loc[s.index > latest_official]
+
+    @property
+    def preliminary_date(self) -> pd.Timestamp | None:
+        s = self.preliminary_index
+        return s.index[-1] if len(s) else None
+
+    @property
+    def preliminary_latest(self) -> float:
+        s = self.preliminary_index
+        return float(s.iloc[-1]) if len(s) else float("nan")
+
+    @property
+    def preliminary_regime(self) -> str:
+        return regime_label(self.preliminary_latest)
+
+    def _horizon_dates(self, horizon: str) -> tuple[pd.Timestamp, pd.Timestamp] | None:
+        """Official latest date and latest official date on/before the target B-day."""
+        s = self.headline_index.dropna()
+        if s.empty:
+            return None
+        latest = s.index[-1]
+        target = latest - pd.tseries.offsets.BusinessDay(HORIZONS[horizon])
+        prior = s.loc[:target]
+        if prior.empty:
+            return None
+        return latest, prior.index[-1]
+
+    def changes(self) -> dict[str, float]:
         out = {}
-        for name, n in HORIZONS.items():
-            out[name] = float(s.iloc[-1] - s.iloc[-1 - n]) if len(s) > n else float("nan")
+        for name in HORIZONS:
+            dates = self._horizon_dates(name)
+            out[name] = (float(self.headline_index.loc[dates[0]]
+                               - self.headline_index.loc[dates[1]])
+                         if dates is not None else float("nan"))
         return out
 
     def _terms_on_published(self, terms: pd.DataFrame) -> pd.DataFrame:
@@ -115,7 +173,7 @@ class IndexResult:
         any unpublished/low-frequency rows elsewhere in the frame."""
         if terms is None or terms.empty:
             return pd.DataFrame()
-        pub = self.index.dropna().index
+        pub = self.headline_index.dropna().index
         return terms.reindex(pub)
 
     def level_contributions(self) -> pd.Series:
@@ -123,11 +181,11 @@ class IndexResult:
         return terms.iloc[-1] if len(terms) else pd.Series(dtype=float)
 
     def change_contributions(self, horizon: str = "1m") -> pd.Series:
-        n = HORIZONS[horizon]
         terms = self._terms_on_published(self.bucket_terms).dropna(how="all")
-        if len(terms) <= n:
+        dates = self._horizon_dates(horizon)
+        if terms.empty or dates is None:
             return pd.Series(dtype=float)
-        return terms.iloc[-1] - terms.iloc[-1 - n]
+        return terms.loc[dates[0]] - terms.loc[dates[1]]
 
     def drivers(self, horizon: str = "1m") -> tuple[str, str]:
         contrib = self.change_contributions(horizon)
@@ -151,11 +209,11 @@ class IndexResult:
 
     def component_change_contributions(self, horizon: str = "1m") -> pd.Series:
         """Each component's contribution to the index change over ``horizon``."""
-        n = HORIZONS[horizon]
         terms = self._terms_on_published(self.component_terms).dropna(how="all")
-        if len(terms) <= n:
+        dates = self._horizon_dates(horizon)
+        if terms.empty or dates is None:
             return pd.Series(dtype=float)
-        return terms.iloc[-1] - terms.iloc[-1 - n]
+        return terms.loc[dates[0]] - terms.loc[dates[1]]
 
 
 def compute_index(
@@ -220,9 +278,16 @@ def compute_index(
     if z_scores.empty:
         empty = pd.Series(dtype=float)
         empty_df = pd.DataFrame()
-        return IndexResult(empty, empty, empty, empty_df, z_scores, empty_df,
-                           empty_df, pd.Series(dtype=float), empty_df, empty_df,
-                           empty, empty, empty, empty, meta)
+        return IndexResult(
+            index=empty, headline_index=empty, raw_index=empty,
+            composite_z=empty, sub_indices=empty_df, z_scores=z_scores,
+            bucket_terms=empty_df, component_terms=empty_df,
+            weights=pd.Series(dtype=float), effective_weights=empty_df,
+            components_by_bucket=empty_df, available_component_count=empty,
+            available_bucket_count=empty, coverage_ok=empty,
+            published_mask=empty, complete_coverage_ok=empty,
+            headline_mask=empty, normal_component_target=empty, meta=meta,
+        )
 
     # 3. Per-bucket live-component counts and sub-index (with min_per_bucket).
     sub_data: dict[str, pd.Series] = {}
@@ -300,8 +365,31 @@ def compute_index(
     published = index.dropna()
     first_published_date = published.index[0] if len(published) else None
 
+    # 6. Official headline gate.  The component target is based only on prior
+    # fully-covered dates, so an abnormally sparse current row cannot lower its
+    # own hurdle.  The first fully-covered date falls back to its own count.
+    all_buckets = available_bucket_count.eq(HEADLINE_REQUIRED_BUCKETS)
+    complete_counts = available_component_count.where(all_buckets)
+    normal_component_target = (
+        complete_counts.shift(1)
+        .rolling(HEADLINE_COMPONENT_LOOKBACK, min_periods=1)
+        .median()
+        .apply(np.ceil)
+        .fillna(complete_counts)
+    )
+    complete_coverage_ok = (
+        all_buckets
+        & normal_component_target.notna()
+        & available_component_count.ge(normal_component_target)
+    )
+    headline_mask = complete_coverage_ok.reindex(raw_index.index, fill_value=False) & warmup_ok
+    headline_index = raw_index.where(headline_mask)
+    headline = headline_index.dropna()
+    first_headline_date = headline.index[0] if len(headline) else None
+
     return IndexResult(
         index=index,
+        headline_index=headline_index,
         raw_index=raw_index,
         composite_z=composite_z,
         sub_indices=sub_indices,
@@ -315,7 +403,11 @@ def compute_index(
         available_bucket_count=available_bucket_count,
         coverage_ok=coverage_ok,
         published_mask=published_mask,
+        complete_coverage_ok=complete_coverage_ok,
+        headline_mask=headline_mask,
+        normal_component_target=normal_component_target,
         meta=meta,
         first_valid_date=first_valid_date,
         first_published_date=first_published_date,
+        first_headline_date=first_headline_date,
     )

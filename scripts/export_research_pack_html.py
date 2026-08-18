@@ -180,7 +180,8 @@ def _build_cover(df, r, lvd, sig):
         f"Latest: {lvd.strftime('%B %d, %Y')} · DATA.xlsx hash: {sig[:12]}…</div>"
         + _kpi_strip([
             {"label": "Composite Liquidity Index", "value": f"{r.latest:.1f}",
-             "sub": regime, "accent": rc},
+             "sub": (f"{regime} · official {r.latest_date.date()}"
+                     if r.latest_date is not None else "Unavailable"), "accent": rc},
             {"label": "1W", "value": f"{r.changes().get('1w', 0):+.1f}"},
             {"label": "1M", "value": f"{r.changes().get('1m', 0):+.1f}"},
             {"label": "3M", "value": f"{r.changes().get('3m', 0):+.1f}"},
@@ -212,11 +213,25 @@ def _build_liquidity(r):
     html = ("<div class='page'>"
             + _section_header("00", "Liquidity Overview", "#5fb04f")
             + _kpi_strip([
-                {"label": "CLI", "value": f"{r.latest:.1f}", "sub": regime, "accent": rc},
+                {"label": "CLI", "value": f"{r.latest:.1f}",
+                 "sub": (f"{regime} · official {r.latest_date.date()}"
+                         if r.latest_date is not None else "Unavailable"), "accent": rc},
                 {"label": "1W Δ", "value": f"{changes.get('1w',0):+.1f} pts"},
                 {"label": "1M Δ", "value": f"{changes.get('1m',0):+.1f} pts"},
                 {"label": "3M Δ", "value": f"{changes.get('3m',0):+.1f} pts"},
             ]))
+
+    if r.preliminary_date is not None:
+        d = r.preliminary_date
+        target = r.normal_component_target.loc[d]
+        target_text = str(int(target)) if pd.notna(target) else "unavailable"
+        html += (
+            "<p class='sub'><b>Preliminary:</b> "
+            f"{d.date()} · {r.preliminary_latest:.1f} · "
+            f"{int(r.available_bucket_count.loc[d])}/5 buckets · "
+            f"{int(r.available_component_count.loc[d])} components "
+            f"(normal target {target_text}). Excluded from headline calculations.</p>"
+        )
 
     # Bucket contributions
     try:
