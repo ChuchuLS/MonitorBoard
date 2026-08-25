@@ -154,3 +154,13 @@ def lead_lag(index: pd.Series, df: pd.DataFrame, benchmark: str,
     lags = range(-max_lag, max_lag + 1)
     vals = {k: di.corr(db.shift(-k)) for k in lags}
     return pd.Series(vals)
+
+
+def describe_peak_lag(peak_lag: int) -> str:
+    """Describe a lag using the same sign convention as :func:`lead_lag`."""
+    peak_lag = int(peak_lag)
+    if peak_lag == 0:
+        return "move roughly together"
+    if peak_lag > 0:
+        return f"our index tends to LEAD by {peak_lag}d"
+    return f"our index tends to LAG by {-peak_lag}d"

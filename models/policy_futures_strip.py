@@ -218,6 +218,25 @@ def build_terminal_spreads(strip_table: pd.DataFrame, terminal: dict) -> dict:
     return result
 
 
+def longest_available_terminal_spread(terminal_spreads: dict) -> dict | None:
+    """Return the longest observed post-terminal spread in the fixed strip.
+
+    A terminal near the back of the eight-contract window does not necessarily
+    have a +12M contract available.  Consumers must not format that structural
+    absence as a number or silently extrapolate beyond the supplied contracts.
+    """
+    for months in (12, 6, 3):
+        value = terminal_spreads.get(f"terminal_to_{months}m_bp")
+        contract = terminal_spreads.get(f"contract_{months}m")
+        if value is not None and pd.notna(value) and contract:
+            return {
+                "months": months,
+                "spread_bp": float(value),
+                "contract": contract,
+            }
+    return None
+
+
 def build_sofr_strip_snapshot(
     futures_df: pd.DataFrame,
     market_df: pd.DataFrame | None = None,
@@ -282,14 +301,17 @@ def build_sofr_strip_current_reading(
     if snap["status"] != "Ready":
         return reading
     terminal = snap["terminal"]
+    available = longest_available_terminal_spread(snap["terminal_spreads"])
+    continuation = (
+        f" The curve then prices {available['spread_bp']:+.1f} bp from the "
+        f"terminal contract to the available +{available['months']}M point "
+        f"({available['contract']})."
+        if available is not None else
+        " No later contract is available inside the fixed strip window."
+    )
     reading["summary"] = (
         f"The strip peaks at {terminal['terminal_rate_pct']:.3f}% in "
         f"{terminal['terminal_contract']} ({terminal['terminal_gap_bp']:+.1f} bp "
-        f"versus EFFR) as of {snap['model_date']}. The curve then prices "
-        f"{snap['terminal_spreads'].get('terminal_to_12m_bp'):+.1f} bp from the "
-        f"terminal contract to the available 12-month point."
-        if snap['terminal_spreads'].get('terminal_to_12m_bp') is not None else
-        f"The strip terminal is {terminal['terminal_rate_pct']:.3f}% in "
-        f"{terminal['terminal_contract']} as of {snap['model_date']}."
+        f"versus EFFR) as of {snap['model_date']}." + continuation
     )
     return reading

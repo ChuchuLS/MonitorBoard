@@ -43,6 +43,7 @@ from index.composite import (
 from index.validation import (
     BENCHMARKS, correlation_table, rolling_correlation,
     standardized_overlay, crisis_behaviour, lead_lag, benchmark_looseness,
+    describe_peak_lag,
 )
 
 # Regime band definitions for the index chart: (low, high, label).
@@ -388,7 +389,7 @@ def lead_lag_chart(ll: pd.Series, benchmark: str, height: int = 300) -> go.Figur
         margin=dict(l=50, r=20, t=20, b=40),
     )
     fig.update_xaxes(showgrid=False, tickfont=dict(size=10, color="#bbb"), linecolor="#222",
-                     title=dict(text=f"Index lead (−) / lag (+) vs {benchmark}, business days",
+                     title=dict(text=f"Index lag (−) / lead (+) vs {benchmark}, business days",
                                 font=dict(size=10, color="#888")))
     fig.update_yaxes(showgrid=True, gridcolor=GRID, zeroline=False,
                      tickfont=dict(size=10, color="#bbb"), linecolor="#222",
@@ -818,9 +819,7 @@ def _render_benchmark_block(df: pd.DataFrame, result: IndexResult) -> None:
                 st.plotly_chart(lead_lag_chart(ll, primary), use_container_width=True,
                                 key="liq_leadlag", config={"displayModeBar": False})
                 peak = ll.idxmax()
-                lead_txt = ("move roughly together" if peak == 0 else
-                            f"our index tends to LEAD by {-peak}d" if peak < 0 else
-                            f"our index tends to LAG by {peak}d")
+                lead_txt = describe_peak_lag(peak)
                 st.caption(f"Peak cross-correlation at lag {peak:+d}d — {lead_txt}.")
 
 

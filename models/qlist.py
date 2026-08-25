@@ -468,20 +468,29 @@ def build_qlist(df: pd.DataFrame, index_result, cli_index: pd.Series) -> list[QA
     # ── Q14: What does the fixed-contract SOFR strip imply? ──
     try:
         from data.policy_futures_loader import load_policy_futures
-        from models.policy_futures_strip import build_sofr_strip_snapshot
+        from models.policy_futures_strip import (
+            build_sofr_strip_snapshot,
+            longest_available_terminal_spread,
+        )
         _fixed = load_policy_futures()
         _snap = build_sofr_strip_snapshot(_fixed, df)
         _tbl = _snap.get("strip_table")
         if _snap.get("status") == "Ready" and hasattr(_tbl, "empty") and not _tbl.empty:
             _terminal = _snap["terminal"]
             _spreads = _snap["terminal_spreads"]
+            _available = longest_available_terminal_spread(_spreads)
+            _continuation = (
+                f"Terminal to +{_available['months']} months is "
+                f"{_available['spread_bp']:+.1f}bp ({_available['contract']})"
+                if _available is not None else
+                "No later contract is available inside the fixed strip window"
+            )
             answers.append(QAnswer(
                 question="What does the fixed-contract SOFR futures strip imply?",
                 answer=(
                     f"The strip peaks at {_terminal['terminal_rate_pct']:.3f}% in "
                     f"{_terminal['terminal_contract']}, {_terminal['terminal_gap_bp']:+.1f}bp "
-                    f"versus EFFR. Terminal to +12 months is "
-                    f"{_spreads.get('terminal_to_12m_bp'):+.1f}bp as of {_snap['model_date']}."
+                    f"versus EFFR. {_continuation} as of {_snap['model_date']}."
                 ),
                 evidence="models.policy_futures_strip.build_sofr_strip_snapshot()",
                 data_status="real_data",
@@ -489,6 +498,7 @@ def build_qlist(df: pd.DataFrame, index_result, cli_index: pd.Series) -> list[QA
                     "Eight actual quarterly SFR contracts: SEP 26 through JUN 28.",
                     "Implied reference rate = 100 − futures price.",
                     "Each contract uses its own Bloomberg Date output and is joined by Date.",
+                    "Post-terminal spread uses the longest horizon actually present; no extrapolation.",
                     "This is not a meeting-by-meeting FOMC path or probability distribution.",
                 ],
             ))

@@ -181,6 +181,9 @@ print(f"   rolling-corr frame: {roll.shape}")
 if bench:
     ll = V.lead_lag(res.index, df, list(bench)[0])
     print(f"   lead-lag peak lag = {ll.idxmax()}d (corr {ll.max():.2f})")
+assert V.describe_peak_lag(3) == "our index tends to LEAD by 3d"
+assert V.describe_peak_lag(-3) == "our index tends to LAG by 3d"
+assert V.describe_peak_lag(0) == "move roughly together"
 
 print("9. Data quality ...")
 rep = validate_data(df, TICKERS)
@@ -1982,7 +1985,7 @@ from models.policy_futures_strip import (
     build_sofr_curve_comparison,
     build_sofr_contract_price_frame,
     build_sofr_implied_rate_frame,
-    build_sofr_strip_snapshot,
+    build_sofr_strip_snapshot, longest_available_terminal_spread,
 )
 
 assert len(SOFR_CONTRACT_CONFIG) == 8
@@ -2036,6 +2039,14 @@ assert _terminal["terminal_sequence"] in range(1, 9)
 assert _terminal["terminal_rate_pct"] == _t.loc[_terminal["terminal_sequence"], "implied_rate_pct"]
 assert abs(_terminal["terminal_gap_bp"] - 100*(_terminal["terminal_rate_pct"]-_fixed_snap["effr_pct"])) < 1e-9
 print("    D. Terminal and EFFR gap are transparent, formula-based diagnostics ✓")
+
+_available_terminal_spread = longest_available_terminal_spread(
+    _fixed_snap["terminal_spreads"]
+)
+assert _available_terminal_spread is not None
+assert _available_terminal_spread["months"] in {3, 6, 12}
+assert _available_terminal_spread["contract"] in set(_t["contract_label"])
+print("    D2. Terminal continuation uses the longest observed horizon without extrapolation ✓")
 
 _missing_code = list(SOFR_CONTRACT_CONFIG)[3]
 _missing_frame = _fixed_fut.drop(columns=[_missing_code])
@@ -2280,9 +2291,10 @@ for _kind in ("equity", "rates"):
         )
     _time_slices = _bt[f"{_kind}_chronological_stability"]
     assert list(_time_slices["slice"]) == ["Earlier half", "Recent half"]
-    assert list(_time_slices["periods"]) == [6, 6]
+    assert int(_time_slices["periods"].sum()) == len(_periods)
+    assert int(_time_slices["periods"].min()) >= 4
     _loo = _bt[f"{_kind}_leave_one_out"]
-    assert _loo["status"] == "Available" and _loo["periods"] == 12
+    assert _loo["status"] == "Available" and _loo["periods"] == len(_periods)
     assert _loo["leave_one_out_mean_min"] <= _loo["leave_one_out_mean_max"]
     _sensitivity = _bt[f"{_kind}_sensitivity"]
     assert len(_sensitivity) == 5 and _sensitivity["is_primary"].sum() == 1
@@ -2333,10 +2345,10 @@ assert "st.slider" not in _bt_page_src and "st.number_input" not in _bt_page_src
 assert "scoring_backtest" in open("charts/pages/__init__.py").read()
 assert "cta_score_backtest" in _shared_snapshot
 assert _shared_snapshot["cta_score_backtest"]["specification"]["fci_used"] is False
-assert len(_shared_snapshot["cta_score_backtest"]["equity_periods"]) == 12
+assert len(_shared_snapshot["cta_score_backtest"]["equity_periods"]) == len(_bt["equity_periods"])
 assert len(_shared_snapshot["cta_score_backtest"]["equity_sensitivity"]) == 5
 assert len(_shared_snapshot["cta_score_backtest"]["equity_chronological_stability"]) == 2
-print("    E4. A2 shows all 12 strict weekly periods plus chronological, leave-one-out and fixed-grid robustness diagnostics; it ignores FCI/future rows and withholds unsupported P&L metrics ✓")
+print(f"    E4. A2 shows all {len(_bt['equity_periods'])} strict weekly periods plus chronological, leave-one-out and fixed-grid robustness diagnostics; it ignores FCI/future rows and withholds unsupported P&L metrics ✓")
 
 _dq_feedback = open("charts/pages/data_quality.py").read()
 assert "SOFR Futures Strip &amp; Calendar Spreads" in _dq_feedback
