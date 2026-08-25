@@ -22,9 +22,14 @@ from charts.common import (
     render_page_header, render_top_tabs, render_kpi_strip,
     render_explanation_box, render_section_footer,
 )
-from charts.liquidity import render_driver_cards, render_index_page
+from charts.liquidity import (
+    render_driver_cards,
+    render_index_page,
+    render_latest_official_move,
+)
 from charts.funding import render_xccy_summary
 from data.loader import source_signature
+from index.components import BUCKETS
 from index.composite import HEADLINE_REQUIRED_BUCKETS
 from index.methodology import INDEX_METHODOLOGY
 
@@ -84,12 +89,24 @@ def render(ctx: PageContext) -> None:
         target_value = r.normal_component_target.loc[preliminary_date]
         target = int(target_value) if pd.notna(target_value) else None
         target_text = str(target) if target is not None else "unavailable"
+        missing_bucket_labels = [
+            BUCKETS[bucket]["label"]
+            for bucket in BUCKETS
+            if bucket not in r.sub_indices.columns
+            or pd.isna(r.sub_indices.at[preliminary_date, bucket])
+        ]
+        missing_bucket_text = (
+            ", ".join(missing_bucket_labels) if missing_bucket_labels else "none"
+        )
         st.warning(
             f"Preliminary {preliminary_date.date()}: {r.preliminary_latest:.1f} "
             f"({buckets}/{HEADLINE_REQUIRED_BUCKETS} buckets, {components} live "
             f"components; normal coverage "
             f"target {target_text}). It is excluded from the official headline, "
-            "regime, changes and contribution calculations until coverage is complete."
+            "regime, changes and contribution calculations until coverage is complete. "
+            f"Missing qualifying bucket(s): {missing_bucket_text}. This partial estimate "
+            "is not comparable with the official level because diagnostic weights are "
+            "renormalised; do not interpret their difference as a market move."
         )
 
     contribution_sum = None
@@ -140,6 +157,7 @@ def render(ctx: PageContext) -> None:
     # Keep only the contributor cards here so the four headline KPIs appear
     # exactly once on the page.
     render_driver_cards(r)
+    render_latest_official_move(r)
     st.markdown("<div style='height:0.8rem;'></div>", unsafe_allow_html=True)
     render_index_page(
         ctx.df, ctx.dff, r, ctx.audit_bundle,

@@ -142,6 +142,17 @@ if res.preliminary_date is not None:
           f"{int(res.available_bucket_count.loc[pd_date])}/{len(BUCKETS)} buckets · "
           "excluded from headline")
 
+latest_move = res.latest_official_move()
+assert latest_move["status"] == "Available"
+assert latest_move["to_date"] == official_date
+assert latest_move["from_date"] == res.headline_index.dropna().index[-2]
+assert latest_move["to_date"] < res.preliminary_date \
+    if res.preliminary_date is not None else True
+assert abs(latest_move["bucket_contributions"].sum() - latest_move["change"]) < 1e-9
+assert abs(latest_move["component_contributions"].sum() - latest_move["change"]) < 1e-9
+print(f"   latest official move = {latest_move['change']:+.2f} pts · "
+      "bucket and component attribution reconcile ✓")
+
 print("5. Changes:", {k: round(v, 2) for k, v in res.changes().items()})
 
 print("6. Contribution reconciliation ...")
@@ -1918,8 +1929,11 @@ print("    G. 05b uses normalized live data; experimental PCA page removed ✓")
 
 _liq_page_src = open("charts/pages/liquidity_overview.py").read()
 assert "render_driver_cards(r)" in _liq_page_src
+assert "render_latest_official_move(r)" in _liq_page_src
+assert "not comparable with the official level" in _liq_page_src
+assert "do not interpret their difference as a market move" in _liq_page_src
 assert "render_summary_panel(r)" not in _liq_page_src
-print("       Liquidity shell renders headline KPIs once and keeps driver cards ✓")
+print("       Liquidity shell separates partial estimates and explains the latest official move ✓")
 
 from config.model_roadmap import ROADMAP as _ML_ROADMAP
 _ml_rm = next(r for r in _ML_ROADMAP if r["module_id"] == "market_linkage")
@@ -1985,7 +1999,8 @@ from models.policy_futures_strip import (
     build_sofr_curve_comparison,
     build_sofr_contract_price_frame,
     build_sofr_implied_rate_frame,
-    build_sofr_strip_snapshot, longest_available_terminal_spread,
+    build_sofr_strip_snapshot,
+    longest_available_terminal_spread,
 )
 
 assert len(SOFR_CONTRACT_CONFIG) == 8

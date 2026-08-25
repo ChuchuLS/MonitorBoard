@@ -34,7 +34,7 @@ from config.theme import (
     ACCENT_CYAN, ACCENT_AMBER, ACCENT_PURPLE,
 )
 from charts.common import autoscale_range, section_header
-from index.components import BUCKETS
+from index.components import BUCKETS, LABEL_OF
 from index.composite import (
     IndexResult, HORIZONS, INDEX_CENTER, regime_label,
     MIN_AVAILABLE_BUCKETS, MIN_AVAILABLE_COMPONENTS, MIN_COMPONENTS_PER_BUCKET,
@@ -164,6 +164,61 @@ def render_driver_cards(result: IndexResult) -> None:
         )
 
 
+def render_latest_official_move(result: IndexResult) -> None:
+    """Explain the latest fully comparable official move and its drivers."""
+    move = result.latest_official_move()
+    if move.get("status") != "Available":
+        return
+
+    change = move["change"]
+    colour = POS_GREEN if change >= 0 else NEG_RED
+    bucket_contrib = move["bucket_contributions"].dropna()
+    component_contrib = move["component_contributions"].dropna()
+    component_contrib = component_contrib[component_contrib.abs() > 1e-12]
+
+    st.markdown("#### Latest official move")
+    st.markdown(
+        f"<div style='font-size:12px;color:#bbb;margin:-0.2rem 0 0.5rem;'>"
+        f"Fully covered dates only: <b>{move['from_date'].date()}</b> "
+        f"({move['from_level']:.2f}) → <b>{move['to_date'].date()}</b> "
+        f"({move['to_level']:.2f}) · change "
+        f"<b style='color:{colour};'>{change:+.2f} pts</b></div>",
+        unsafe_allow_html=True,
+    )
+
+    chart_col, table_col = st.columns([1.25, 1], gap="medium")
+    with chart_col:
+        st.plotly_chart(
+            contribution_chart(bucket_contrib, "Latest official move decomposition", 260),
+            use_container_width=True,
+            key="liq_latest_official_move",
+            config={"displayModeBar": False},
+        )
+    with table_col:
+        largest = component_contrib.reindex(
+            component_contrib.abs().sort_values(ascending=False).index
+        ).head(6)
+        detail = pd.DataFrame({
+            "Component": [LABEL_OF.get(key, key) for key in largest.index],
+            "Contribution (pts)": largest.values,
+            "Direction": ["Easing" if value >= 0 else "Tightening"
+                          for value in largest.values],
+        })
+        st.markdown("##### Largest component drivers")
+        st.dataframe(
+            detail.style.format({"Contribution (pts)": "{:+.3f}"}),
+            hide_index=True,
+            use_container_width=True,
+        )
+        st.caption("Largest absolute component contributions; this is attribution, not causality.")
+
+    bucket_gap = float(bucket_contrib.sum() - change)
+    component_gap = float(component_contrib.sum() - change)
+    st.caption(
+        "Positive = easing; negative = tightening. Bucket contributions sum to the "
+        f"official move (reconciliation gap {bucket_gap:+.8f} pts); component gap "
+        f"{component_gap:+.8f} pts."
+    )
 # ===========================================================================
 # Index line chart with regime bands
 # ===========================================================================

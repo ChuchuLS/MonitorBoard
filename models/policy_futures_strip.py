@@ -222,8 +222,8 @@ def longest_available_terminal_spread(terminal_spreads: dict) -> dict | None:
     """Return the longest observed post-terminal spread in the fixed strip.
 
     A terminal near the back of the eight-contract window does not necessarily
-    have a +12M contract available.  Consumers must not format that structural
-    absence as a number or silently extrapolate beyond the supplied contracts.
+    have a +12M contract available. Consumers must not format that structural
+    absence as a number or silently extrapolate beyond supplied contracts.
     """
     for months in (12, 6, 3):
         value = terminal_spreads.get(f"terminal_to_{months}m_bp")

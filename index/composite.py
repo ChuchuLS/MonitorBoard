@@ -215,6 +215,36 @@ class IndexResult:
             return pd.Series(dtype=float)
         return terms.loc[dates[0]] - terms.loc[dates[1]]
 
+    def latest_official_move(self) -> dict:
+        """Exact attribution between the two latest *official* observations.
+
+        Dates are taken only from ``headline_index``.  This prevents a later
+        partial observation from being presented as a comparable daily move.
+        Missing component terms represent zero contribution on that date, so
+        filling them with zero preserves the additive reconciliation when the
+        live-component set changes between two otherwise official dates.
+        """
+        official = self.headline_index.dropna()
+        if len(official) < 2:
+            return {"status": "Insufficient history"}
+
+        from_date, to_date = official.index[-2], official.index[-1]
+        bucket_now = self.bucket_terms.reindex([to_date]).iloc[0].fillna(0.0)
+        bucket_before = self.bucket_terms.reindex([from_date]).iloc[0].fillna(0.0)
+        component_now = self.component_terms.reindex([to_date]).iloc[0].fillna(0.0)
+        component_before = self.component_terms.reindex([from_date]).iloc[0].fillna(0.0)
+
+        return {
+            "status": "Available",
+            "from_date": from_date,
+            "to_date": to_date,
+            "from_level": float(official.loc[from_date]),
+            "to_level": float(official.loc[to_date]),
+            "change": float(official.loc[to_date] - official.loc[from_date]),
+            "bucket_contributions": bucket_now.subtract(bucket_before),
+            "component_contributions": component_now.subtract(component_before),
+        }
+
 
 def compute_index(
     df: pd.DataFrame,
