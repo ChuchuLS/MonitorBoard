@@ -126,10 +126,16 @@ def page_css() -> str:
         font-family: 'Inter', system-ui, -apple-system, sans-serif;
     }
     section[data-testid="stSidebar"] {
-        background-color: #050505;
+        background:
+            radial-gradient(circle at 20% 0%, rgba(95,176,79,0.07), transparent 30%),
+            #050505;
         border-right: 1px solid #1a1a1a;
     }
-    section[data-testid="stSidebar"] * { color: #ccc !important; }
+    section[data-testid="stSidebar"] { color: #ccc; }
+    section[data-testid="stSidebar"] > div { padding-top: 0.35rem; }
+    section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+        padding-left: 0.35rem; padding-right: 0.35rem;
+    }
     h1, h2, h3, h4, h5, h6 {
         color: #ffffff !important;
         letter-spacing: 0.04em;
@@ -143,8 +149,134 @@ def page_css() -> str:
     }
     .stMarkdown p { color: #ccc; }
     hr { border-color: #1a1a1a !important; margin: 0.75rem 0 !important; }
-    [data-testid="stSidebar"] [role="radiogroup"] label {
-        color: #ccc !important; font-size: 13px !important;
+    /* Sidebar research shell */
+    .sidebar-brand {
+        padding: 0.75rem 0.15rem 0.85rem;
+        border-bottom: 1px solid #1d1d1d;
+    }
+    .sidebar-brand-kicker {
+        color: #69c85a; font-size: 8px; font-weight: 700;
+        letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 5px;
+    }
+    .sidebar-brand-title {
+        color: #fff; font-size: 17px; font-weight: 750;
+        letter-spacing: 0.035em; line-height: 1.1;
+    }
+    .sidebar-brand-sub {
+        color: #777; font-size: 9px; letter-spacing: 0.14em;
+        text-transform: uppercase; margin-top: 4px;
+    }
+    .sidebar-data-status {
+        margin: 0.75rem 0 0.9rem; padding: 0.65rem 0.75rem;
+        background: rgba(255,255,255,0.025); border: 1px solid #1d1d1d;
+        border-radius: 7px;
+    }
+    .sidebar-status-row {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 10px; min-height: 22px; font-size: 10px;
+    }
+    .sidebar-status-row span {
+        color: #737373; letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    .sidebar-status-row strong {
+        color: #d8d8d8; font-size: 10px; font-weight: 650;
+        letter-spacing: 0.04em; text-align: right;
+    }
+    .sidebar-status-pending {
+        margin: 4px -3px -1px; padding: 3px 3px 0;
+        border-top: 1px solid #1b1b1b;
+    }
+    .sidebar-status-pending strong { color: #d99830; }
+    .sidebar-section-label {
+        color: #6f6f6f; font-size: 9px; font-weight: 700;
+        letter-spacing: 0.14em; text-transform: uppercase;
+        margin: 0.2rem 0.15rem 0.4rem;
+    }
+    [data-testid="stSidebar"] [data-testid="stExpander"] {
+        border: 0 !important; background: transparent !important;
+        margin-bottom: 2px;
+    }
+    [data-testid="stSidebar"] [data-testid="stExpander"] details {
+        border: 0 !important; background: transparent !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stExpander"] summary {
+        min-height: 34px; padding: 0.15rem 0.45rem !important;
+        border-radius: 5px;
+    }
+    [data-testid="stSidebar"] [data-testid="stExpander"] summary:hover {
+        background: rgba(255,255,255,0.035);
+    }
+    [data-testid="stSidebar"] [data-testid="stExpander"] summary p {
+        color: #9a9a9a !important; font-size: 10px !important;
+        font-weight: 700 !important; letter-spacing: 0.105em !important;
+        text-transform: uppercase;
+    }
+    [data-testid="stSidebar"] [data-testid="stExpanderDetails"] {
+        padding: 0.05rem 0 0.35rem 0.45rem !important;
+    }
+    [data-testid="stSidebar"] .stButton { margin: 1px 0; }
+    [data-testid="stSidebar"] .stButton > button {
+        min-height: 32px; padding: 0.32rem 0.65rem;
+        justify-content: flex-start; text-align: left;
+        color: #a7a7a7; background: transparent;
+        border: 1px solid transparent; border-radius: 5px;
+        font-size: 12px; font-weight: 450;
+    }
+    [data-testid="stSidebar"] .stButton > button:hover {
+        color: #fff; background: rgba(255,255,255,0.04);
+        border-color: #242424;
+    }
+    [data-testid="stSidebar"] .stButton > button:focus:not(:active) {
+        color: #fff; border-color: #2b2b2b;
+        box-shadow: none;
+    }
+    .sidebar-nav-active {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 8px; min-height: 34px; padding: 0.38rem 0.65rem;
+        margin: 1px 0; border-radius: 5px;
+        color: #fff; background: color-mix(in srgb, var(--nav-accent) 11%, transparent);
+        border: 1px solid color-mix(in srgb, var(--nav-accent) 42%, #1f1f1f);
+        box-shadow: inset 2px 0 0 var(--nav-accent);
+        font-size: 12px; font-weight: 600;
+    }
+    .sidebar-nav-active small {
+        color: var(--nav-accent); font-size: 7px; font-weight: 800;
+        letter-spacing: 0.12em; text-transform: uppercase;
+    }
+    .sidebar-lookback-label {
+        margin-top: 0.85rem; padding-top: 0.75rem;
+        border-top: 1px solid #1b1b1b;
+    }
+    [data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div {
+        background: #0d0d0d; border-color: #222; border-radius: 6px;
+    }
+    .sidebar-liquidity-card {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; margin: 0.8rem 0 0.65rem; padding: 0.65rem 0.75rem;
+        background: #0c0c0c; border: 1px solid #1e1e1e;
+        border-left: 2px solid var(--regime-color); border-radius: 6px;
+    }
+    .sidebar-liquidity-card > div:first-child {
+        display: flex; flex-direction: column;
+    }
+    .sidebar-liquidity-card span {
+        color: #777; font-size: 8px; letter-spacing: 0.1em;
+        text-transform: uppercase;
+    }
+    .sidebar-liquidity-card strong {
+        color: var(--regime-color); font-size: 20px; line-height: 1.1;
+    }
+    .sidebar-liquidity-meta {
+        display: flex; flex-direction: column; align-items: flex-end;
+    }
+    .sidebar-liquidity-meta strong {
+        color: var(--regime-color); font-size: 9px; letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+    .sidebar-liquidity-meta span { margin-top: 3px; }
+    [data-testid="stSidebar"] [data-testid="stDownloadButton"] button {
+        min-height: 36px; background: #111; border: 1px solid #262626;
+        border-radius: 6px; color: #d8d8d8;
     }
     [data-testid="stPlotlyChart"] { background-color: transparent !important; }
     .block-container {

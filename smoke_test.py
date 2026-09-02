@@ -15,7 +15,8 @@ from data.quality import validate_data, quality_summary
 from data.transforms import rolling_zscore
 from config.tickers import TICKERS
 from config.pages import (
-    PAGES, PAGES_BY_ID, TOP_NAV_GROUPS, get_page, nav_label, STATUS_LABELS,
+    PAGES, PAGES_BY_ID, TOP_NAV_GROUPS, SIDEBAR_NAV_GROUPS, SIDEBAR_LABELS,
+    get_page, nav_label, sidebar_label, STATUS_LABELS,
 )
 from config.theme import SECTION_COLORS, section_color, page_css
 from index.components import build_components, BUCKETS
@@ -65,6 +66,12 @@ print("   deployment contracts OK: pinned runtime · no silent page failures · 
 
 # Registry / theme sanity — Phase 1 shell must be internally consistent.
 assert len(PAGES) == 18, f"expected 18 registered pages, got {len(PAGES)}"
+_sidebar_ids = [page_id for group in SIDEBAR_NAV_GROUPS for page_id in group["page_ids"]]
+assert len(_sidebar_ids) == len(set(_sidebar_ids)), "sidebar page ids must be unique"
+assert set(_sidebar_ids) == {"contents", *PAGES_BY_ID}, \
+    "sidebar groups must expose Contents and every registered page exactly once"
+assert set(SIDEBAR_LABELS) == set(_sidebar_ids)
+assert sidebar_label("liquidity") == "Liquidity overview"
 if _HAS_STREAMLIT_PAGES:
     for p in PAGES:
         for k in ("id", "label", "title", "section", "color_key", "status",

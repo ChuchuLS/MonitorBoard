@@ -298,6 +298,78 @@ PAGES_BY_ID: dict[str, dict] = {p["id"]: p for p in PAGES}
 PAGE_IDS: list[str] = [p["id"] for p in PAGES]
 
 
+# Sidebar navigation is deliberately task-oriented rather than exposing the
+# internal section numbering as one long flat list.  Section numbers remain in
+# the page headers and exports, where they are useful for audit/reconciliation,
+# while the sidebar uses concise research-desk labels.
+SIDEBAR_LABELS: dict[str, str] = {
+    "contents": "Research overview",
+    "liquidity": "Liquidity overview",
+    "policy": "Policy & short rates",
+    "policy_futures": "SOFR futures strip",
+    "decomposition": "Rate decomposition",
+    "regimes": "Curve regimes",
+    "global_rates": "Global rates",
+    "country_boards": "Country boards",
+    "cross_asset": "Cross-asset regimes",
+    "market_linkage": "Market linkage",
+    "fx_rate_diff": "FX rate differentials",
+    "sector_rotation": "Sector rotation",
+    "sector_contribution": "Sector contribution",
+    "index_breadth": "Index breadth",
+    "earnings_valuation": "Earnings & valuation",
+    "data_quality": "Data & methodology",
+    "scoring": "Global scoring",
+    "scoring_backtest": "CTA backtest",
+    "model_roadmap": "Model roadmap",
+}
+
+SIDEBAR_NAV_GROUPS: list[dict] = [
+    {
+        "id": "overview",
+        "label": "Overview",
+        "page_ids": ("contents", "liquidity"),
+    },
+    {
+        "id": "macro_rates",
+        "label": "Macro & Rates",
+        "page_ids": (
+            "policy", "policy_futures", "decomposition", "regimes",
+            "global_rates", "country_boards",
+        ),
+    },
+    {
+        "id": "cross_asset",
+        "label": "Cross-Asset",
+        "page_ids": ("cross_asset", "market_linkage", "fx_rate_diff"),
+    },
+    {
+        "id": "equities",
+        "label": "Equities",
+        "page_ids": (
+            "sector_rotation", "sector_contribution", "index_breadth",
+            "earnings_valuation",
+        ),
+    },
+    {
+        "id": "research",
+        "label": "Research & Data",
+        "page_ids": (
+            "data_quality", "scoring", "scoring_backtest", "model_roadmap",
+        ),
+    },
+]
+
+
+def sidebar_label(page_id: str) -> str:
+    """Return the concise user-facing sidebar label for a page id."""
+    if page_id in SIDEBAR_LABELS:
+        return SIDEBAR_LABELS[page_id]
+    if page_id in PAGES_BY_ID:
+        return PAGES_BY_ID[page_id]["title"]
+    return page_id.replace("_", " ").title()
+
+
 # The reference chart pack keeps the top strip at section level. Streamlit's
 # sidebar still exposes every individual page, while this grouped registry
 # prevents the orientation strip from expanding to 18 separate chips.

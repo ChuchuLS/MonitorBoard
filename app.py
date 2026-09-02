@@ -18,9 +18,11 @@ import pandas as pd
 import streamlit as st
 
 from config.theme import REGIME_COLORS, TEXT_DIM, section_color, page_css
-from config.pages import PAGES, PAGES_BY_ID, nav_label
+from config.pages import (
+    PAGES_BY_ID, SIDEBAR_NAV_GROUPS, sidebar_label,
+)
 from data.loader import (
-    load_data, date_filter, data_source_label, latest_valid_date,
+    load_data, date_filter, latest_valid_date,
     source_signature,
 )
 from charts.pages import PageContext, render_page
@@ -127,34 +129,102 @@ _pdf_export_name = (
 )
 
 
-# Sidebar
-NAV_OPTIONS = ["Contents"] + [nav_label(p) for p in PAGES]
-_LABEL_TO_ID = {"Contents": "contents"}
-for p in PAGES:
-    _LABEL_TO_ID[nav_label(p)] = p["id"]
+# Sidebar navigation state.  Buttons are used instead of a 19-option radio so
+# the pages can be grouped without changing any internal page id or renderer.
+_VALID_PAGE_IDS = {"contents", *PAGES_BY_ID.keys()}
+if st.session_state.get("active_page") not in _VALID_PAGE_IDS:
+    st.session_state["active_page"] = "contents"
+
+
+def _activate_page(page_id: str) -> None:
+    if page_id in _VALID_PAGE_IDS:
+        st.session_state["active_page"] = page_id
+
+
+def _render_sidebar_navigation() -> None:
+    active_page = st.session_state["active_page"]
+    st.markdown('<div class="sidebar-section-label">Navigation</div>',
+                unsafe_allow_html=True)
+    for group in SIDEBAR_NAV_GROUPS:
+        expanded = active_page in group["page_ids"]
+        with st.expander(group["label"], expanded=expanded):
+            for page_id in group["page_ids"]:
+                label = sidebar_label(page_id)
+                if page_id == active_page:
+                    page = PAGES_BY_ID.get(page_id)
+                    accent = section_color(page["color_key"]) if page else "#5fb04f"
+                    st.markdown(
+                        f"""
+                        <div class="sidebar-nav-active" style="--nav-accent:{accent};">
+                          <span>{label}</span><small>Current</small>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.button(
+                        label,
+                        key=f"sidebar_nav_{page_id}",
+                        on_click=_activate_page,
+                        args=(page_id,),
+                        width="stretch",
+                    )
 
 with st.sidebar:
     st.markdown(
-        """
-        <div style="padding:0.5rem 0 0.25rem;">
-          <div style="font-size:14px;font-weight:700;letter-spacing:0.08em;
-                      color:#fff;text-transform:uppercase;">
-            Rates &amp; Liquidity Pack</div>
-          <div style="font-size:9px;color:#888;letter-spacing:0.12em;
-                      text-transform:uppercase;margin-top:2px;">
-            Daily macro / liquidity research shell</div>
+        f"""
+        <div class="sidebar-brand">
+          <div class="sidebar-brand-kicker">Daily Macro Research</div>
+          <div class="sidebar-brand-title">Rates &amp; Liquidity</div>
+          <div class="sidebar-brand-sub">Research Board</div>
         </div>
         """, unsafe_allow_html=True)
-    st.caption(f"{df.index.min().date()} → {df.index.max().date()}  ·  "
-               f"src: {data_source_label()}")
-    st.divider()
 
-    nav_choice = st.radio("SECTION", NAV_OPTIONS, index=0, key="nav_page")
-    st.divider()
+    _raw_date = df.index.max() if not df.empty else None
+    _official_date = index_result.latest_date
+    _raw_date_text = _raw_date.strftime("%b %d") if _raw_date is not None else "—"
+    _official_date_text = (
+        _official_date.strftime("%b %d") if _official_date is not None else "—"
+    )
+    _pending_text = "Complete"
+    if (_raw_date is not None and _official_date is not None
+            and _raw_date > _official_date
+            and _raw_date in index_result.available_bucket_count.index):
+        _pending_buckets = int(index_result.available_bucket_count.loc[_raw_date])
+        _pending_components = int(index_result.available_component_count.loc[_raw_date])
+        _normal_target = int(index_result.normal_component_target.loc[_raw_date])
+        _pending_text = (
+            f"{_pending_buckets}/5 buckets · "
+            f"{_pending_components}/{_normal_target} live"
+        )
+    st.markdown(
+        f"""
+        <div class="sidebar-data-status">
+          <div class="sidebar-status-row">
+            <span>Raw data</span><strong>{_raw_date_text}</strong>
+          </div>
+          <div class="sidebar-status-row">
+            <span>Official model</span><strong>{_official_date_text}</strong>
+          </div>
+          <div class="sidebar-status-row sidebar-status-pending">
+            <span>Pending</span><strong>{_pending_text}</strong>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    range_preset = st.radio(
-        "LOOKBACK", ["6M", "1Y", "3Y", "5Y", "10Y", "Max", "Custom"],
-        index=2, key="lookback_preset")
+    _render_sidebar_navigation()
+
+    st.markdown('<div class="sidebar-section-label sidebar-lookback-label">Lookback</div>',
+                unsafe_allow_html=True)
+    range_preset = st.selectbox(
+        "Lookback window",
+        ["6M", "1Y", "3Y", "5Y", "10Y", "Max", "Custom"],
+        index=2,
+        key="lookback_preset",
+        label_visibility="collapsed",
+    )
     end_date = df.index.max()
     if range_preset == "6M":
         start_date = end_date - pd.DateOffset(months=6)
@@ -182,25 +252,20 @@ with st.sidebar:
         reg = index_result.latest_regime
         reg_color = REGIME_COLORS.get(reg, TEXT_DIM)
         official_date = index_result.latest_date
-        st.divider()
         st.markdown(
             f"""
-            <div style="font-size:10px;color:#888;letter-spacing:0.1em;
-                        text-transform:uppercase;">Liquidity official</div>
-            <div style="font-size:26px;font-weight:700;color:{reg_color};
-                        line-height:1.1;">{index_result.latest:.1f}</div>
-            <div style="font-size:11px;color:{reg_color};font-weight:700;
-                        text-transform:uppercase;letter-spacing:0.06em;">{reg}</div>
-            <div style="font-size:9px;color:#777;margin-top:3px;">
-              AS OF {official_date.date() if official_date is not None else '—'}</div>
+            <div class="sidebar-liquidity-card" style="--regime-color:{reg_color};">
+              <div>
+                <span>Liquidity official</span>
+                <strong>{index_result.latest:.1f}</strong>
+              </div>
+              <div class="sidebar-liquidity-meta">
+                <strong>{reg}</strong>
+                <span>{official_date:%b %d, %Y}</span>
+              </div>
+            </div>
             """, unsafe_allow_html=True)
-        if index_result.preliminary_date is not None:
-            st.caption(
-                f"Preliminary {index_result.preliminary_date.date()}: "
-                f"{index_result.preliminary_latest:.1f} · excluded from headline"
-            )
 
-    st.divider()
     try:
         st.download_button(
             label="⬇  Export Board to PDF",
@@ -208,7 +273,7 @@ with st.sidebar:
             file_name=_pdf_export_name,
             mime="application/pdf",
             key="sidebar_export_board_pdf",
-            use_container_width=True,
+            width="stretch",
             help="Download the complete linked Board, not only the page currently open.",
         )
         st.caption("Complete linked pack · all registered Board pages")
@@ -227,5 +292,5 @@ ctx = PageContext(
     pdf_export_name=_pdf_export_name,
 )
 
-page_id = _LABEL_TO_ID.get(nav_choice, "contents")
+page_id = st.session_state["active_page"]
 render_page(page_id, ctx)
