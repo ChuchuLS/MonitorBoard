@@ -158,7 +158,7 @@ def _render_sidebar_navigation() -> None:
                     st.markdown(
                         f"""
                         <div class="sidebar-nav-active" style="--nav-accent:{accent};">
-                          <span>{label}</span><small>{tr("Current", "当前", language)}</small>
+                          <span>{label}</span>
                         </div>
                         """,
                         unsafe_allow_html=True,

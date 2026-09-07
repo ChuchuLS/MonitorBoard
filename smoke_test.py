@@ -46,6 +46,14 @@ if _HAS_STREAMLIT_PAGES:
     assert "偏紧est" not in translate_ui_text("Tightest")
     print("   Chinese display glossary preserves whole financial terms ✓")
 
+    _sidebar_css = page_css()
+    assert '.stButton > button p' in _sidebar_css
+    assert 'text-align: left !important' in _sidebar_css
+    assert 'font-size: 12px; font-weight: 500; line-height: 1.35' in _sidebar_css
+    assert '.sidebar-nav-active small' not in _sidebar_css
+    assert '<small>{tr("Current", "当前", language)}</small>' not in Path("app.py").read_text()
+    print("   sidebar options share one left-aligned type scale in active/inactive states ✓")
+
 # Deployment/UI contracts: user-facing pages may not silently swallow errors,
 # and KPI subtitles are plain text because render_kpi_card escapes them.
 _ui_files = [Path("app.py"), *sorted(Path("charts/pages").glob("*.py"))]

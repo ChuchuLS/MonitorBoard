@@ -221,13 +221,22 @@ def page_css() -> str:
     [data-testid="stSidebar"] [data-testid="stExpanderDetails"] {
         padding: 0.05rem 0 0.35rem 0.45rem !important;
     }
-    [data-testid="stSidebar"] .stButton { margin: 1px 0; }
+    [data-testid="stSidebar"] .stButton {
+        width: 100%; margin: 1px 0;
+    }
     [data-testid="stSidebar"] .stButton > button {
-        min-height: 32px; padding: 0.32rem 0.65rem;
-        justify-content: flex-start; text-align: left;
+        width: 100%; min-height: 34px; padding: 0.38rem 0.65rem;
+        display: flex; align-items: center; justify-content: flex-start;
+        text-align: left;
         color: #a7a7a7; background: transparent;
         border: 1px solid transparent; border-radius: 5px;
-        font-size: 12px; font-weight: 450;
+        font-size: 12px; font-weight: 500; line-height: 1.35;
+    }
+    [data-testid="stSidebar"] .stButton > button p,
+    [data-testid="stSidebar"] .stButton > button [data-testid="stMarkdownContainer"] {
+        width: 100%; margin: 0 !important;
+        color: inherit !important; font: inherit !important;
+        line-height: inherit !important; text-align: left !important;
     }
     [data-testid="stSidebar"] .stButton > button:hover {
         color: #fff; background: rgba(255,255,255,0.04);
@@ -238,17 +247,19 @@ def page_css() -> str:
         box-shadow: none;
     }
     .sidebar-nav-active {
-        display: flex; align-items: center; justify-content: space-between;
-        gap: 8px; min-height: 34px; padding: 0.38rem 0.65rem;
+        width: 100%; display: flex; align-items: center; justify-content: flex-start;
+        min-height: 34px; padding: 0.38rem 0.65rem;
         margin: 1px 0; border-radius: 5px;
         color: #fff; background: color-mix(in srgb, var(--nav-accent) 11%, transparent);
         border: 1px solid color-mix(in srgb, var(--nav-accent) 42%, #1f1f1f);
         box-shadow: inset 2px 0 0 var(--nav-accent);
-        font-size: 12px; font-weight: 600;
+        font-size: 12px; font-weight: 500; line-height: 1.35;
+        text-align: left;
     }
-    .sidebar-nav-active small {
-        color: var(--nav-accent); font-size: 7px; font-weight: 800;
-        letter-spacing: 0.12em; text-transform: uppercase;
+    .sidebar-nav-active span {
+        width: 100%; display: block; margin: 0;
+        color: inherit; font: inherit; line-height: inherit;
+        text-align: left;
     }
     .sidebar-lookback-label {
         margin-top: 0.85rem; padding-top: 0.75rem;
