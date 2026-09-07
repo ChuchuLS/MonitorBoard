@@ -172,6 +172,9 @@ from config.pages import (
     PAGES_BY_ID as _PAGES_BY_ID,
     TOP_NAV_GROUPS as _TOP_NAV_GROUPS,
 )
+from config.i18n import (
+    LANG_ZH, TOP_NAV_ZH, current_language, localized_page, tr,
+)
 
 
 def _esc(x) -> str:
@@ -187,15 +190,23 @@ def render_page_header(page: dict, latest_date: str | None = None,
     'title', 'description', 'color_key'). ``latest_date`` and ``viewing`` are
     optional context strings appended to the subtitle line.
     """
+    language = current_language()
+    page = localized_page(page, language)
     color = _section_color(page.get("color_key"))
     section = _esc(page.get("section", ""))
     title = _esc(page.get("title", ""))
     subtitle = _esc(page.get("description", ""))
     ctx_bits = []
     if latest_date:
-        ctx_bits.append(f"Latest: <span style='color:#ccc;'>{_esc(latest_date)}</span>")
+        ctx_bits.append(
+            f"{tr('Latest', '最新', language)}: "
+            f"<span style='color:#ccc;'>{_esc(latest_date)}</span>"
+        )
     if viewing:
-        ctx_bits.append(f"Viewing: <span style='color:#ccc;'>{_esc(viewing)}</span>")
+        ctx_bits.append(
+            f"{tr('Viewing', '查看区间', language)}: "
+            f"<span style='color:#ccc;'>{_esc(viewing)}</span>"
+        )
     ctx = "  ·  ".join(ctx_bits)
     ctx_row = (f"<div class='rp-page-sub'>{ctx}</div>" if ctx else "")
 
@@ -203,7 +214,7 @@ def render_page_header(page: dict, latest_date: str | None = None,
         f"""
         <div class="rp-page-header" style="border-left-color:{color};">
           <div class="rp-page-section" style="color:{color};">
-            {section} · Section
+            {section} · {tr('Section', '章节', language)}
           </div>
           <div class="rp-page-title">{title}</div>
           <div class="rp-page-sub">{subtitle}</div>
@@ -220,6 +231,7 @@ def render_top_tabs(current_id: str) -> None:
     Individual subpages remain in the sidebar. Grouping the orientation strip
     mirrors the reference pack and keeps it readable as the app grows.
     """
+    language = current_language()
     chips = []
     home_active = current_id == "contents"
     chips.append(
@@ -227,7 +239,7 @@ def render_top_tabs(current_id: str) -> None:
         f"style='color:{'#fff' if home_active else '#888'};"
         f"background:{'rgba(255,255,255,0.03)' if home_active else 'transparent'};"
         f"border-color:{'#666' if home_active else 'transparent'};'>"
-        f"<span class='rp-tab-num'>⌂</span>Contents</span>"
+        f"<span class='rp-tab-num'>⌂</span>{tr('Contents', '总览', language)}</span>"
     )
     for group in _TOP_NAV_GROUPS:
         color = _section_color(group["color_key"])
@@ -235,7 +247,10 @@ def render_top_tabs(current_id: str) -> None:
         border = color if active else "transparent"
         text_color = "#fff" if active else "#888"
         bg = "rgba(255,255,255,0.03)" if active else "transparent"
-        label = _esc(group["label"])
+        label = _esc(
+            TOP_NAV_ZH.get(group["id"], group["label"])
+            if language == LANG_ZH else group["label"]
+        )
         num = _esc(group["section"])
         chips.append(
             f"<span class='rp-tab {'rp-tab-active' if active else ''}' "
@@ -335,21 +350,23 @@ def render_missing_data_warning(required: list[str] | None = None,
     body = ""
     if message:
         body += f"<div>{message}</div>"
-    body += _list("Required", required or [], "#d99830")
-    body += _list("Available now", available or [], "#5fb04f")
-    body += _list("Missing", missing or [], "#d04848")
-    _rp_box("Missing data", body, "rp-box-warn")
+    language = current_language()
+    body += _list(tr("Required", "需要", language), required or [], "#d99830")
+    body += _list(tr("Available now", "当前可用", language), available or [], "#5fb04f")
+    body += _list(tr("Missing", "缺失", language), missing or [], "#d04848")
+    _rp_box(tr("Missing data", "数据缺失", language), body, "rp-box-warn")
 
 
 def render_section_footer(page: dict) -> None:
     """Section footer with 'Builds on: <prev>' and 'Next: <next>' chips."""
+    language = current_language()
     builds_on = page.get("builds_on")
     nxt = page.get("next")
 
     def _chip(prefix: str, page_id: str | None) -> str:
         if not page_id:
             return f"<span>{prefix}: <span style='color:#444;'>—</span></span>"
-        p = _PAGES_BY_ID.get(page_id, {})
+        p = localized_page(_PAGES_BY_ID.get(page_id, {}), language)
         color = _section_color(p.get("color_key"))
         num = _esc(p.get("section", ""))
         label = _esc(p.get("title", page_id))
@@ -362,8 +379,8 @@ def render_section_footer(page: dict) -> None:
     st.markdown(
         f"""
         <div class="rp-footer">
-          {_chip("Builds on", builds_on)}
-          {_chip("Next", nxt)}
+          {_chip(tr("Builds on", "承接", language), builds_on)}
+          {_chip(tr("Next", "下一页", language), nxt)}
         </div>
         """,
         unsafe_allow_html=True,

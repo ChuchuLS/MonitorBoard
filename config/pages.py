@@ -361,13 +361,25 @@ SIDEBAR_NAV_GROUPS: list[dict] = [
 ]
 
 
-def sidebar_label(page_id: str) -> str:
+def sidebar_label(page_id: str, language: str = "en") -> str:
     """Return the concise user-facing sidebar label for a page id."""
+    if language == "zh":
+        from config.i18n import PAGE_ZH
+        translated = PAGE_ZH.get(page_id, {}).get("sidebar")
+        if translated:
+            return translated
     if page_id in SIDEBAR_LABELS:
         return SIDEBAR_LABELS[page_id]
     if page_id in PAGES_BY_ID:
         return PAGES_BY_ID[page_id]["title"]
     return page_id.replace("_", " ").title()
+
+
+def sidebar_group_label(group: dict, language: str = "en") -> str:
+    if language == "zh":
+        from config.i18n import SIDEBAR_GROUP_ZH
+        return SIDEBAR_GROUP_ZH.get(group["id"], group["label"])
+    return group["label"]
 
 
 # The reference chart pack keeps the top strip at section level. Streamlit's

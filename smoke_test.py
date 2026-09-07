@@ -16,8 +16,9 @@ from data.transforms import rolling_zscore
 from config.tickers import TICKERS
 from config.pages import (
     PAGES, PAGES_BY_ID, TOP_NAV_GROUPS, SIDEBAR_NAV_GROUPS, SIDEBAR_LABELS,
-    get_page, nav_label, sidebar_label, STATUS_LABELS,
+    get_page, nav_label, sidebar_group_label, sidebar_label, STATUS_LABELS,
 )
+from config.i18n import PAGE_ZH, localized_page, localized_regime, tr
 from config.theme import SECTION_COLORS, section_color, page_css
 from index.components import build_components, BUCKETS
 from index.composite import compute_index, regime_label
@@ -72,6 +73,13 @@ assert set(_sidebar_ids) == {"contents", *PAGES_BY_ID}, \
     "sidebar groups must expose Contents and every registered page exactly once"
 assert set(SIDEBAR_LABELS) == set(_sidebar_ids)
 assert sidebar_label("liquidity") == "Liquidity overview"
+assert set(PAGE_ZH) == {"contents", *PAGES_BY_ID}, \
+    "Chinese registry must cover Contents and every registered page"
+assert sidebar_label("liquidity", "zh") == "流动性概览"
+assert sidebar_group_label(SIDEBAR_NAV_GROUPS[1], "zh") == "宏观与利率"
+assert localized_page(PAGES_BY_ID["scoring_backtest"], "zh")["title"] == "CTA 评分回测"
+assert localized_regime("Neutral", "zh") == "中性"
+assert tr("Official", "正式值", "en") == "Official"
 if _HAS_STREAMLIT_PAGES:
     for p in PAGES:
         for k in ("id", "label", "title", "section", "color_key", "status",

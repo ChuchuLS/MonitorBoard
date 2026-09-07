@@ -33,6 +33,9 @@ from config.theme import (
     POS_GREEN, NEG_RED, REGIME_COLORS, BUCKET_COLORS,
     ACCENT_CYAN, ACCENT_AMBER, ACCENT_PURPLE,
 )
+from config.i18n import (
+    LANG_ZH, current_language, localized_bucket, localized_regime, tr,
+)
 from charts.common import autoscale_range, section_header
 from index.components import BUCKETS, LABEL_OF
 from index.composite import (
@@ -137,15 +140,16 @@ def render_driver_cards(result: IndexResult) -> None:
         return
 
     easing_lbl, tight_lbl = result.drivers("1m")
+    language = current_language()
     d1, d2 = st.columns(2, gap="small")
     with d1:
         st.markdown(
             f"""
             <div class="kpi-card" style="margin-top:0.6rem;">
-              <div class="kpi-label">Main easing contributor (1m)</div>
+              <div class="kpi-label">{tr('Main easing contributor (1m)', '主要宽松贡献（1个月）', language)}</div>
               <div class="kpi-value" style="color:{POS_GREEN};font-size:18px;
                    line-height:1.3;">{easing_lbl}</div>
-              <div class="kpi-sub">pushing liquidity looser</div>
+              <div class="kpi-sub">{tr('pushing liquidity looser', '推动流动性改善', language)}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -154,10 +158,10 @@ def render_driver_cards(result: IndexResult) -> None:
         st.markdown(
             f"""
             <div class="kpi-card" style="margin-top:0.6rem;">
-              <div class="kpi-label">Main tightening contributor (1m)</div>
+              <div class="kpi-label">{tr('Main tightening contributor (1m)', '主要收紧贡献（1个月）', language)}</div>
               <div class="kpi-value" style="color:{NEG_RED};font-size:18px;
                    line-height:1.3;">{tight_lbl}</div>
-              <div class="kpi-sub">pushing liquidity tighter</div>
+              <div class="kpi-sub">{tr('pushing liquidity tighter', '推动流动性收紧', language)}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -170,26 +174,31 @@ def render_latest_official_move(result: IndexResult) -> None:
     if move.get("status") != "Available":
         return
 
+    language = current_language()
     change = move["change"]
     colour = POS_GREEN if change >= 0 else NEG_RED
     bucket_contrib = move["bucket_contributions"].dropna()
     component_contrib = move["component_contributions"].dropna()
     component_contrib = component_contrib[component_contrib.abs() > 1e-12]
 
-    st.markdown("#### Latest official move")
+    st.markdown(tr("#### Latest official move", "#### 最新正式变动", language))
     st.markdown(
         f"<div style='font-size:12px;color:#bbb;margin:-0.2rem 0 0.5rem;'>"
-        f"Fully covered dates only: <b>{move['from_date'].date()}</b> "
+        f"{tr('Fully covered dates only', '仅比较覆盖完整的日期', language)}: <b>{move['from_date'].date()}</b> "
         f"({move['from_level']:.2f}) → <b>{move['to_date'].date()}</b> "
-        f"({move['to_level']:.2f}) · change "
-        f"<b style='color:{colour};'>{change:+.2f} pts</b></div>",
+        f"({move['to_level']:.2f}) · {tr('change', '变化', language)} "
+        f"<b style='color:{colour};'>{change:+.2f} {tr('pts', '点', language)}</b></div>",
         unsafe_allow_html=True,
     )
 
     chart_col, table_col = st.columns([1.25, 1], gap="medium")
     with chart_col:
         st.plotly_chart(
-            contribution_chart(bucket_contrib, "Latest official move decomposition", 260),
+            contribution_chart(
+                bucket_contrib,
+                tr("Latest official move decomposition", "最新正式变动拆解", language),
+                260,
+            ),
             use_container_width=True,
             key="liq_latest_official_move",
             config={"displayModeBar": False},
@@ -201,30 +210,40 @@ def render_latest_official_move(result: IndexResult) -> None:
         detail = pd.DataFrame({
             "Component": [LABEL_OF.get(key, key) for key in largest.index],
             "Contribution (pts)": largest.values,
-            "Direction": ["Easing" if value >= 0 else "Tightening"
+            tr("Direction", "方向", language): [
+                tr("Easing", "宽松", language) if value >= 0
+                else tr("Tightening", "收紧", language)
                           for value in largest.values],
         })
-        st.markdown("##### Largest component drivers")
+        st.markdown(tr("##### Largest component drivers", "##### 最大组件驱动", language))
         st.dataframe(
             detail.style.format({"Contribution (pts)": "{:+.3f}"}),
             hide_index=True,
             use_container_width=True,
         )
-        st.caption("Largest absolute component contributions; this is attribution, not causality.")
+        st.caption(tr(
+            "Largest absolute component contributions; this is attribution, not causality.",
+            "按绝对值列示最大的组件贡献；这是归因，不代表因果关系。",
+            language,
+        ))
 
     bucket_gap = float(bucket_contrib.sum() - change)
     component_gap = float(component_contrib.sum() - change)
-    st.caption(
+    st.caption(tr(
         "Positive = easing; negative = tightening. Bucket contributions sum to the "
         f"official move (reconciliation gap {bucket_gap:+.8f} pts); component gap "
-        f"{component_gap:+.8f} pts."
-    )
+        f"{component_gap:+.8f} pts.",
+        "正值代表宽松，负值代表收紧。板块贡献之和等于正式变动"
+        f"（对账差额 {bucket_gap:+.8f} 点）；组件对账差额为 {component_gap:+.8f} 点。",
+        language,
+    ))
 # ===========================================================================
 # Index line chart with regime bands
 # ===========================================================================
 def index_line_chart(index: pd.Series, height: int = 460,
                      preliminary: pd.Series | None = None) -> go.Figure:
     """Liquidity history with an optional dashed preliminary tail."""
+    language = current_language()
     s = index.dropna()
     p = (preliminary.dropna() if preliminary is not None
          else pd.Series(dtype=float))
@@ -252,14 +271,14 @@ def index_line_chart(index: pd.Series, height: int = 460,
         )
 
     fig.add_hline(y=INDEX_CENTER, line=dict(color=TEXT_VERY_DIM, width=0.8, dash="dot"),
-                  annotation_text="Neutral 50", annotation_position="right",
+                  annotation_text=tr("Neutral 50", "中性 50", language), annotation_position="right",
                   annotation_font=dict(size=9, color=TEXT_DIM))
 
     if len(s):
         fig.add_trace(go.Scatter(
             x=s.index, y=s.values, mode="lines",
             line=dict(color=LINE_WHITE, width=1.4),
-            name="Official / historical",
+            name=tr("Official / historical", "正式值 / 历史", language),
             hovertemplate="%{x|%Y-%m-%d}: %{y:.1f}<extra></extra>",
         ))
         fig.add_trace(go.Scatter(
@@ -277,8 +296,8 @@ def index_line_chart(index: pd.Series, height: int = 460,
             x=bridge.index, y=bridge.values, mode="lines+markers",
             line=dict(color=ACCENT_AMBER, width=1.4, dash="dash"),
             marker=dict(color=ACCENT_AMBER, size=6),
-            name="Preliminary",
-            hovertemplate="Preliminary<br>%{x|%Y-%m-%d}: %{y:.1f}<extra></extra>",
+            name=tr("Preliminary", "初步值", language),
+            hovertemplate=tr("Preliminary", "初步值", language) + "<br>%{x|%Y-%m-%d}: %{y:.1f}<extra></extra>",
         ))
 
     fig.update_layout(
@@ -290,12 +309,14 @@ def index_line_chart(index: pd.Series, height: int = 460,
     fig.update_xaxes(showgrid=False, tickfont=dict(size=10, color="#bbb"), linecolor="#222")
     fig.update_yaxes(showgrid=True, gridcolor=GRID, zeroline=False, range=[y_lo, y_hi],
                      tickfont=dict(size=10, color="#bbb"), linecolor="#222",
-                     title=dict(text="Index (50 = neutral)", font=dict(size=10, color="#888")))
+                     title=dict(text=tr("Index (50 = neutral)", "指数（50 = 中性）", language),
+                                font=dict(size=10, color="#888")))
     return fig
 
 
 def sub_index_chart(sub_indices: pd.DataFrame, height: int = 360) -> go.Figure:
     """One z-score line per bucket sub-index (higher = looser)."""
+    language = current_language()
     fig = go.Figure()
     fig.add_hline(y=0, line=dict(color=TEXT_VERY_DIM, width=0.6, dash="dot"))
     for bucket in _BUCKET_ORDER:
@@ -307,8 +328,8 @@ def sub_index_chart(sub_indices: pd.DataFrame, height: int = 360) -> go.Figure:
         fig.add_trace(go.Scatter(
             x=s.index, y=s.values, mode="lines",
             line=dict(color=BUCKET_COLORS.get(bucket, LINE_WHITE), width=1.2),
-            name=BUCKETS[bucket]["label"],
-            hovertemplate=(f"{BUCKETS[bucket]['label']}<br>"
+            name=localized_bucket(BUCKETS[bucket]["label"], language),
+            hovertemplate=(f"{localized_bucket(BUCKETS[bucket]['label'], language)}<br>"
                            "%{x|%Y-%m-%d}: %{y:+.2f}σ<extra></extra>"),
         ))
     fig.update_layout(
@@ -321,16 +342,18 @@ def sub_index_chart(sub_indices: pd.DataFrame, height: int = 360) -> go.Figure:
     fig.update_yaxes(showgrid=True, gridcolor=GRID, zeroline=False,
                      tickfont=dict(size=10, color="#bbb"), linecolor="#222",
                      ticksuffix="σ",
-                     title=dict(text="Sub-index (z-score)", font=dict(size=10, color="#888")))
+                     title=dict(text=tr("Sub-index (z-score)", "板块子指数（z-score）", language),
+                                font=dict(size=10, color="#888")))
     return fig
 
 
 def contribution_chart(contrib: pd.Series, title: str, height: int = 300) -> go.Figure:
     """Horizontal bars of each bucket's contribution (green=easing, red=tightening)."""
+    language = current_language()
     fig = go.Figure()
     contrib = contrib.reindex([b for b in _BUCKET_ORDER if b in contrib.index]).dropna()
     if len(contrib):
-        labels = [BUCKETS[b]["label"] for b in contrib.index]
+        labels = [localized_bucket(BUCKETS[b]["label"], language) for b in contrib.index]
         colours = [POS_GREEN if v >= 0 else NEG_RED for v in contrib.values]
         fig.add_trace(go.Bar(
             x=contrib.values, y=labels, orientation="h",
@@ -353,7 +376,8 @@ def contribution_chart(contrib: pd.Series, title: str, height: int = 300) -> go.
         fig.update_xaxes(range=[-span * 1.45, span * 1.45])
     fig.update_xaxes(showgrid=True, gridcolor=GRID, zeroline=False,
                      tickfont=dict(size=9, color="#bbb"), linecolor="#222",
-                     title=dict(text="index points", font=dict(size=9, color="#888")))
+                     title=dict(text=tr("index points", "指数点", language),
+                                font=dict(size=9, color="#888")))
     fig.update_yaxes(showgrid=False, tickfont=dict(size=10, color="#ddd"),
                      linecolor="#222", automargin=True)
     return fig
@@ -456,15 +480,16 @@ def coverage_chart(components: pd.Series, buckets: pd.Series,
                    first_published, height: int = 280) -> go.Figure:
     """Available components (left axis) and qualifying buckets (right axis) over
     time, with the reliable-from line marked."""
+    language = current_language()
     fig = go.Figure()
     c = components.dropna()
     b = buckets.dropna()
     fig.add_trace(go.Scatter(
-        x=c.index, y=c.values, mode="lines", name="Components",
+        x=c.index, y=c.values, mode="lines", name=tr("Components", "组件", language),
         line=dict(color=ACCENT_CYAN, width=1.3),
         hovertemplate="%{x|%Y-%m-%d}: %{y} components<extra></extra>"))
     fig.add_trace(go.Scatter(
-        x=b.index, y=b.values, mode="lines", name="Qualifying buckets",
+        x=b.index, y=b.values, mode="lines", name=tr("Qualifying buckets", "合格板块", language),
         line=dict(color=ACCENT_AMBER, width=1.3), yaxis="y2",
         hovertemplate="%{x|%Y-%m-%d}: %{y} buckets<extra></extra>"))
     if first_published is not None:
@@ -472,7 +497,7 @@ def coverage_chart(components: pd.Series, buckets: pd.Series,
         fig.add_shape(type="line", x0=fp_str, x1=fp_str, y0=0, y1=1, yref="paper",
                       line=dict(color=POS_GREEN, width=1, dash="dash"))
         fig.add_annotation(x=fp_str, y=1.0, yref="paper", yanchor="bottom",
-                           text="reliable from", showarrow=False,
+                           text=tr("reliable from", "可靠起点", language), showarrow=False,
                            font=dict(size=9, color=POS_GREEN))
     fig.update_layout(
         **{**DARK_LAYOUT, "showlegend": True}, height=height,
@@ -481,17 +506,18 @@ def coverage_chart(components: pd.Series, buckets: pd.Series,
                     bgcolor="rgba(0,0,0,0)", font=dict(size=10, color="#ccc")),
         yaxis2=dict(overlaying="y", side="right", showgrid=False, range=[0, 5.5],
                     tickfont=dict(size=10, color=ACCENT_AMBER),
-                    title=dict(text="buckets", font=dict(size=9, color=ACCENT_AMBER))),
+                    title=dict(text=tr("buckets", "板块", language), font=dict(size=9, color=ACCENT_AMBER))),
     )
     fig.update_xaxes(showgrid=False, tickfont=dict(size=10, color="#bbb"), linecolor="#222")
     fig.update_yaxes(showgrid=True, gridcolor=GRID, zeroline=False,
                      tickfont=dict(size=10, color=ACCENT_CYAN), linecolor="#222",
-                     title=dict(text="components", font=dict(size=9, color=ACCENT_CYAN)))
+                     title=dict(text=tr("components", "组件", language), font=dict(size=9, color=ACCENT_CYAN)))
     return fig
 
 
 def effective_weights_chart(eff: pd.DataFrame, height: int = 280) -> go.Figure:
     """Stacked area of the renormalised bucket weights actually used each day."""
+    language = current_language()
     fig = go.Figure()
     eff = eff.dropna(how="all")
     for bucket in _BUCKET_ORDER:
@@ -499,10 +525,11 @@ def effective_weights_chart(eff: pd.DataFrame, height: int = 280) -> go.Figure:
             continue
         s = (eff[bucket].fillna(0) * 100)
         fig.add_trace(go.Scatter(
-            x=s.index, y=s.values, mode="lines", name=BUCKETS[bucket]["label"],
+            x=s.index, y=s.values, mode="lines",
+            name=localized_bucket(BUCKETS[bucket]["label"], language),
             line=dict(width=0.5, color=BUCKET_COLORS.get(bucket, LINE_WHITE)),
             stackgroup="w", fillcolor=BUCKET_COLORS.get(bucket, LINE_WHITE),
-            hovertemplate=(f"{BUCKETS[bucket]['label']}<br>"
+            hovertemplate=(f"{localized_bucket(BUCKETS[bucket]['label'], language)}<br>"
                            "%{x|%Y-%m-%d}: %{y:.0f}%<extra></extra>")))
     fig.update_layout(
         **{**DARK_LAYOUT, "showlegend": True}, height=height,
@@ -513,7 +540,8 @@ def effective_weights_chart(eff: pd.DataFrame, height: int = 280) -> go.Figure:
     fig.update_xaxes(showgrid=False, tickfont=dict(size=10, color="#bbb"), linecolor="#222")
     fig.update_yaxes(showgrid=True, gridcolor=GRID, zeroline=False, range=[0, 100],
                      ticksuffix="%", tickfont=dict(size=10, color="#bbb"), linecolor="#222",
-                     title=dict(text="effective weight", font=dict(size=9, color="#888")))
+                     title=dict(text=tr("effective weight", "有效权重", language),
+                                font=dict(size=9, color="#888")))
     return fig
 
 
@@ -545,11 +573,15 @@ def render_index_page(df: pd.DataFrame, dff: pd.DataFrame, result: IndexResult,
                       export_bytes: bytes | Callable[[], bytes] | None = None,
                       export_name: str | None = None) -> None:
     """Render the entire Composite Liquidity Index section."""
+    language = current_language()
     audit = audit or {}
     section_header(
-        "Composite Liquidity Index",
-        "Raw-indicator liquidity gauge · higher = looser · 50 = neutral · "
-        "z-scored & weighted across five buckets",
+        tr("Composite Liquidity Index", "综合流动性指数", language),
+        tr(
+            "Raw-indicator liquidity gauge · higher = looser · 50 = neutral · z-scored & weighted across five buckets",
+            "原始指标流动性温度计 · 数值越高越宽松 · 50 = 中性 · 五个板块经 z-score 标准化后加权",
+            language,
+        ),
     )
 
     # Excel export — one click, full multi-sheet workbook.
@@ -557,7 +589,7 @@ def render_index_page(df: pd.DataFrame, dff: pd.DataFrame, result: IndexResult,
         _, btn_col = st.columns([6, 2])
         with btn_col:
             st.download_button(
-                label="⬇  Export to Excel",
+                label=tr("⬇  Export to Excel", "⬇  导出 Excel", language),
                 data=export_bytes,
                 file_name=export_name or "liquidity_index.xlsx",
                 mime="application/vnd.openxmlformats-officedocument."
@@ -571,15 +603,20 @@ def render_index_page(df: pd.DataFrame, dff: pd.DataFrame, result: IndexResult,
 
     if result.index.dropna().empty:
         st.warning(
-            "No index could be built because none of the component indicators "
-            "are present in the data. See the Data Quality section for details."
+            tr(
+                "No index could be built because none of the component indicators are present in the data. See the Data Quality section for details.",
+                "由于数据中不存在任何组件指标，无法构建指数。详情请查看“数据质量”页面。",
+                language,
+            )
         )
         return
     if result.headline_index.dropna().empty:
         st.warning(
-            "No official headline is available because no date meets the full "
-            "five-bucket and normal-component-coverage rule. Partial analytical "
-            "observations remain visible only for diagnostics."
+            tr(
+                "No official headline is available because no date meets the full five-bucket and normal-component-coverage rule. Partial analytical observations remain visible only for diagnostics.",
+                "没有任何日期同时满足五个板块和正常组件覆盖规则，因此暂无正式值；不完整读数仅用于诊断。",
+                language,
+            )
         )
 
     # --- Index level + regime line ----------------------------------------
@@ -588,12 +625,11 @@ def render_index_page(df: pd.DataFrame, dff: pd.DataFrame, result: IndexResult,
     # Warn if the chosen lookback reaches into the unavailable analytical era.
     fp = result.first_published_date
     if fp is not None and start < fp:
-        st.warning(
-            f"The selected lookback starts {start.date()}, but analytical history is "
-            f"available from **{fp.date()}** — earlier dates fail the minimum "
-            f"coverage rules (too few buckets / single-component buckets) and are "
-            f"left blank. See *Coverage & reliability* below."
-        )
+        st.warning(tr(
+            f"The selected lookback starts {start.date()}, but analytical history is available from **{fp.date()}** — earlier dates fail the minimum coverage rules (too few buckets / single-component buckets) and are left blank. See *Coverage & reliability* below.",
+            f"所选回看区间始于 {start.date()}，但可分析历史从 **{fp.date()}** 才开始。更早日期未达到最低覆盖规则（板块过少或板块仅有单一组件），因此保持空白。详见下方“覆盖与可靠性”。",
+            language,
+        ))
 
     idx_window = result.index.loc[(result.index.index >= start) & (result.index.index <= end)].copy()
     preliminary_window = result.preliminary_index.loc[
@@ -603,20 +639,23 @@ def render_index_page(df: pd.DataFrame, dff: pd.DataFrame, result: IndexResult,
         idx_window.loc[idx_window.index > result.latest_date] = np.nan
     st.plotly_chart(index_line_chart(idx_window, preliminary=preliminary_window), use_container_width=True,
                     key="liq_index_line", config={"displayModeBar": False})
-    fp_txt = f" · reliable from {fp.date()}" if fp is not None else ""
-    st.caption(
-        "Bands: green = Loose (≥60) · grey = Neutral (45–60) · "
-        "amber = Tight (35–45) · red = Stress (<35). Dashed amber observations "
-        "are preliminary and excluded from headline changes." + fp_txt
-    )
+    fp_txt = (f" · {tr('reliable from', '可靠起点', language)} {fp.date()}"
+              if fp is not None else "")
+    st.caption(tr(
+        "Bands: green = Loose (≥60) · grey = Neutral (45–60) · amber = Tight (35–45) · red = Stress (<35). Dashed amber observations are preliminary and excluded from headline changes.",
+        "区间：绿色 = 宽松（≥60）· 灰色 = 中性（45–60）· 黄色 = 偏紧（35–45）· 红色 = 压力（<35）。黄色虚线为初步值，不进入正式涨跌计算。",
+        language,
+    ) + fp_txt)
 
     # --- Sub-indices + contribution decomposition -------------------------
     left, right = st.columns([1.4, 1], gap="medium")
     with left:
         st.markdown(
             "<div style='color:#888;font-size:11px;letter-spacing:0.08em;"
-            "text-transform:uppercase;margin:0.4rem 0;'>Sub-index by bucket "
-            "(z-score, higher = looser)</div>", unsafe_allow_html=True)
+            "text-transform:uppercase;margin:0.4rem 0;'>"
+            + tr("Sub-index by bucket (z-score, higher = looser)",
+                 "板块子指数（z-score，越高越宽松）", language)
+            + "</div>", unsafe_allow_html=True)
         sub_window = result.sub_indices.loc[
             (result.sub_indices.index >= start) & (result.sub_indices.index <= end)]
         st.plotly_chart(sub_index_chart(sub_window), use_container_width=True,
@@ -624,18 +663,20 @@ def render_index_page(df: pd.DataFrame, dff: pd.DataFrame, result: IndexResult,
 
     with right:
         horizon = st.selectbox(
-            "CONTRIBUTION HORIZON", options=list(HORIZONS.keys()), index=1,
+            tr("CONTRIBUTION HORIZON", "贡献周期", language),
+            options=list(HORIZONS.keys()), index=1,
             key="liq_contrib_horizon",
-            help="Which buckets drove the index change over this window.",
+            help=tr("Which buckets drove the index change over this window.",
+                    "哪些板块推动了该周期内的指数变化。", language),
         )
         st.plotly_chart(
             contribution_chart(result.change_contributions(horizon),
-                               f"{horizon} change decomposition"),
+                               tr(f"{horizon} change decomposition", f"{horizon} 变化拆解", language)),
             use_container_width=True, key="liq_contrib_change",
             config={"displayModeBar": False})
         st.plotly_chart(
             contribution_chart(result.level_contributions(),
-                               "current level vs neutral"),
+                               tr("current level vs neutral", "当前水平相对中性", language)),
             use_container_width=True, key="liq_contrib_level",
             config={"displayModeBar": False})
 
@@ -659,34 +700,33 @@ def render_index_page(df: pd.DataFrame, dff: pd.DataFrame, result: IndexResult,
 def _render_coverage_block(result: IndexResult) -> None:
     """Show how many components/buckets feed the index over time + effective
     weights, making partial-coverage periods obvious (requirements #1, #7)."""
+    language = current_language()
     st.markdown(
         "<div style='border-top:1px solid #1a1a1a;margin-top:1rem;padding-top:0.6rem;'>"
         "<div style='font-size:14px;font-weight:700;letter-spacing:0.06em;color:#fff;"
-        "text-transform:uppercase;'>Coverage &amp; reliability</div>"
+        "text-transform:uppercase;'>" + tr("Coverage &amp; reliability", "覆盖与可靠性", language) + "</div>"
         "<div style='font-size:10px;color:#888;letter-spacing:0.08em;"
-        "text-transform:uppercase;margin-top:2px;'>How much of the component "
-        "universe actually feeds the index each day</div></div>",
+        "text-transform:uppercase;margin-top:2px;'>"
+        + tr("How much of the component universe actually feeds the index each day",
+             "每天实际进入指数的组件与板块数量", language)
+        + "</div></div>",
         unsafe_allow_html=True,
     )
 
     fp = result.first_published_date
     fv = result.first_valid_date
     if fp is not None:
+        coverage_note = tr(
+            f"The index is computable from <b>{fv.date() if fv is not None else '—'}</b> once sufficient history exists, but is only <b style='color:{POS_GREEN};'>available analytically from {fp.date()}</b>, when at least {MIN_AVAILABLE_BUCKETS} buckets, each with at least {MIN_COMPONENTS_PER_BUCKET} live components, and at least {MIN_AVAILABLE_COMPONENTS} total components are available. Earlier dates are a <b>low-coverage / warm-up period</b>. The official headline uses the most recent date with all {HEADLINE_REQUIRED_BUCKETS} buckets and at least the trailing {HEADLINE_COMPONENT_LOOKBACK}-business-day median live-component count.",
+            f"指数在具备足够历史后可从 <b>{fv.date() if fv is not None else '—'}</b> 开始计算，但只有到 <b style='color:{POS_GREEN};'>{fp.date()}</b> 才可用于分析：至少需要 {MIN_AVAILABLE_BUCKETS} 个板块、每个板块至少 {MIN_COMPONENTS_PER_BUCKET} 个有效组件，且总计至少 {MIN_AVAILABLE_COMPONENTS} 个组件。更早日期属于<b>低覆盖 / 预热期</b>。正式值采用最近一个同时拥有全部 {HEADLINE_REQUIRED_BUCKETS} 个板块，且有效组件数不低于过去 {HEADLINE_COMPONENT_LOOKBACK} 个工作日中位数的日期。",
+            language,
+        )
         st.markdown(
             f"""
             <div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:6px;
                         padding:0.6rem 0.9rem;margin:0.3rem 0 0.6rem;font-size:12px;
                         color:#ccc;line-height:1.6;">
-              The index is computable from <b>{fv.date() if fv is not None else '—'}</b>
-              (once ~2y of history exists for the first indicators) but is only
-              <b style="color:{POS_GREEN};">available analytically from {fp.date()}</b>, when at
-              least {MIN_AVAILABLE_BUCKETS} buckets — each with ≥
-              {MIN_COMPONENTS_PER_BUCKET} live components — and ≥
-              {MIN_AVAILABLE_COMPONENTS} components are available. Earlier dates are a
-              <b>low-coverage / warm-up period</b> and are not shown as a valid signal.
-              The official headline uses the most recent date with all
-              {HEADLINE_REQUIRED_BUCKETS} buckets and at least the trailing
-              {HEADLINE_COMPONENT_LOOKBACK}-business-day median live-component count.
+              {coverage_note}
             </div>
             """,
             unsafe_allow_html=True)
@@ -695,8 +735,9 @@ def _render_coverage_block(result: IndexResult) -> None:
     with c_left:
         st.markdown(
             "<div style='color:#888;font-size:11px;letter-spacing:0.08em;"
-            "text-transform:uppercase;margin:0.3rem 0 0.2rem;'>Components &amp; "
-            "buckets available over time</div>", unsafe_allow_html=True)
+            "text-transform:uppercase;margin:0.3rem 0 0.2rem;'>"
+            + tr("Components &amp; buckets available over time", "组件与板块的历史可用数量", language)
+            + "</div>", unsafe_allow_html=True)
         st.plotly_chart(
             coverage_chart(result.available_component_count,
                            result.available_bucket_count, fp),
@@ -705,19 +746,23 @@ def _render_coverage_block(result: IndexResult) -> None:
     with c_right:
         st.markdown(
             "<div style='color:#888;font-size:11px;letter-spacing:0.08em;"
-            "text-transform:uppercase;margin:0.3rem 0 0.2rem;'>Effective bucket "
-            "weights over time (renormalised)</div>", unsafe_allow_html=True)
+            "text-transform:uppercase;margin:0.3rem 0 0.2rem;'>"
+            + tr("Effective bucket weights over time (renormalised)",
+                 "历史有效板块权重（重新归一化）", language)
+            + "</div>", unsafe_allow_html=True)
         st.plotly_chart(effective_weights_chart(result.effective_weights),
                         use_container_width=True, key="liq_effweights",
                         config={"displayModeBar": False})
-    st.caption(
-        "Partial analytical dates may renormalise weights for diagnostics, but "
-        "they are never used for the official headline. The official value requires "
-        "all five buckets, so its effective weights remain the stated base weights.")
+    st.caption(tr(
+        "Partial analytical dates may renormalise weights for diagnostics, but they are never used for the official headline. The official value requires all five buckets, so its effective weights remain the stated base weights.",
+        "不完整日期可为诊断目的重新归一化权重，但绝不会进入正式标题。正式值要求五个板块全部可用，因此其有效权重始终等于既定基础权重。",
+        language,
+    ))
 
 
 def _render_driver_note(result: IndexResult, horizon: str) -> None:
     """Plain-language summary of the bucket contributions to the move."""
+    language = current_language()
     contrib = result.change_contributions(horizon)
     if contrib.empty or contrib.isna().all():
         return
@@ -728,7 +773,7 @@ def _render_driver_note(result: IndexResult, horizon: str) -> None:
         v = contrib[bucket]
         colour = POS_GREEN if v >= 0 else NEG_RED
         parts.append(
-            f"<span style='color:#aaa;'>{BUCKETS[bucket]['label']}</span> "
+            f"<span style='color:#aaa;'>{localized_bucket(BUCKETS[bucket]['label'], language)}</span> "
             f"<span style='color:{colour};font-weight:700;'>{v:+.2f}</span>")
     total = contrib.sum()
     total_col = POS_GREEN if total >= 0 else NEG_RED
@@ -739,13 +784,11 @@ def _render_driver_note(result: IndexResult, horizon: str) -> None:
                     padding:0.7rem 0.9rem;margin-top:0.4rem;">
           <div style="font-size:10px;color:#888;letter-spacing:0.1em;
                       text-transform:uppercase;margin-bottom:6px;">
-            {horizon} index change attribution &nbsp;·&nbsp; total
+            {tr(f'{horizon} index change attribution', f'{horizon} 指数变化归因', language)} &nbsp;·&nbsp; {tr('total', '合计', language)}
             <span style="color:{total_col};font-weight:700;">{total:+.2f}</span> pts</div>
           <div style="font-size:12px;line-height:1.9;">{body}</div>
           <div style="font-size:10px;color:#666;margin-top:6px;">
-            Positive = bucket eased liquidity (index up) · negative = bucket
-            tightened liquidity (index down). Contributions sum exactly to the
-            index move.</div>
+            {tr('Positive = bucket eased liquidity (index up) · negative = bucket tightened liquidity (index down). Contributions sum exactly to the index move.', '正值 = 该板块推动流动性改善（指数上升）· 负值 = 该板块推动流动性收紧（指数下降）。贡献之和与指数变动完全对账。', language)}</div>
         </div>
         """,
         unsafe_allow_html=True,

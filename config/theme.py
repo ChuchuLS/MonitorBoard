@@ -166,6 +166,13 @@ def page_css() -> str:
         color: #777; font-size: 9px; letter-spacing: 0.14em;
         text-transform: uppercase; margin-top: 4px;
     }
+    [data-testid="stSidebar"] [data-testid="stSelectbox"] label p {
+        color: #777; font-size: 9px; font-weight: 700;
+        letter-spacing: 0.12em; text-transform: uppercase;
+    }
+    [data-testid="stSidebar"] [data-testid="stSelectbox"] {
+        margin-top: 0.55rem;
+    }
     .sidebar-data-status {
         margin: 0.75rem 0 0.9rem; padding: 0.65rem 0.75rem;
         background: rgba(255,255,255,0.025); border: 1px solid #1d1d1d;

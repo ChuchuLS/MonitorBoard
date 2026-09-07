@@ -10,6 +10,9 @@ import logging
 import pandas as pd
 import streamlit as st
 from config.pages import PAGES, STATUS_LABELS, STATUS_COLORS
+from config.i18n import (
+    LANG_ZH, STATUS_ZH, current_language, localized_page, localized_regime, tr,
+)
 from config.theme import section_color
 from charts.common import (
     render_page_header, render_top_tabs, render_section_footer,
@@ -29,6 +32,7 @@ CONTENTS_PAGE_META = {
 
 def render(ctx: PageContext) -> None:
     from data.loader import latest_valid_date
+    language = current_language()
     render_top_tabs("contents")
     lvd = latest_valid_date(ctx.df)
     latest = lvd.strftime("%b %d, %Y").upper() if lvd else "—"
@@ -37,7 +41,8 @@ def render(ctx: PageContext) -> None:
     # ── Today's Dashboard State ──
     st.markdown("<div style='margin:0.4rem 0 0.3rem;font-size:11px;color:#888;"
                 "letter-spacing:0.1em;text-transform:uppercase;'>"
-                "Today's dashboard state</div>", unsafe_allow_html=True)
+                + tr("Today's dashboard state", "今日看板状态", language)
+                + "</div>", unsafe_allow_html=True)
 
     r = ctx.index_result
     from config.theme import REGIME_COLORS
@@ -46,7 +51,7 @@ def render(ctx: PageContext) -> None:
     regime_color = REGIME_COLORS.get(regime, "#888")
     changes = r.changes() if callable(getattr(r, "changes", None)) else {}
 
-    readings = [("Latest valid data date", latest)]
+    readings = [(tr("Latest valid data date", "最新有效数据日期", language), latest)]
     state_failures: list[str] = []
 
     def _record_state_failure(label: str, exc: Exception) -> None:
@@ -56,22 +61,23 @@ def render(ctx: PageContext) -> None:
     # Liquidity
     if pd.notna(r.latest):
         official_suffix = f" · {r.latest_date.date()}" if r.latest_date is not None else ""
-        readings.append(("Composite Liquidity Index — Official",
+        readings.append((tr("Composite Liquidity Index — Official", "综合流动性指数 — 正式值", language),
                          f"<span style='color:{regime_color};'>{r.latest:.1f} "
-                         f"({regime}){official_suffix}</span>"))
+                         f"({localized_regime(regime, language)}){official_suffix}</span>"))
         if r.preliminary_date is not None and pd.notna(r.preliminary_latest):
             prelim_buckets = int(r.available_bucket_count.loc[r.preliminary_date])
             prelim_components = int(r.available_component_count.loc[r.preliminary_date])
             readings.append((
-                "Composite Liquidity Index — Preliminary",
+                tr("Composite Liquidity Index — Preliminary", "综合流动性指数 — 初步值", language),
                 f"{r.preliminary_latest:.1f} · {r.preliminary_date.date()} · "
-                f"{prelim_buckets}/{HEADLINE_REQUIRED_BUCKETS} buckets · "
-                f"{prelim_components} components",
+                f"{prelim_buckets}/{HEADLINE_REQUIRED_BUCKETS} {tr('buckets', '板块', language)} · "
+                f"{prelim_components} {tr('components', '组件', language)}",
             ))
         for h in ("1w", "1m", "3m"):
             v = changes.get(h)
             if v is not None and pd.notna(v):
-                readings.append((f"CLI {h.upper()} change", f"{v:+.1f} pts"))
+                readings.append((tr(f"CLI {h.upper()} change", f"CLI {h.upper()} 变化", language),
+                                 f"{v:+.1f} {tr('pts', '点', language)}"))
 
     # Cross-Asset
     try:
@@ -142,12 +148,14 @@ def render(ctx: PageContext) -> None:
     except Exception as exc:
         _record_state_failure("Data-quality summary", exc)
 
-    render_current_reading_list("Today's readings", readings)
+    render_current_reading_list(tr("Today's readings", "今日读数", language), readings)
     if state_failures:
         st.warning(
-            "Some dashboard-state summaries are unavailable: "
+            tr("Some dashboard-state summaries are unavailable: ",
+               "部分看板摘要暂不可用：", language)
             + "; ".join(state_failures)
-            + ". No missing reading was replaced with zero or a proxy."
+            + tr(". No missing reading was replaced with zero or a proxy.",
+                 "。任何缺失读数均未以零值或代理值替代。", language)
         )
 
     # ── Content coverage vs reference PDF ──
@@ -158,7 +166,7 @@ def render(ctx: PageContext) -> None:
         st.markdown(
             "<div style='margin:1rem 0 0.3rem;font-size:11px;color:#888;"
             "letter-spacing:0.1em;text-transform:uppercase;'>"
-            "Content coverage vs reference PDF</div>", unsafe_allow_html=True)
+            f"{tr('Content coverage vs reference PDF', '相对参考 PDF 的内容覆盖', language)}</div>", unsafe_allow_html=True)
         cov_items = [
             (f"Live", f"<span style='color:#5fb04f;'>{counts.get('Live', 0)}</span>"),
             (f"Partial", f"<span style='color:#d99830;'>{counts.get('Partial', 0)}</span>"),
@@ -167,8 +175,9 @@ def render(ctx: PageContext) -> None:
             (f"Not started", f"{counts.get('Not Started', 0)}"),
             (f"Total modules", f"<b>{total}</b>"),
         ]
-        render_current_reading_list("Model coverage", cov_items)
-        st.caption("See 08 · Model Roadmap for the full content gap analysis.")
+        render_current_reading_list(tr("Model coverage", "模型覆盖", language), cov_items)
+        st.caption(tr("See 08 · Model Roadmap for the full content gap analysis.",
+                      "完整内容缺口分析请见 09 · 模型路线图。", language))
     except Exception as exc:
         logger.exception("Contents model-coverage summary failed")
         st.warning(
@@ -179,15 +188,16 @@ def render(ctx: PageContext) -> None:
     # ── Section listing ──
     st.markdown("<div style='margin:1.2rem 0 0.4rem;font-size:11px;color:#888;"
                 "letter-spacing:0.1em;text-transform:uppercase;'>"
-                "Sections</div>", unsafe_allow_html=True)
+                f"{tr('Sections', '页面目录', language)}</div>", unsafe_allow_html=True)
     rows_html = []
     for p in PAGES:
         color = section_color(p["color_key"])
         status = p["status"]
-        status_label = STATUS_LABELS[status]
+        status_label = STATUS_ZH.get(status, STATUS_LABELS[status]) if language == LANG_ZH else STATUS_LABELS[status]
         status_color = STATUS_COLORS[status]
-        title = _html.escape(p["title"])
-        desc = _html.escape(p["description"])
+        display_page = localized_page(p, language)
+        title = _html.escape(display_page["title"])
+        desc = _html.escape(display_page["description"])
         num = _html.escape(p["section"])
         rows_html.append(
             f"<div style='display:grid;grid-template-columns:52px 1fr 140px;"
@@ -207,22 +217,24 @@ def render(ctx: PageContext) -> None:
     legend_bits = " &nbsp; ".join(
         f"<span style='color:{STATUS_COLORS[k]};'>■</span> "
         f"<span style='color:#aaa;font-size:11px;letter-spacing:0.06em;"
-        f"text-transform:uppercase;'>{STATUS_LABELS[k]}</span>"
+        f"text-transform:uppercase;'>{STATUS_ZH.get(k, STATUS_LABELS[k]) if language == LANG_ZH else STATUS_LABELS[k]}</span>"
         for k in ["live", "partial", "scaffold", "experimental", "requires"]
     )
     st.markdown(f"<div style='margin-top:10px;font-size:11px;'>"
                 f"<span style='color:#666;letter-spacing:0.1em;text-transform:uppercase;'>"
-                f"Legend</span> &nbsp;{legend_bits}</div>", unsafe_allow_html=True)
+                f"{tr('Legend', '图例', language)}</span> &nbsp;{legend_bits}</div>", unsafe_allow_html=True)
 
     # ── Export download (lazy) ──
-    with st.expander("Export research pack", expanded=False):
-        st.caption("Download the complete linked Board as a 16:9 PDF. The file "
-                   "contains the cover, contents, all registered pages, PDF "
-                   "bookmarks and internal navigation.")
+    with st.expander(tr("Export research pack", "导出研究报告", language), expanded=False):
+        st.caption(tr(
+            "Download the complete linked Board as a 16:9 English PDF. The file contains the cover, contents, all registered pages, PDF bookmarks and internal navigation.",
+            "下载完整的 16:9 英文版 PDF，包含封面、目录、全部页面、书签和内部导航。",
+            language,
+        ))
         if ctx.pdf_export_builder:
             try:
                 st.download_button(
-                    "⬇  Download complete Board PDF",
+                    tr("⬇  Download complete English Board PDF", "⬇  下载完整英文版 PDF", language),
                     data=ctx.pdf_export_builder,
                     file_name=ctx.pdf_export_name,
                     mime="application/pdf",

@@ -19,8 +19,9 @@ import streamlit as st
 
 from config.theme import REGIME_COLORS, TEXT_DIM, section_color, page_css
 from config.pages import (
-    PAGES_BY_ID, SIDEBAR_NAV_GROUPS, sidebar_label,
+    PAGES_BY_ID, SIDEBAR_NAV_GROUPS, sidebar_group_label, sidebar_label,
 )
+from config.i18n import LANG_EN, LANG_ZH, localized_regime, tr
 from data.loader import (
     load_data, date_filter, latest_valid_date,
     source_signature,
@@ -143,20 +144,21 @@ def _activate_page(page_id: str) -> None:
 
 def _render_sidebar_navigation() -> None:
     active_page = st.session_state["active_page"]
-    st.markdown('<div class="sidebar-section-label">Navigation</div>',
+    language = st.session_state.get("ui_language", LANG_EN)
+    st.markdown(f'<div class="sidebar-section-label">{tr("Navigation", "导航", language)}</div>',
                 unsafe_allow_html=True)
     for group in SIDEBAR_NAV_GROUPS:
         expanded = active_page in group["page_ids"]
-        with st.expander(group["label"], expanded=expanded):
+        with st.expander(sidebar_group_label(group, language), expanded=expanded):
             for page_id in group["page_ids"]:
-                label = sidebar_label(page_id)
+                label = sidebar_label(page_id, language)
                 if page_id == active_page:
                     page = PAGES_BY_ID.get(page_id)
                     accent = section_color(page["color_key"]) if page else "#5fb04f"
                     st.markdown(
                         f"""
                         <div class="sidebar-nav-active" style="--nav-accent:{accent};">
-                          <span>{label}</span><small>Current</small>
+                          <span>{label}</span><small>{tr("Current", "当前", language)}</small>
                         </div>
                         """,
                         unsafe_allow_html=True,
@@ -171,14 +173,28 @@ def _render_sidebar_navigation() -> None:
                     )
 
 with st.sidebar:
+    _language_names = ("English", "中文")
+    _language_choice = st.session_state.get("ui_language_choice", "English")
+    _ui_language = LANG_ZH if _language_choice == "中文" else LANG_EN
+    st.session_state["ui_language"] = _ui_language
+
     st.markdown(
         f"""
         <div class="sidebar-brand">
-          <div class="sidebar-brand-kicker">Daily Macro Research</div>
+          <div class="sidebar-brand-kicker">{tr("Daily Macro Research", "每日宏观研究", _ui_language)}</div>
           <div class="sidebar-brand-title">Rates &amp; Liquidity</div>
-          <div class="sidebar-brand-sub">Research Board</div>
+          <div class="sidebar-brand-sub">{tr("Research Board", "研究看板", _ui_language)}</div>
         </div>
         """, unsafe_allow_html=True)
+
+    _language_choice = st.selectbox(
+        "Language / 语言",
+        _language_names,
+        index=1 if _ui_language == LANG_ZH else 0,
+        key="ui_language_choice",
+    )
+    _ui_language = LANG_ZH if _language_choice == "中文" else LANG_EN
+    st.session_state["ui_language"] = _ui_language
 
     _raw_date = df.index.max() if not df.empty else None
     _official_date = index_result.latest_date
@@ -186,7 +202,7 @@ with st.sidebar:
     _official_date_text = (
         _official_date.strftime("%b %d") if _official_date is not None else "—"
     )
-    _pending_text = "Complete"
+    _pending_text = tr("Complete", "完整", _ui_language)
     if (_raw_date is not None and _official_date is not None
             and _raw_date > _official_date
             and _raw_date in index_result.available_bucket_count.index):
@@ -194,20 +210,20 @@ with st.sidebar:
         _pending_components = int(index_result.available_component_count.loc[_raw_date])
         _normal_target = int(index_result.normal_component_target.loc[_raw_date])
         _pending_text = (
-            f"{_pending_buckets}/5 buckets · "
-            f"{_pending_components}/{_normal_target} live"
+            f"{_pending_buckets}/5 {tr('buckets', '板块', _ui_language)} · "
+            f"{_pending_components}/{_normal_target} {tr('live', '有效组件', _ui_language)}"
         )
     st.markdown(
         f"""
         <div class="sidebar-data-status">
           <div class="sidebar-status-row">
-            <span>Raw data</span><strong>{_raw_date_text}</strong>
+            <span>{tr("Raw data", "原始数据", _ui_language)}</span><strong>{_raw_date_text}</strong>
           </div>
           <div class="sidebar-status-row">
-            <span>Official model</span><strong>{_official_date_text}</strong>
+            <span>{tr("Official model", "正式模型", _ui_language)}</span><strong>{_official_date_text}</strong>
           </div>
           <div class="sidebar-status-row sidebar-status-pending">
-            <span>Pending</span><strong>{_pending_text}</strong>
+            <span>{tr("Pending", "待补齐", _ui_language)}</span><strong>{_pending_text}</strong>
           </div>
         </div>
         """,
@@ -216,10 +232,10 @@ with st.sidebar:
 
     _render_sidebar_navigation()
 
-    st.markdown('<div class="sidebar-section-label sidebar-lookback-label">Lookback</div>',
+    st.markdown(f'<div class="sidebar-section-label sidebar-lookback-label">{tr("Lookback", "回看区间", _ui_language)}</div>',
                 unsafe_allow_html=True)
     range_preset = st.selectbox(
-        "Lookback window",
+        tr("Lookback window", "回看区间", _ui_language),
         ["6M", "1Y", "3Y", "5Y", "10Y", "Max", "Custom"],
         index=2,
         key="lookback_preset",
@@ -239,7 +255,7 @@ with st.sidebar:
     elif range_preset == "Max":
         start_date = df.index.min()
     else:
-        custom = st.date_input("Range",
+        custom = st.date_input(tr("Range", "日期范围", _ui_language),
                                value=(end_date - pd.DateOffset(years=3), end_date),
                                min_value=df.index.min().date(),
                                max_value=df.index.max().date())
@@ -256,11 +272,11 @@ with st.sidebar:
             f"""
             <div class="sidebar-liquidity-card" style="--regime-color:{reg_color};">
               <div>
-                <span>Liquidity official</span>
+                <span>{tr("Liquidity official", "正式流动性指数", _ui_language)}</span>
                 <strong>{index_result.latest:.1f}</strong>
               </div>
               <div class="sidebar-liquidity-meta">
-                <strong>{reg}</strong>
+                <strong>{localized_regime(reg, _ui_language)}</strong>
                 <span>{official_date:%b %d, %Y}</span>
               </div>
             </div>
@@ -268,17 +284,29 @@ with st.sidebar:
 
     try:
         st.download_button(
-            label="⬇  Export Board to PDF",
+            label=tr("⬇  Export English PDF", "⬇  导出英文 PDF", _ui_language),
             data=lambda: _build_pdf_export(sig, _prod_date)[0],
             file_name=_pdf_export_name,
             mime="application/pdf",
             key="sidebar_export_board_pdf",
             width="stretch",
-            help="Download the complete linked Board, not only the page currently open.",
+            help=tr(
+                "Download the complete English Board, not only the page currently open.",
+                "下载完整英文版看板，而不只是当前页面。",
+                _ui_language,
+            ),
         )
-        st.caption("Complete linked pack · all registered Board pages")
+        st.caption(tr(
+            "English-only complete pack · all registered Board pages",
+            "仅英文版完整报告 · 包含全部已注册页面",
+            _ui_language,
+        ))
     except Exception as exc:
-        st.error(f"PDF export unavailable: {type(exc).__name__}")
+        st.error(tr(
+            f"PDF export unavailable: {type(exc).__name__}",
+            f"PDF 导出暂不可用：{type(exc).__name__}",
+            _ui_language,
+        ))
 
 
 # Build context — export is LAZY (callable, not pre-built bytes)

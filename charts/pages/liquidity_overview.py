@@ -16,6 +16,7 @@ import pandas as pd
 import streamlit as st
 
 from config.pages import get_page
+from config.i18n import current_language, localized_bucket, localized_regime, tr
 from config.theme import section_color
 
 from charts.common import (
@@ -39,6 +40,7 @@ logger = logging.getLogger(__name__)
 
 
 def render(ctx: PageContext) -> None:
+    language = current_language()
     page = get_page("liquidity")
     color = section_color(page["color_key"])
 
@@ -53,7 +55,8 @@ def render(ctx: PageContext) -> None:
     viewing = (
         f"{ctx.start_date.strftime('%b %Y').upper()} → "
         f"{ctx.end_date.strftime('%b %Y').upper()} · "
-        f"raw workbook latest {raw_latest_date.date() if raw_latest_date is not None else '—'}"
+        f"{tr('raw workbook latest', '原始工作簿最新日期', language)} "
+        f"{raw_latest_date.date() if raw_latest_date is not None else '—'}"
     )
     render_page_header(page, latest_date=latest, viewing=viewing)
 
@@ -66,20 +69,21 @@ def render(ctx: PageContext) -> None:
 
     changes = r.changes() if callable(getattr(r, "changes", None)) else {}
     kpi_cards = [
-        {"label": "Composite Liquidity Index",
+        {"label": tr("Composite Liquidity Index", "综合流动性指数", language),
          "value": f"{r.latest:.1f}" if pd.notna(r.latest) else "—",
-         "sub": (f"Official {published_date.date()} · regime: {regime}"
-                 if published_date is not None else "No complete date available"),
+         "sub": (f"{tr('Official', '正式值', language)} {published_date.date()} · "
+                 f"{tr('regime', '状态', language)}: {localized_regime(regime, language)}"
+                 if published_date is not None else tr("No complete date available", "暂无完整日期", language)),
          "accent": color},
-        {"label": "1-week change",
+        {"label": tr("1-week change", "1周变化", language),
          "value": _fmt_change(changes.get("1w")),
-         "sub": "vs 5 business days ago"},
-        {"label": "1-month change",
+         "sub": tr("vs 5 business days ago", "相对5个工作日前", language)},
+        {"label": tr("1-month change", "1个月变化", language),
          "value": _fmt_change(changes.get("1m")),
-         "sub": "vs 21 business days ago"},
-        {"label": "3-month change",
+         "sub": tr("vs 21 business days ago", "相对21个工作日前", language)},
+        {"label": tr("3-month change", "3个月变化", language),
          "value": _fmt_change(changes.get("3m")),
-         "sub": "vs 63 business days ago"},
+         "sub": tr("vs 63 business days ago", "相对63个工作日前", language)},
     ]
     render_kpi_strip(kpi_cards)
 
@@ -90,7 +94,7 @@ def render(ctx: PageContext) -> None:
         target = int(target_value) if pd.notna(target_value) else None
         target_text = str(target) if target is not None else "unavailable"
         missing_bucket_labels = [
-            BUCKETS[bucket]["label"]
+            localized_bucket(BUCKETS[bucket]["label"], language)
             for bucket in BUCKETS
             if bucket not in r.sub_indices.columns
             or pd.isna(r.sub_indices.at[preliminary_date, bucket])
@@ -98,16 +102,24 @@ def render(ctx: PageContext) -> None:
         missing_bucket_text = (
             ", ".join(missing_bucket_labels) if missing_bucket_labels else "none"
         )
-        st.warning(
-            f"Preliminary {preliminary_date.date()}: {r.preliminary_latest:.1f} "
-            f"({buckets}/{HEADLINE_REQUIRED_BUCKETS} buckets, {components} live "
-            f"components; normal coverage "
-            f"target {target_text}). It is excluded from the official headline, "
-            "regime, changes and contribution calculations until coverage is complete. "
-            f"Missing qualifying bucket(s): {missing_bucket_text}. This partial estimate "
-            "is not comparable with the official level because diagnostic weights are "
-            "renormalised; do not interpret their difference as a market move."
-        )
+        if language == "zh":
+            st.warning(
+                f"初步值 {preliminary_date.date()}：{r.preliminary_latest:.1f} "
+                f"（{buckets}/{HEADLINE_REQUIRED_BUCKETS} 个板块，{components} 个有效组件；"
+                f"正常覆盖门槛为 {target_text}）。在数据覆盖完整前，该读数不进入正式标题、"
+                f"市场状态、涨跌幅或贡献计算。缺失的合格板块：{missing_bucket_text}。"
+                "由于诊断权重经过重新归一化，该初步值不能与正式值直接比较；两者差额不能解释为市场涨跌。"
+            )
+        else:
+            st.warning(
+                f"Preliminary {preliminary_date.date()}: {r.preliminary_latest:.1f} "
+                f"({buckets}/{HEADLINE_REQUIRED_BUCKETS} buckets, {components} live "
+                f"components; normal coverage target {target_text}). It is excluded from "
+                "the official headline, regime, changes and contribution calculations until "
+                f"coverage is complete. Missing qualifying bucket(s): {missing_bucket_text}. "
+                "This partial estimate is not comparable with the official level because "
+                "diagnostic weights are renormalised; do not interpret their difference as a market move."
+            )
 
     contribution_sum = None
     if getattr(r, "bucket_terms", None) is not None and published_date is not None:
@@ -124,33 +136,43 @@ def render(ctx: PageContext) -> None:
         if reconciliation_gap is not None
         else "unavailable"
     )
-    render_explanation_box(
-        "Version and data-update reconciliation",
-        f"<b>Methodology:</b> {INDEX_METHODOLOGY['version']} — complete-date headline rule active. "
-        f"<b>Official model date:</b> {published_date.date() if published_date is not None else '—'}. "
-        f"<b>Preliminary model date:</b> {preliminary_date.date() if preliminary_date is not None else '—'}. "
-        f"<b>Raw workbook latest row:</b> {raw_latest_date.date() if raw_latest_date is not None else '—'}. "
-        f"<b>Source hash:</b> <code>{source_signature()[:12]}</code>. "
-        f"<b>Bucket reconciliation gap:</b> {reconciliation_text}."
-    )
-    st.caption(
-        "The z-score formula and bucket weights are unchanged. Methodology v0.4 changes "
-        "headline selection: only the most recent fully covered date is official; later "
-        "partial observations remain preliminary and cannot rewrite headline changes."
-    )
+    if language == "zh":
+        render_explanation_box(
+            "版本与数据更新对账",
+            f"<b>方法版本：</b>{INDEX_METHODOLOGY['version']}，启用完整日期正式值规则。"
+            f"<b>正式模型日期：</b>{published_date.date() if published_date is not None else '—'}。"
+            f"<b>初步模型日期：</b>{preliminary_date.date() if preliminary_date is not None else '—'}。"
+            f"<b>原始工作簿最新行：</b>{raw_latest_date.date() if raw_latest_date is not None else '—'}。"
+            f"<b>来源哈希：</b><code>{source_signature()[:12]}</code>。"
+            f"<b>板块对账差额：</b>{reconciliation_text}。"
+        )
+        st.caption(
+            "z-score 公式和板块权重未改变。方法 v0.4 只调整正式值选择：最近一个覆盖完整的日期才是正式值；"
+            "更晚但不完整的读数保持为初步值，不能改写正式涨跌。"
+        )
+    else:
+        render_explanation_box(
+            "Version and data-update reconciliation",
+            f"<b>Methodology:</b> {INDEX_METHODOLOGY['version']} — complete-date headline rule active. "
+            f"<b>Official model date:</b> {published_date.date() if published_date is not None else '—'}. "
+            f"<b>Preliminary model date:</b> {preliminary_date.date() if preliminary_date is not None else '—'}. "
+            f"<b>Raw workbook latest row:</b> {raw_latest_date.date() if raw_latest_date is not None else '—'}. "
+            f"<b>Source hash:</b> <code>{source_signature()[:12]}</code>. "
+            f"<b>Bucket reconciliation gap:</b> {reconciliation_text}."
+        )
+        st.caption(
+            "The z-score formula and bucket weights are unchanged. Methodology v0.4 changes "
+            "headline selection: only the most recent fully covered date is official; later "
+            "partial observations remain preliminary and cannot rewrite headline changes."
+        )
 
     render_explanation_box(
-        "What this section shows",
-        "A raw-indicator liquidity gauge, z-scored across five buckets "
-        "(money-market funding, dollar funding, credit, central-bank reserves, "
-        "market liquidity) and rescaled so <b>50 = neutral</b> and higher = "
-        "looser. The headline automatically steps back to the latest fully "
-        "covered date. The panels below decompose that official reading into bucket and "
-        "component contributions, benchmark it against Bloomberg FCI and the "
-        "Chicago Fed NFCI, and expose the full methodology audit trail. "
-        "The <b>Export to Excel</b> button ships a multi-sheet workbook of "
-        "index, buckets, components, contributions, reconciliation, "
-        "forward-fill audit and methodology parameters.",
+        tr("What this section shows", "本页说明", language),
+        tr(
+            "A raw-indicator liquidity gauge, z-scored across five buckets (money-market funding, dollar funding, credit, central-bank reserves, market liquidity) and rescaled so <b>50 = neutral</b> and higher = looser. The headline automatically steps back to the latest fully covered date. The panels below decompose that official reading into bucket and component contributions, benchmark it against Bloomberg FCI and the Chicago Fed NFCI, and expose the full methodology audit trail. The <b>Export to Excel</b> button ships a multi-sheet workbook of index, buckets, components, contributions, reconciliation, forward-fill audit and methodology parameters.",
+            "这是一个由原始指标构成的流动性温度计。五个板块经过滚动 z-score 标准化后合成，<b>50 = 中性</b>，数值越高代表越宽松。正式标题会自动退回最近一个覆盖完整的日期。下方把正式读数拆成板块和组件贡献，并与 Bloomberg FCI、Chicago Fed NFCI 对照，同时保留完整的方法审计轨迹。<b>导出 Excel</b> 会生成包含指数、板块、组件、贡献、对账、向前填充审计和方法参数的多工作表文件。",
+            language,
+        ),
     )
 
     # The research-pack shell above already renders level and horizon changes.
