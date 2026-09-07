@@ -32,11 +32,19 @@ try:
         render_missing_data_warning, render_section_footer,
     )
     from charts.pages import PageContext, render_page, RENDERERS
+    from charts.i18n_runtime import translate_ui_text
     _HAS_STREAMLIT_PAGES = True
 except Exception:
     _HAS_STREAMLIT_PAGES = False
     print("   (Streamlit not available; skipping page import checks)")
 print("   all imports OK")
+
+if _HAS_STREAMLIT_PAGES:
+    assert translate_ui_text("Dates aligned") == "日期是否对齐"
+    assert translate_ui_text("Tightest") == "最紧张"
+    assert "日期s" not in translate_ui_text("Latest dates are series-specific")
+    assert "偏紧est" not in translate_ui_text("Tightest")
+    print("   Chinese display glossary preserves whole financial terms ✓")
 
 # Deployment/UI contracts: user-facing pages may not silently swallow errors,
 # and KPI subtitles are plain text because render_kpi_card escapes them.

@@ -8,6 +8,9 @@ from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
 
+from config.i18n import PAGE_ZH
+from config.pages import PAGES
+
 
 ROOT = Path(__file__).resolve().parent
 
@@ -69,6 +72,11 @@ assert any("初步值" in str(item.value) for item in at.warning), \
 liquidity_markup = " ".join(str(item.value) for item in at.markdown)
 for text in ("流动性概览", "综合流动性指数", "最新正式变动", "覆盖与可靠性"):
     assert text in liquidity_markup, f"Chinese Liquidity rendering is missing: {text}"
+version_cards = [str(item.value) for item in at.markdown if "版本与日期" in str(item.value)]
+assert version_cards, "Compact version/date card was not rendered"
+assert all("来源哈希" not in value and "板块对账差额" not in value
+           for value in version_cards), \
+    "Technical source hash/reconciliation fields must not appear in the headline card"
 print("2. Liquidity official/preliminary rendering ✓")
 
 nav = next((widget for widget in at.sidebar.button
@@ -79,4 +87,20 @@ _assert_clean(at, "A2 CTA Backtest page")
 assert any("CTA 评分回测" in str(item.value) for item in at.markdown), \
     "Chinese CTA Backtest page header was not rendered"
 print("3. A2 CTA Backtest page ✓")
+
+# Every registered page must render through the Chinese display boundary.
+for page in PAGES:
+    page_id = page["id"]
+    nav = next((widget for widget in at.sidebar.button
+                if widget.key == f"sidebar_nav_{page_id}"), None)
+    assert nav is not None, f"Sidebar navigation missing for {page_id}"
+    nav.click().run(timeout=180)
+    _assert_clean(at, f"Chinese {page_id} page")
+    expected_title = PAGE_ZH[page_id]["title"]
+    rendered = " ".join(str(item.value) for item in at.markdown)
+    assert expected_title in rendered, \
+        f"Chinese page title missing for {page_id}: {expected_title}"
+    assert "日期s" not in rendered and "偏紧est" not in rendered, \
+        f"Broken partial-word translation detected on {page_id}"
+print(f"4. All {len(PAGES)} registered pages render in Chinese ✓")
 print("ALL STREAMLIT RUNTIME TESTS PASSED ✓")

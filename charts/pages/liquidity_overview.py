@@ -29,7 +29,6 @@ from charts.liquidity import (
     render_latest_official_move,
 )
 from charts.funding import render_xccy_summary
-from data.loader import source_signature
 from index.components import BUCKETS
 from index.composite import HEADLINE_REQUIRED_BUCKETS
 from index.methodology import INDEX_METHODOLOGY
@@ -121,30 +120,13 @@ def render(ctx: PageContext) -> None:
                 "diagnostic weights are renormalised; do not interpret their difference as a market move."
             )
 
-    contribution_sum = None
-    if getattr(r, "bucket_terms", None) is not None and published_date is not None:
-        try:
-            contribution_sum = float(r.bucket_terms.loc[published_date].sum())
-        except Exception:
-            contribution_sum = None
-    reconciliation_gap = (
-        contribution_sum - (float(r.latest) - 50.0)
-        if contribution_sum is not None and pd.notna(r.latest) else None
-    )
-    reconciliation_text = (
-        f"{reconciliation_gap:+.8f} index points"
-        if reconciliation_gap is not None
-        else "unavailable"
-    )
     if language == "zh":
         render_explanation_box(
-            "版本与数据更新对账",
+            "版本与日期",
             f"<b>方法版本：</b>{INDEX_METHODOLOGY['version']}，启用完整日期正式值规则。"
             f"<b>正式模型日期：</b>{published_date.date() if published_date is not None else '—'}。"
             f"<b>初步模型日期：</b>{preliminary_date.date() if preliminary_date is not None else '—'}。"
             f"<b>原始工作簿最新行：</b>{raw_latest_date.date() if raw_latest_date is not None else '—'}。"
-            f"<b>来源哈希：</b><code>{source_signature()[:12]}</code>。"
-            f"<b>板块对账差额：</b>{reconciliation_text}。"
         )
         st.caption(
             "z-score 公式和板块权重未改变。方法 v0.4 只调整正式值选择：最近一个覆盖完整的日期才是正式值；"
@@ -152,13 +134,11 @@ def render(ctx: PageContext) -> None:
         )
     else:
         render_explanation_box(
-            "Version and data-update reconciliation",
+            "Version and dates",
             f"<b>Methodology:</b> {INDEX_METHODOLOGY['version']} — complete-date headline rule active. "
             f"<b>Official model date:</b> {published_date.date() if published_date is not None else '—'}. "
             f"<b>Preliminary model date:</b> {preliminary_date.date() if preliminary_date is not None else '—'}. "
             f"<b>Raw workbook latest row:</b> {raw_latest_date.date() if raw_latest_date is not None else '—'}. "
-            f"<b>Source hash:</b> <code>{source_signature()[:12]}</code>. "
-            f"<b>Bucket reconciliation gap:</b> {reconciliation_text}."
         )
         st.caption(
             "The z-score formula and bucket weights are unchanged. Methodology v0.4 changes "

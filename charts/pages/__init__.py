@@ -22,6 +22,7 @@ from . import data_quality as _data_quality
 from . import scoring as _scoring
 from . import scoring_backtest as _scoring_backtest
 from . import model_roadmap as _model_roadmap
+from charts.i18n_runtime import localized_streamlit_output
 
 
 RENDERERS = {
@@ -50,4 +51,5 @@ RENDERERS = {
 def render_page(page_id: str, ctx: PageContext) -> None:
     if page_id not in RENDERERS:
         raise KeyError(f"Unknown page id: {page_id}")
-    RENDERERS[page_id](ctx)
+    with localized_streamlit_output():
+        RENDERERS[page_id](ctx)
