@@ -17,7 +17,6 @@ from charts.common import (
     render_model_note,
     render_page_header,
     render_section_footer,
-    render_top_tabs,
 )
 from config.pages import get_page
 from config.theme import BG, GRID, TEXT_DIM, section_color
@@ -40,7 +39,6 @@ def _fmt(value, fmt="+.2f", suffix=""):
 
 def render(ctx: PageContext) -> None:
     page = get_page("sector_contribution")
-    render_top_tabs(page["id"])
 
     horizon = st.selectbox(
         "Contribution window (common observations)",

@@ -18,7 +18,7 @@ from config.model_roadmap import (
     METHODOLOGY_RESEARCH_BACKLOG,
 )
 from charts.common import (
-    render_page_header, render_top_tabs, render_kpi_strip,
+    render_page_header, render_kpi_strip,
     render_explanation_box, render_model_note,
     render_current_reading_list, render_section_footer,
 )
@@ -38,7 +38,6 @@ def _status_style(val):
 
 def render(ctx: PageContext) -> None:
     page = get_page("model_roadmap")
-    render_top_tabs(page["id"])
 
     from data.loader import latest_valid_date
     lvd = latest_valid_date(ctx.df)

@@ -11,7 +11,7 @@ import streamlit as st
 from config.pages import get_page
 from config.theme import section_color, BG, GRID, TEXT_DIM
 from charts.common import (
-    render_page_header, render_top_tabs, render_kpi_strip,
+    render_page_header, render_kpi_strip,
     render_explanation_box, render_current_reading_list,
     render_model_note, render_missing_data_warning,
     render_section_footer, render_data_source_note,
@@ -48,7 +48,6 @@ def _trailing_percentile(series: pd.Series, window: int = 252):
 
 def render(ctx: PageContext) -> None:
     page = get_page("sector_rotation")
-    render_top_tabs(page["id"])
 
     weights = load_spx_sector_weights()
     reading = build_sector_current_reading(ctx.df, weights)

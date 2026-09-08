@@ -13,7 +13,7 @@ import streamlit as st
 from config.pages import get_page
 from config.theme import section_color, BG, GRID, TEXT_DIM, DARK_LAYOUT
 from charts.common import (
-    render_page_header, render_top_tabs, render_kpi_strip,
+    render_page_header, render_kpi_strip,
     render_explanation_box, render_current_reading_box,
     render_model_note, render_section_footer,
 )
@@ -32,7 +32,6 @@ COUNTRY_COLORS = {
 
 def render(ctx: PageContext) -> None:
     page = get_page("global_rates")
-    render_top_tabs(page["id"])
     from data.loader import latest_valid_date as _lvd
     _ld = _lvd(ctx.df) or ctx.df.index.max()
     latest = _ld.strftime("%b %d, %Y").upper()

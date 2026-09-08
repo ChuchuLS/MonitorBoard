@@ -157,7 +157,7 @@ def ofr_chart(series: pd.Series, top_note: str | None,
 # Research-pack shell helpers (Phase 1)
 # ===========================================================================
 # These are the reusable UI primitives every page renderer uses to build the
-# PDF-style shell — page header, top-tab strip, KPI strip, content boxes, and
+# PDF-style shell — page header, KPI strip, content boxes, and
 # the section footer with Builds on / Next linkage.
 #
 # Everything below is presentation-only. It never touches data or the index
@@ -171,10 +171,9 @@ from config.theme import section_color as _section_color
 from config.pages import (
     PAGES as _PAGES,
     PAGES_BY_ID as _PAGES_BY_ID,
-    TOP_NAV_GROUPS as _TOP_NAV_GROUPS,
 )
 from config.i18n import (
-    LANG_ZH, TOP_NAV_ZH, current_language, localized_page, tr,
+    current_language, localized_page, tr,
 )
 
 
@@ -237,44 +236,6 @@ def render_page_header(page: dict, latest_date: str | None = None,
         """,
         unsafe_allow_html=True,
     )
-
-
-def render_top_tabs(current_id: str) -> None:
-    """Reference-style top-level section strip.
-
-    Individual subpages remain in the sidebar. Grouping the orientation strip
-    mirrors the reference pack and keeps it readable as the app grows.
-    """
-    language = current_language()
-    chips = []
-    home_active = current_id == "contents"
-    chips.append(
-        f"<span class='rp-tab {'rp-tab-active' if home_active else ''}' "
-        f"style='color:{'#fff' if home_active else '#888'};"
-        f"background:{'rgba(255,255,255,0.03)' if home_active else 'transparent'};"
-        f"border-color:{'#666' if home_active else 'transparent'};'>"
-        f"<span class='rp-tab-num'>⌂</span>{tr('Contents', '总览', language)}</span>"
-    )
-    for group in _TOP_NAV_GROUPS:
-        color = _section_color(group["color_key"])
-        active = current_id in group["page_ids"]
-        border = color if active else "transparent"
-        text_color = "#fff" if active else "#888"
-        bg = "rgba(255,255,255,0.03)" if active else "transparent"
-        label = _esc(
-            TOP_NAV_ZH.get(group["id"], group["label"])
-            if language == LANG_ZH else group["label"]
-        )
-        num = _esc(group["section"])
-        chips.append(
-            f"<span class='rp-tab {'rp-tab-active' if active else ''}' "
-            f"style='color:{text_color};background:{bg};"
-            f"border-color:{border};'>"
-            f"<span class='rp-tab-num' style='color:{color};'>{num}</span>"
-            f"{label}</span>"
-        )
-    st.markdown(f"<div class='rp-tabs'>{''.join(chips)}</div>",
-                unsafe_allow_html=True)
 
 
 def render_kpi_card(label: str, value: str, sub: str | None = None,

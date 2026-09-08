@@ -15,7 +15,6 @@ from charts.common import (
     render_model_note,
     render_page_header,
     render_section_footer,
-    render_top_tabs,
 )
 from config.pages import get_page
 from config.theme import BG, GRID, TEXT_DIM, section_color
@@ -50,7 +49,6 @@ def _chart_layout(height: int = 330):
 
 def render(ctx: PageContext) -> None:
     page = get_page("earnings_valuation")
-    render_top_tabs(page["id"])
 
     data = load_equity_earnings_data()
     index_codes = list(INDEX_META)

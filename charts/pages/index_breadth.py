@@ -13,7 +13,6 @@ from charts.common import (
     render_model_note,
     render_page_header,
     render_section_footer,
-    render_top_tabs,
 )
 from config.pages import get_page
 from config.theme import BG, GRID, TEXT_DIM, section_color
@@ -54,7 +53,6 @@ def _add_bar_panel(frame, columns, labels, colors, title, key):
 
 def render(ctx: PageContext) -> None:
     page = get_page("index_breadth")
-    render_top_tabs(page["id"])
     data = load_equity_earnings_data()
     prices = data.get("prices", pd.DataFrame())
     breadth = load_index_breadth()

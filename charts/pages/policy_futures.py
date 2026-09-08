@@ -7,7 +7,7 @@ import streamlit as st
 
 from charts.common import (
     render_explanation_box, render_kpi_strip, render_missing_data_warning,
-    render_model_note, render_page_header, render_section_footer, render_top_tabs,
+    render_model_note, render_page_header, render_section_footer,
 )
 from config.pages import get_page
 from config.theme import BG, GRID, TEXT_DIM
@@ -29,7 +29,6 @@ def _spread_card(label: str, value, sub: str) -> dict:
 
 def render(ctx: PageContext) -> None:
     page = get_page("policy_futures")
-    render_top_tabs(page["id"])
     futures_df = load_policy_futures()
     snap = build_sofr_strip_snapshot(futures_df, ctx.df, horizons=(1, 5, 20))
     model_date = snap.get("model_date")

@@ -14,7 +14,6 @@ from charts.common import (
     render_model_note,
     render_page_header,
     render_section_footer,
-    render_top_tabs,
 )
 from config.pages import get_page
 from config.theme import BG, GRID, TEXT_DIM, section_color
@@ -43,7 +42,6 @@ def _fmt(v, fmt=".2f", suffix=""):
 
 def render(ctx: PageContext) -> None:
     page = get_page("market_linkage")
-    render_top_tabs(page["id"])
 
     # ``ctx.df`` retains Bloomberg ticker names (SPX INDEX, USGG10YR INDEX,
     # DXY CURNCY), while the linkage model deliberately works with the shared

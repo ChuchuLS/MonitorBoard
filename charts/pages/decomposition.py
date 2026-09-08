@@ -16,7 +16,7 @@ from config.pages import get_page
 from config.i18n import current_language, tr
 from config.theme import section_color, BG, GRID, TEXT_DIM, DARK_LAYOUT, ACCENT_GREEN, ACCENT_CYAN, ACCENT_AMBER
 from charts.common import (
-    render_page_header, render_top_tabs, render_kpi_strip,
+    render_page_header, render_kpi_strip,
     render_explanation_box, render_current_reading_box,
     render_model_note, render_missing_data_warning, render_section_footer,
 )
@@ -34,7 +34,6 @@ COLOR_INFL = "#f97316"
 def render(ctx: PageContext) -> None:
     language = current_language()
     page = get_page("decomposition")
-    render_top_tabs(page["id"])
     from data.loader import latest_valid_date as _lvd
     from models.rate_decomposition import US_NOMINAL, US_BREAKEVEN
     _req = list(US_NOMINAL.values()) + list(US_BREAKEVEN.values())

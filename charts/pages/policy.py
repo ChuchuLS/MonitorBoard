@@ -15,7 +15,7 @@ from config.theme import section_color, BG, GRID, TEXT_DIM
 from config.tickers import TICKERS, TICKER_METADATA
 from data.loader import latest_valid_date
 from charts.common import (
-    render_page_header, render_top_tabs, render_kpi_strip,
+    render_page_header, render_kpi_strip,
     render_explanation_box, render_current_reading_list,
     render_model_note, render_missing_data_warning,
     render_section_footer, render_data_source_note,
@@ -35,7 +35,6 @@ PC = {"Easy": "#22c55e", "Normal": "#06b6d4", "Tight": "#f97316",
 def render(ctx: PageContext) -> None:
     page = get_page("policy")
     color = section_color(page["color_key"])
-    render_top_tabs(page["id"])
 
     # Build model FIRST
     pressure = build_funding_pressure_score(ctx.df)

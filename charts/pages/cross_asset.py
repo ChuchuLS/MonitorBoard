@@ -23,7 +23,7 @@ from config.pages import get_page
 from config.theme import section_color, BG, GRID, TEXT_DIM, DARK_LAYOUT
 
 from charts.common import (
-    render_page_header, render_top_tabs, render_kpi_strip,
+    render_page_header, render_kpi_strip,
     render_explanation_box, render_model_note,
     render_missing_data_warning, render_section_footer,
 )
@@ -40,7 +40,6 @@ def render(ctx: PageContext) -> None:
     page = get_page("cross_asset")
     color = section_color(page["color_key"])
 
-    render_top_tabs(page["id"])
 
     prices = load_crossasset()
 

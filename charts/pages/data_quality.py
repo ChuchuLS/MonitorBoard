@@ -25,7 +25,7 @@ from config.theme import ACCENT_GREEN, ACCENT_AMBER, ACCENT_RED
 from config.tickers import TICKERS
 
 from charts.common import (
-    render_page_header, render_top_tabs, render_kpi_strip,
+    render_page_header, render_kpi_strip,
     render_explanation_box, render_missing_data_warning, render_section_footer,
 )
 from data.loader import load_meta, cache_status_label
@@ -58,7 +58,6 @@ def _file_hash(path: Path) -> str:
 def render(ctx: PageContext) -> None:
     page = get_page("data_quality")
 
-    render_top_tabs(page["id"])
     from data.loader import latest_valid_date as _lvd
     valid_latest = (_lvd(ctx.df) or ctx.df.index.max()).date()
     latest_date = valid_latest

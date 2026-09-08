@@ -13,7 +13,6 @@ from charts.common import (
     render_model_note,
     render_page_header,
     render_section_footer,
-    render_top_tabs,
 )
 from config.pages import get_page
 from config.theme import ACCENT_GREEN, ACCENT_RED, BG, GRID, TEXT_DIM, section_color
@@ -303,7 +302,6 @@ def _render_market_tab(
 
 def render(ctx: PageContext) -> None:
     page = get_page("scoring_backtest")
-    render_top_tabs(page["id"])
     data = load_pulsar()
     result = build_score_backtest(data or {}, PRIMARY_CONFIG)
     equity = result["equity_periods"]

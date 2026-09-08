@@ -20,7 +20,7 @@ from config.i18n import current_language, localized_bucket, localized_regime, tr
 from config.theme import section_color
 
 from charts.common import (
-    render_page_header, render_top_tabs, render_kpi_strip,
+    render_page_header, render_kpi_strip,
     render_explanation_box, render_section_footer,
 )
 from charts.liquidity import (
@@ -43,7 +43,6 @@ def render(ctx: PageContext) -> None:
     page = get_page("liquidity")
     color = section_color(page["color_key"])
 
-    render_top_tabs(page["id"])
     r = ctx.index_result
     published = r.headline_index.dropna()
     published_date = published.index[-1] if len(published) else None

@@ -23,7 +23,6 @@ from charts.common import (
     render_model_note,
     render_page_header,
     render_section_footer,
-    render_top_tabs,
 )
 from config.pages import get_page
 from config.theme import BG, GRID, TEXT_DIM
@@ -221,7 +220,6 @@ def _render_country_decomposition(ctx: PageContext, country: str) -> None:
 
 def render(ctx: PageContext) -> None:
     page = get_page("country_boards")
-    render_top_tabs(page["id"])
 
     readiness = available_country_boards(ctx.df)
     ready_countries = [c for c, info in readiness.items() if info["status"] == "Ready"]

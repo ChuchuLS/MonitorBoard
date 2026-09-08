@@ -356,27 +356,6 @@ def page_css() -> str:
         text-transform: uppercase; margin-top: 4px;
     }
 
-    /* Top section tabs — horizontal strip of section chips. */
-    .rp-tabs {
-        display: flex; flex-wrap: wrap; gap: 4px;
-        border-bottom: 1px solid #1a1a1a;
-        padding: 0.15rem 0 0.6rem 0; margin-bottom: 0.9rem;
-    }
-    .rp-tab {
-        display: inline-flex; align-items: baseline; gap: 6px;
-        padding: 4px 10px; border-radius: 3px;
-        font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase;
-        color: #888; background: transparent;
-        border: 1px solid transparent;
-    }
-    .rp-tab .rp-tab-num {
-        font-size: 9px; opacity: 0.7; letter-spacing: 0.1em;
-    }
-    .rp-tab-active {
-        color: #fff; background: rgba(255,255,255,0.03);
-        border: 1px solid #262626;
-    }
-
     /* KPI strip and its cards (variant with a coloured top rule). */
     .rp-kpi-strip {
         display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));

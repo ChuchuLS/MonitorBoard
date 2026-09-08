@@ -15,7 +15,7 @@ from data.quality import validate_data, quality_summary
 from data.transforms import rolling_zscore
 from config.tickers import TICKERS
 from config.pages import (
-    PAGES, PAGES_BY_ID, TOP_NAV_GROUPS, SIDEBAR_NAV_GROUPS, SIDEBAR_LABELS,
+    PAGES, PAGES_BY_ID, SIDEBAR_NAV_GROUPS, SIDEBAR_LABELS,
     get_page, nav_label, sidebar_group_label, sidebar_label, STATUS_LABELS,
 )
 from config.i18n import (
@@ -30,7 +30,7 @@ from index import validation as V
 try:
     import charts.common, charts.rates, charts.funding, charts.credit, charts.liquidity
     from charts.common import (
-        render_page_header, render_top_tabs, render_kpi_strip, render_kpi_card,
+        render_page_header, render_kpi_strip, render_kpi_card,
         render_explanation_box, render_current_reading_box, render_model_note,
         render_missing_data_warning, render_section_footer,
     )
@@ -332,14 +332,12 @@ missing_colors = [p["id"] for p in PAGES if p["color_key"] not in SECTION_COLORS
 assert not missing_colors, f"pages missing colours: {missing_colors}"
 print(f"    SECTION_COLORS covers all {len(PAGES)} sections")
 
-_grouped_ids = [pid for group in TOP_NAV_GROUPS for pid in group["page_ids"]]
-assert len(TOP_NAV_GROUPS) == 9
-assert len(_grouped_ids) == len(set(_grouped_ids))
-assert set(_grouped_ids) == {p["id"] for p in PAGES}
-assert next(g for g in TOP_NAV_GROUPS if g["id"] == "equities")["page_ids"] == (
-    "sector_rotation", "sector_contribution", "index_breadth", "earnings_valuation"
+_page_source = "\n".join(
+    path.read_text(encoding="utf-8") for path in Path("charts/pages").glob("*.py")
 )
-print(f"    top strip: 9 grouped sections cover all {len(PAGES)} sidebar pages ✓")
+assert "render_top_tabs" not in _page_source
+assert "rp-tabs" not in Path("config/theme.py").read_text(encoding="utf-8")
+print("    redundant non-interactive top strip removed; sidebar is the sole navigation ✓")
 
 # Phase 2: DATA.xlsx workbook-section loaders + model modules
 from data.external_loaders import load_crossasset, load_ficc, load_pulsar

@@ -138,19 +138,6 @@ SIDEBAR_GROUP_ZH = {
 }
 
 
-TOP_NAV_ZH = {
-    "liquidity": "流动性",
-    "policy": "政策",
-    "decomposition": "拆解",
-    "regimes": "状态",
-    "global_rates": "全球利率",
-    "cross_asset": "跨资产",
-    "equities": "股票",
-    "fx": "外汇",
-    "appendix": "附录",
-}
-
-
 STATUS_ZH = {
     "live": "已上线",
     "partial": "部分完成",

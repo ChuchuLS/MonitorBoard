@@ -15,7 +15,7 @@ from config.i18n import (
 )
 from config.theme import section_color
 from charts.common import (
-    render_page_header, render_top_tabs, render_section_footer,
+    render_page_header, render_section_footer,
     render_kpi_strip, render_current_reading_list, render_model_status_chip,
 )
 from ._context import PageContext
@@ -33,7 +33,6 @@ CONTENTS_PAGE_META = {
 def render(ctx: PageContext) -> None:
     from data.loader import latest_valid_date
     language = current_language()
-    render_top_tabs("contents")
     lvd = latest_valid_date(ctx.df)
     latest = lvd.strftime("%b %d, %Y").upper() if lvd else "—"
     render_page_header(CONTENTS_PAGE_META, latest_date=latest)
