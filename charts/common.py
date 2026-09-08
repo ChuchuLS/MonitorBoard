@@ -173,7 +173,7 @@ from config.pages import (
     PAGES_BY_ID as _PAGES_BY_ID,
 )
 from config.i18n import (
-    current_language, localized_page, tr,
+    LANG_ZH, current_language, localized_page, tr,
 )
 
 
