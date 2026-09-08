@@ -1,0 +1,517 @@
+"""
+config/pages.py
+===============
+Single source of truth for the research-pack navigation. Every part of the
+shell reads from PAGES: sidebar radio, top-tabs strip, page header, section
+footer, and the Contents page.
+
+Phase 1.5 cleanup: pages are classified honestly as:
+  - "live"      : fully implemented on real data, model matches its stated purpose
+  - "partial"   : implemented but missing some intended features / data
+  - "scaffold"  : structural page + honest missing-data warning
+  - "requires"  : blocked pending additional Bloomberg fields
+  - "experimental" : integrated from external repo, working but not the
+                     PDF-reference model — labelled as PCA / interim
+
+Data source tags tell the Data Quality page and each page header which
+DATA.xlsx workbook section drives the section.
+"""
+
+from __future__ import annotations
+
+PAGES: list[dict] = [
+    {
+        "id": "liquidity",
+        "label": "Liquidity",
+        "title": "Liquidity Overview",
+        "section": "00",
+        "color_key": "liquidity",
+        "status": "live",
+        "data_source": "sheet1_market",
+        "description": "Composite Liquidity Index — five-bucket, coverage-gated "
+                       "rolling z-score gauge (higher = looser). Includes bucket "
+                       "and component contributions, benchmark validation, "
+                       "methodology audit, and a compact XCCY basis summary.",
+        "builds_on": None,
+        "next": "policy",
+    },
+    {
+        "id": "policy",
+        "label": "Policy",
+        "title": "Policy & Short Rates",
+        "section": "01",
+        "color_key": "policy",
+        "status": "live",
+        "data_source": "sheet1_market",
+        "description": "Live confirmed policy and funding-plumbing monitor: "
+                       "SOFR / EFFR / IORB, TGCR / BGCR / GCF / Tri-Party spreads, "
+                       "funding-pressure diagnostics and weekly H.4.1 context. "
+                       "The fixed-contract SOFR futures strip is a separate live page; a "
+                       "meeting-by-meeting FOMC path remains unimplemented.",
+        "builds_on": "liquidity",
+        "next": "policy_futures",
+    },
+    {
+        "id": "policy_futures",
+        "label": "Futures Strip",
+        "title": "SOFR Futures Strip & Calendar Spreads",
+        "section": "01b",
+        "color_key": "policy",
+        "status": "live",
+        "data_source": "policy_futures_sheet",
+        "description": "Eight fixed quarterly Three-Month SOFR contracts from SEP 26 "
+                       "through JUN 28. Shows implied rates, 1D/5D/1M changes, 3M/6M/12M "
+                       "calendar spreads, terminal-rate diagnostics and current/1-week/"
+                       "1-month strip curves. "
+                       "Contract-month specific, but not a meeting-by-meeting FOMC path.",
+        "builds_on": "policy",
+        "next": "decomposition",
+    },
+    {
+        "id": "decomposition",
+        "label": "Decomp",
+        "title": "Rate Decomposition",
+        "section": "02",
+        "color_key": "decomposition",
+        "status": "live",
+        "data_source": "sheet1_market",
+        "description": "Decompose nominal yield moves into real-rate and inflation "
+                       "components (identity form via TIPS breakevens or swap form "
+                       "via ZCIS with residual). US curve complex + rolling rate attribution + "
+                       "2s10s curve decomposition. Uses breakeven identity.",
+        "builds_on": "policy",
+        "next": "regimes",
+    },
+    {
+        "id": "regimes",
+        "label": "Regimes",
+        "title": "Curve Regimes",
+        "section": "03",
+        "color_key": "regimes",
+        "status": "live",
+        "data_source": "sheet1_market",
+        "description": "7-regime classification (bull/bear × steepener/flattener/twist/neutral) across "
+                       "nominal, real, and inflation curves on 6 tenor pairs.",
+        "builds_on": "decomposition",
+        "next": "global_rates",
+    },
+    {
+        "id": "global_rates",
+        "label": "Global",
+        "title": "Global Rates",
+        "section": "04",
+        "color_key": "global_rates",
+        "status": "live",
+        "data_source": "sheet1_market",
+        "description": "Global 10Y normalized overlay, yield curve snapshots, and "
+                       "2s10s slope ranking across seven markets: US, DE, JP, UK, "
+                       "CA, AU and CH. The overlay uses genuine observations only; "
+                       "missing sessions are not forward-filled.",
+        "builds_on": "regimes",
+        "next": "country_boards",
+    },
+    {
+        "id": "country_boards",
+        "label": "Country Boards",
+        "title": "Country Rate Boards",
+        "section": "04b",
+        "color_key": "global_rates",
+        "status": "live",
+        "data_source": "sheet1_market",
+        "description": "Fully aligned 2Y / 5Y / 10Y / 30Y nominal sovereign curve "
+                       "boards for US, DE, JP, UK, CA, AU and CH. Shows yield levels, "
+                       "common-calendar changes, curve slopes, percentiles and a "
+                       "descriptive curve-move reading. Adds exact-tenor nominal / real / "
+                       "inflation-compensation attribution where confirmed real-yield "
+                       "series exist; Switzerland stays explicitly unavailable. No "
+                       "forward-fill, proxy substitution or forecast claim.",
+        "builds_on": "global_rates",
+        "next": "cross_asset",
+    },
+    {
+        "id": "cross_asset",
+        "label": "Cross-Asset",
+        "title": "Cross-Asset Regime Timeline",
+        "section": "05",
+        "color_key": "cross_asset",
+        "status": "live",
+        "data_source": "sheet1_market",
+        "description": "8-regime directional classification using SPX / UST 10Y / "
+                       "DXY vol-scaled signals: 20D change ÷ 21D trailing "
+                       "volatility. The sign of each signal determines UP/DOWN. "
+                       "Uses DATA.xlsx / Sheet1 cross-asset columns (SPX, USGG10YR, DXY).",
+        "builds_on": "country_boards",
+        "next": "market_linkage",
+    },
+    {
+        "id": "market_linkage",
+        "label": "Linkage",
+        "title": "Market Linkage & Correlations",
+        "section": "05b",
+        "color_key": "cross_asset",
+        "status": "live",
+        "data_source": "sheet1_market",
+        "description": "PDF-aligned one-trade linkage gauge for SPX / UST 10Y / DXY. "
+                       "Shows rolling PC1 explained variance and the three underlying "
+                       "pairwise correlations. No regime label, causal attribution, or forecast.",
+        "builds_on": "cross_asset",
+        "next": "sector_rotation",
+    },
+    {
+        "id": "sector_rotation",
+        "label": "Sectors",
+        "title": "Sector Rotation & Breadth",
+        "section": "06",
+        "color_key": "equities",
+        "status": "live",
+        "data_source": "sheet1_market",
+        "description": "Descriptive monitor for the 11 S&P 500 sector indices: "
+                       "absolute and relative performance vs SPX, breadth, "
+                       "cross-sectional dispersion, rotation quadrants, and "
+                       "sector-weight context. Not causal attribution or "
+                       "official SPX return attribution. ETF proxies are "
+                       "excluded from the production model.",
+        "builds_on": "market_linkage",
+        "next": "sector_contribution",
+    },
+    {
+        "id": "sector_contribution",
+        "label": "Sector Est.",
+        "title": "Sector Contribution Estimate",
+        "section": "06b",
+        "color_key": "equities",
+        "status": "live",
+        "data_source": "sheet1_market",
+        "description": "Approximate SPX sector return contribution using the latest "
+                       "periodic sector weights available on or before each return "
+                       "window start date. Explicit residual reconciliation. Not "
+                       "official index-provider attribution.",
+        "builds_on": "sector_rotation",
+        "next": "index_breadth",
+    },
+    {
+        "id": "index_breadth",
+        "label": "Index Breadth",
+        "title": "Global Index Trend & Market Breadth",
+        "section": "06c",
+        "color_key": "equities",
+        "status": "partial",
+        "data_source": "index_breadth_sheet",
+        "description": "Selectable-index trend panel using each index's own cash "
+                       "close and available 50D/200D/100W moving averages. Reference-style "
+                       "advance–decline, 52-week high/low, moving-average breadth, RSI "
+                       "breadth and index put/call panels activate only when the corresponding "
+                       "constituent-level Index_Breadth inputs are supplied; no proxy is used.",
+        "builds_on": "sector_contribution",
+        "next": "earnings_valuation",
+    },
+    {
+        "id": "earnings_valuation",
+        "label": "Earnings",
+        "title": "Global FY1 Earnings & Valuation",
+        "section": "06d",
+        "color_key": "equities",
+        "status": "live",
+        "data_source": "scoring_sheets",
+        "description": "One index dropdown controls the rolling exact-return decomposition and implied FY1 P/E chart. Uses each selected index's own confirmed weekly FY1 consensus EPS (BEST_EPS with 1FY override), matched backward to its latest observed cash close within three calendar days; missing inputs remain Missing data. Not fair value or a forecast.",
+        "builds_on": "index_breadth",
+        "next": "fx_rate_diff",
+    },
+    {
+        "id": "fx_rate_diff",
+        "label": "FX Rates",
+        "title": "FX Rate Differential Monitor",
+        "section": "07",
+        "color_key": "fx",
+        "status": "live",
+        "data_source": "sheet1_market",
+        "description": "Pair-specific FX monitor for EURUSD, USDJPY, GBPUSD and AUDUSD "
+                       "against 2Y/10Y nominal and 10Y real yield differentials, plus "
+                       "the full 3M/12M cross-currency basis dashboard. Not causal attribution or fair value.",
+        "builds_on": "earnings_valuation",
+        "next": "data_quality",
+    },
+    {
+        "id": "data_quality",
+        "label": "Data",
+        "title": "Data Quality & Methodology",
+        "section": "08",
+        "color_key": "data_quality",
+        "status": "live",
+        "data_source": "all",
+        "description": "Source-of-truth trust chain for DATA.xlsx workbook "
+                       "sections, ticker coverage, scoring-sheet audit, "
+                       "forward-fill audit, and Composite Liquidity Index "
+                       "methodology.",
+        "builds_on": "fx_rate_diff",
+        "next": "scoring",
+    },
+    {
+        "id": "scoring",
+        "label": "Scoring",
+        "title": "Global Scoring (Appendix)",
+        "section": "A1",
+        "color_key": "scoring",
+        "status": "live",
+        "data_source": "scoring_sheets",
+        "description": "Cross-sectional macro + market scoring model for 10 "
+                       "sovereign bond markets and 18 requested equity indices. "
+                       "Indices with incomplete factor sets are explicitly Partial and excluded from headline rankings; absent factors are never proxied. "
+                       "Appendix — standalone model. Uses DATA.xlsx / scoring sheets.",
+        "builds_on": "data_quality",
+        "next": "scoring_backtest",
+    },
+    {
+        "id": "scoring_backtest",
+        "label": "CTA Backtest",
+        "title": "CTA Score Backtest",
+        "section": "A2",
+        "color_key": "scoring",
+        "status": "partial",
+        "data_source": "scoring_sheets",
+        "description": "Fixed-specification weekly Top 3 minus Bottom 3 signal "
+                       "evaluation for the current Rates and Equity Scores. Uses "
+                       "a full 90-calendar-day factor lookback and displays every "
+                       "usable period. Limited history, revised macro data and the "
+                       "rates yield-change proxy prevent strategy-validation or P&L claims.",
+        "builds_on": "scoring",
+        "next": "model_roadmap",
+    },
+    {
+        "id": "model_roadmap",
+        "label": "Roadmap",
+        "title": "Model Roadmap & Content Gap",
+        "section": "09",
+        "color_key": "data_quality",
+        "status": "live",
+        "data_source": "sheet1_market",
+        "description": "Content gap analysis vs the reference PDF. Shows what "
+                       "is implemented, what is missing, what data is needed, "
+                       "and what should be built next.",
+        "builds_on": "scoring_backtest",
+        "next": None,
+    },
+]
+
+# Convenience lookups
+PAGES_BY_ID: dict[str, dict] = {p["id"]: p for p in PAGES}
+PAGE_IDS: list[str] = [p["id"] for p in PAGES]
+
+
+# Sidebar navigation is deliberately task-oriented rather than exposing the
+# internal section numbering as one long flat list.  Section numbers remain in
+# the page headers and exports, where they are useful for audit/reconciliation,
+# while the sidebar uses concise research-desk labels.
+SIDEBAR_LABELS: dict[str, str] = {
+    "contents": "Research overview",
+    "liquidity": "Liquidity overview",
+    "policy": "Policy & short rates",
+    "policy_futures": "SOFR futures strip",
+    "decomposition": "Rate decomposition",
+    "regimes": "Curve regimes",
+    "global_rates": "Global rates",
+    "country_boards": "Country boards",
+    "cross_asset": "Cross-asset regimes",
+    "market_linkage": "Market linkage",
+    "fx_rate_diff": "FX rate differentials",
+    "sector_rotation": "Sector rotation",
+    "sector_contribution": "Sector contribution",
+    "index_breadth": "Index breadth",
+    "earnings_valuation": "Earnings & valuation",
+    "data_quality": "Data & methodology",
+    "scoring": "Global scoring",
+    "scoring_backtest": "CTA backtest",
+    "model_roadmap": "Model roadmap",
+}
+
+SIDEBAR_NAV_GROUPS: list[dict] = [
+    {
+        "id": "overview",
+        "label": "Overview",
+        "page_ids": ("contents", "liquidity"),
+    },
+    {
+        "id": "macro_rates",
+        "label": "Macro & Rates",
+        "page_ids": (
+            "policy", "policy_futures", "decomposition", "regimes",
+            "global_rates", "country_boards",
+        ),
+    },
+    {
+        "id": "cross_asset",
+        "label": "Cross-Asset",
+        "page_ids": ("cross_asset", "market_linkage", "fx_rate_diff"),
+    },
+    {
+        "id": "equities",
+        "label": "Equities",
+        "page_ids": (
+            "sector_rotation", "sector_contribution", "index_breadth",
+            "earnings_valuation",
+        ),
+    },
+    {
+        "id": "research",
+        "label": "Research & Data",
+        "page_ids": (
+            "data_quality", "scoring", "scoring_backtest", "model_roadmap",
+        ),
+    },
+]
+
+
+def sidebar_label(page_id: str, language: str = "en") -> str:
+    """Return the concise user-facing sidebar label for a page id."""
+    if language == "zh":
+        from config.i18n import PAGE_ZH
+        translated = PAGE_ZH.get(page_id, {}).get("sidebar")
+        if translated:
+            return translated
+    if page_id in SIDEBAR_LABELS:
+        return SIDEBAR_LABELS[page_id]
+    if page_id in PAGES_BY_ID:
+        return PAGES_BY_ID[page_id]["title"]
+    return page_id.replace("_", " ").title()
+
+
+def sidebar_group_label(group: dict, language: str = "en") -> str:
+    if language == "zh":
+        from config.i18n import SIDEBAR_GROUP_ZH
+        return SIDEBAR_GROUP_ZH.get(group["id"], group["label"])
+    return group["label"]
+
+
+# The reference chart pack keeps the top strip at section level. Streamlit's
+# sidebar still exposes every individual page, while this grouped registry
+# prevents the orientation strip from expanding to 18 separate chips.
+TOP_NAV_GROUPS: list[dict] = [
+    {
+        "id": "liquidity",
+        "section": "00",
+        "label": "Liquidity",
+        "color_key": "liquidity",
+        "page_ids": ("liquidity",),
+    },
+    {
+        "id": "policy",
+        "section": "01",
+        "label": "Policy",
+        "color_key": "policy",
+        "page_ids": ("policy", "policy_futures"),
+    },
+    {
+        "id": "decomposition",
+        "section": "02",
+        "label": "Decomp",
+        "color_key": "decomposition",
+        "page_ids": ("decomposition",),
+    },
+    {
+        "id": "regimes",
+        "section": "03",
+        "label": "Regimes",
+        "color_key": "regimes",
+        "page_ids": ("regimes",),
+    },
+    {
+        "id": "global_rates",
+        "section": "04",
+        "label": "Global",
+        "color_key": "global_rates",
+        "page_ids": ("global_rates", "country_boards"),
+    },
+    {
+        "id": "cross_asset",
+        "section": "05",
+        "label": "Cross-Asset",
+        "color_key": "cross_asset",
+        "page_ids": ("cross_asset", "market_linkage"),
+    },
+    {
+        "id": "equities",
+        "section": "06",
+        "label": "Equities",
+        "color_key": "equities",
+        "page_ids": ("sector_rotation", "sector_contribution", "index_breadth", "earnings_valuation"),
+    },
+    {
+        "id": "fx",
+        "section": "07",
+        "label": "FX",
+        "color_key": "fx",
+        "page_ids": ("fx_rate_diff",),
+    },
+    {
+        "id": "appendix",
+        "section": "A",
+        "label": "Appendix",
+        "color_key": "data_quality",
+        "page_ids": ("data_quality", "scoring", "scoring_backtest", "model_roadmap"),
+    },
+]
+
+
+def get_page(page_id: str) -> dict:
+    return PAGES_BY_ID[page_id]
+
+
+def nav_label(page: dict) -> str:
+    return f"{page['section']} · {page['label']}"
+
+
+STATUS_LABELS = {
+    "live":         "Live",
+    "partial":      "Partial",
+    "scaffold":     "Scaffold — build next",
+    "requires":     "Requires data",
+    "experimental": "Experimental",
+}
+
+STATUS_COLORS = {
+    "live":         "#5fb04f",
+    "partial":      "#d99830",
+    "scaffold":     "#35bdf4",
+    "requires":     "#d04848",
+    "experimental": "#b184ff",
+}
+
+
+# ---------------------------------------------------------------------------
+# Data source registry (requirement #5)
+# ---------------------------------------------------------------------------
+DATA_SOURCES = {
+    "sheet1_market": {
+        "file": "data/DATA.xlsx",
+        "sheet": "Sheet1",
+        "role": "Main market data: liquidity, rates, credit, cross-asset, sectors, FX and XCCY inputs",
+        "source_of_truth": True,
+        "pages": [
+            "liquidity", "policy", "decomposition", "regimes",
+            "global_rates", "country_boards", "cross_asset", "market_linkage",
+            "sector_rotation", "sector_contribution",
+            "fx_rate_diff",
+        ],
+    },
+    "policy_futures_sheet": {
+        "file": "data/DATA.xlsx",
+        "sheet": "Policy_Futures",
+        "role": "Eight fixed quarterly Three-Month SOFR contract Date + Price BQL blocks",
+        "source_of_truth": True,
+        "pages": ["policy_futures"],
+    },
+    "scoring_sheets": {
+        "file": "data/DATA.xlsx",
+        "sheet": "Macro_GDP / Macro_CPI / Macro_Fiscal / Rates_10Y / Equity_*",
+        "role": "Global scoring model sheets (macro + market factors)",
+        "source_of_truth": True,
+        "pages": ["earnings_valuation", "scoring", "scoring_backtest"],
+    },
+    "index_breadth_sheet": {
+        "file": "data/DATA.xlsx",
+        "sheet": "Equity_Prices / optional Index_Breadth",
+        "role": "Selectable cash-index trend plus optional constituent-level market-breadth inputs",
+        "source_of_truth": True,
+        "pages": ["index_breadth"],
+    },
+}
