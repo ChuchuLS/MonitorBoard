@@ -80,13 +80,29 @@ assert all("来源哈希" not in value and "板块对账差额" not in value
 print("2. Liquidity official/preliminary rendering ✓")
 
 nav = next((widget for widget in at.sidebar.button
+            if widget.key == "sidebar_nav_regimes"), None)
+assert nav is not None, "Grouped sidebar Curve Regimes navigation was not rendered"
+nav.click().run(timeout=180)
+_assert_clean(at, "03 Curve Regimes page")
+regime_markup = " ".join(str(item.value) for item in at.markdown)
+for text in ("状态矩阵（最新）", "状态概览", "熊市平坦化", "方法说明"):
+    assert text in regime_markup, f"Chinese Curve Regimes rendering is missing: {text}"
+for text in ("Bear Flattener", "Bear Steepener", "Twist Flattener",
+             "Regime matrix", "Regime landscape", "Uses a 10-day"):
+    assert text not in regime_markup, f"Curve Regimes still exposes English UI text: {text}"
+regime_matrix = at.dataframe[0].value
+assert list(regime_matrix.index) == ["名义", "实际", "通胀"]
+assert "熊市平坦化" in regime_matrix.to_string()
+print("3. Curve Regimes dynamic values and methodology render in Chinese ✓")
+
+nav = next((widget for widget in at.sidebar.button
             if widget.key == "sidebar_nav_scoring_backtest"), None)
 assert nav is not None, "Grouped sidebar CTA Backtest navigation was not rendered"
 nav.click().run(timeout=180)
 _assert_clean(at, "A2 CTA Backtest page")
 assert any("CTA 评分回测" in str(item.value) for item in at.markdown), \
     "Chinese CTA Backtest page header was not rendered"
-print("3. A2 CTA Backtest page ✓")
+print("4. A2 CTA Backtest page ✓")
 
 # Every registered page must render through the Chinese display boundary.
 for page in PAGES:
@@ -100,7 +116,14 @@ for page in PAGES:
     rendered = " ".join(str(item.value) for item in at.markdown)
     assert expected_title in rendered, \
         f"Chinese page title missing for {page_id}: {expected_title}"
-    assert "日期s" not in rendered and "偏紧est" not in rendered, \
-        f"Broken partial-word translation detected on {page_id}"
-print(f"4. All {len(PAGES)} registered pages render in Chinese ✓")
+    forbidden = (
+        "日期s", "偏紧est", "source-共-truth", "实际 Estate",
+        "Bear Flattener", "Bear Steepener", "Twist Flattener",
+        "Regime matrix", "Regime landscape", "Selected slope history",
+        "FX model dates by pair", "Positive breadth",
+        "The dashboard reads one", "This page uses breakeven inflation",
+    )
+    assert not any(text in rendered for text in forbidden), \
+        f"Untranslated or broken Chinese UI text detected on {page_id}"
+print(f"5. All {len(PAGES)} registered pages render in Chinese ✓")
 print("ALL STREAMLIT RUNTIME TESTS PASSED ✓")

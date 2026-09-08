@@ -165,6 +165,7 @@ def ofr_chart(series: pd.Series, top_note: str | None,
 # and just handing values to these helpers.
 
 import html as _html
+import re as _re
 
 from config.theme import section_color as _section_color
 from config.pages import (
@@ -180,6 +181,18 @@ from config.i18n import (
 def _esc(x) -> str:
     """Cheap HTML escaper for values injected into templates."""
     return _html.escape(str(x) if x is not None else "")
+
+
+def _localized_date_display(value, language: str) -> str:
+    """Use an unambiguous ISO date in Chinese mode when given an English date."""
+    text = str(value) if value is not None else ""
+    if language != LANG_ZH:
+        return text
+    if _re.fullmatch(r"[A-Za-z]{3}\s+\d{1,2},\s+\d{4}", text.strip()):
+        parsed = pd.to_datetime(text, errors="coerce")
+        if pd.notna(parsed):
+            return parsed.strftime("%Y-%m-%d")
+    return text
 
 
 def render_page_header(page: dict, latest_date: str | None = None,
@@ -198,6 +211,7 @@ def render_page_header(page: dict, latest_date: str | None = None,
     subtitle = _esc(page.get("description", ""))
     ctx_bits = []
     if latest_date:
+        latest_date = _localized_date_display(latest_date, language)
         ctx_bits.append(
             f"{tr('Latest', '最新', language)}: "
             f"<span style='color:#ccc;'>{_esc(latest_date)}</span>"
@@ -423,9 +437,13 @@ def render_model_status_chip(status: str, detail: str = "") -> str:
 def render_data_source_note(source: str, latest_date: str | None = None,
                             caveat: str | None = None) -> None:
     """Render a small data-source footnote at the bottom of a section."""
-    parts = [f"Data source: <b>{_esc(source)}</b>"]
+    language = current_language()
+    parts = [f"{tr('Data source', '数据来源', language)}: <b>{_esc(source)}</b>"]
     if latest_date:
-        parts.append(f"Latest: <b>{_esc(latest_date)}</b>")
+        latest_date = _localized_date_display(latest_date, language)
+        parts.append(
+            f"{tr('Latest', '最新', language)}: <b>{_esc(latest_date)}</b>"
+        )
     if caveat:
         parts.append(f"<span style='color:#d99830;'>{_esc(caveat)}</span>")
     st.markdown(

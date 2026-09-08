@@ -168,6 +168,24 @@ REGIME_ZH = {
 }
 
 
+CURVE_REGIME_ZH = {
+    "Bull Steepener": "牛市陡峭化",
+    "Bull Flattener": "牛市平坦化",
+    "Bear Steepener": "熊市陡峭化",
+    "Bear Flattener": "熊市平坦化",
+    "Twist Steepener": "扭曲式陡峭化",
+    "Twist Flattener": "扭曲式平坦化",
+    "Neutral": "中性",
+}
+
+
+CURVE_TYPE_ZH = {
+    "Nominal": "名义",
+    "Real": "实际",
+    "Inflation": "通胀",
+}
+
+
 BUCKET_ZH = {
     "Money-market funding": "货币市场融资",
     "Dollar funding / XCCY": "美元融资 / XCCY",
@@ -203,4 +221,18 @@ def localized_bucket(label: str, language: str | None = None) -> str:
 def localized_regime(label: str, language: str | None = None) -> str:
     if (language or current_language()) == LANG_ZH:
         return REGIME_ZH.get(label, label)
+    return label
+
+
+def localized_curve_regime(label: str, language: str | None = None) -> str:
+    """Translate a curve-classification output without changing model keys."""
+    if (language or current_language()) == LANG_ZH:
+        return CURVE_REGIME_ZH.get(label, label)
+    return label
+
+
+def localized_curve_type(label: str, language: str | None = None) -> str:
+    """Translate the displayed curve family without changing dataframe keys."""
+    if (language or current_language()) == LANG_ZH:
+        return CURVE_TYPE_ZH.get(label, label)
     return label

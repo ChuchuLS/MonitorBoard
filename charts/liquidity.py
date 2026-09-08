@@ -1026,6 +1026,7 @@ def _render_reconciliation(rec: dict | None) -> None:
     """Legacy vs current methodology reconciliation (requirement #2)."""
     if not rec:
         return
+    language = current_language()
     st.markdown(
         "<div style='border-top:1px solid #1a1a1a;margin-top:1rem;padding-top:0.6rem;'>"
         "<div style='font-size:14px;font-weight:700;letter-spacing:0.06em;color:#fff;"
@@ -1038,8 +1039,20 @@ def _render_reconciliation(rec: dict | None) -> None:
     d = rec["date"].date()
     diff = rec["index_diff"]
     col = POS_GREEN if diff >= 0 else NEG_RED
-    st.markdown(
-        f"""
+    if language == LANG_ZH:
+        reconciliation_text = f"""
+        <div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:6px;
+                    padding:0.7rem 0.9rem;margin:0.3rem 0 0.6rem;font-size:13px;
+                    color:#ccc;line-height:1.8;">
+          截至 <b>{d}</b>：旧方法 = <b>{rec['legacy_index']:.2f}</b>，
+          当前方法（v0.4）= <b>{rec['current_index']:.2f}</b>，
+          差额 = <b style="color:{col};">{diff:+.2f}</b> 指数点
+          （综合 z-score {rec['legacy_z']:.3f} → {rec['current_z']:.3f}，
+          Δ {rec['z_diff']:+.3f}）。该变化仅来自<b>方法调整</b>；市场数据影响另行计算。
+        </div>
+        """
+    else:
+        reconciliation_text = f"""
         <div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:6px;
                     padding:0.7rem 0.9rem;margin:0.3rem 0 0.6rem;font-size:13px;
                     color:#ccc;line-height:1.8;">
@@ -1050,8 +1063,8 @@ def _render_reconciliation(rec: dict | None) -> None:
           Δ {rec['z_diff']:+.3f}). This is the change attributable to
           <b>methodology only</b> — market-data effects are separate.
         </div>
-        """,
-        unsafe_allow_html=True)
+        """
+    st.markdown(reconciliation_text, unsafe_allow_html=True)
 
     tab = rec["table"].copy()
     disp = tab[["bucket_label", "legacy_sub", "current_sub", "legacy_eff_w",
@@ -1106,6 +1119,7 @@ def _render_ffill_audit(ffa: pd.DataFrame | None) -> None:
 
 def _render_methodology_audit(result: IndexResult, audit: dict | None) -> None:
     """Methodology version, parameters, audit trail, and the math (req #1, #9)."""
+    language = current_language()
     with st.expander("Methodology & audit trail", expanded=False):
         if audit:
             ver = audit.get("version", "?")
@@ -1159,8 +1173,24 @@ def _render_methodology_audit(result: IndexResult, audit: dict | None) -> None:
                 "version bump + the reconciliation table above tell you whether the "
                 "move came from market data or from methodology.")
 
-        st.markdown(
-            r"""
+        if language == LANG_ZH:
+            math_note = r"""
+**计算方法。**
+**1. 方向调整** — $	ext{adj}_{i,t} = 	ext{raw}_{i,t}	imes 	ext{dir}_i$（数值越高代表越宽松）。
+**2. 滚动 z-score** — $z_{i,t} = (	ext{adj}_{i,t}-mu_{i,t})/sigma_{i,t}$，使用过去5年窗口
+（最少2年），截尾至 $[-3,3]$；若窗口内不同取值少于20个，则保持 NaN（低变动保护）。
+周度序列只在真实的周三观测上计算 z-score，随后最多向前填充10个工作日。
+**3. 板块子指数** — 有效 z-score 的均值；板块至少有2个有效组件时才计入。
+**4. 综合值** — $sum_b 	ilde w_{b,t},	ext{bucket}_{b,t}$，只在合格板块之间重新归一化权重。
+**5. 指数** — $50 + 10	imes	ext{composite}$。
+**6. 组件贡献** — $10,	ilde w_{b,t},z_{i,t}/n_{b,t}$，合计等于指数减50。
+**7. 覆盖门槛** — 分析历史至少需要3个板块和8个组件。正式标题采用最近一个五个板块
+全部可用、且组件数不低于此前完整日期过去63个工作日中位数的日期。较晚的不完整日期
+标记为初步值，不影响正式标题、状态、涨跌或贡献。
+**基准**（Bloomberg FCI、Chicago Fed NFCI）仅用于验证，绝不作为指数输入。
+            """
+        else:
+            math_note = r"""
 **The math.**
 **1. Direction** — $\text{adj}_{i,t} = \text{raw}_{i,t}\times \text{dir}_i$ (higher = looser).
 **2. Rolling z** — $z_{i,t} = (\text{adj}_{i,t}-\mu_{i,t})/\sigma_{i,t}$, trailing 5y
@@ -1178,4 +1208,4 @@ The official headline uses the latest date with all 5 buckets and at least the t
 are Preliminary and do not affect the headline, regime, changes or contributions.
 **Benchmarks** (Bloomberg FCI, Chicago Fed NFCI) are validation only, never inputs.
             """
-        )
+        st.markdown(math_note)

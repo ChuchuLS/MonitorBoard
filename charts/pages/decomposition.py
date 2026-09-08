@@ -13,6 +13,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
 from config.pages import get_page
+from config.i18n import current_language, tr
 from config.theme import section_color, BG, GRID, TEXT_DIM, DARK_LAYOUT, ACCENT_GREEN, ACCENT_CYAN, ACCENT_AMBER
 from charts.common import (
     render_page_header, render_top_tabs, render_kpi_strip,
@@ -31,6 +32,7 @@ COLOR_INFL = "#f97316"
 
 
 def render(ctx: PageContext) -> None:
+    language = current_language()
     page = get_page("decomposition")
     render_top_tabs(page["id"])
     from data.loader import latest_valid_date as _lvd
@@ -72,10 +74,15 @@ def render(ctx: PageContext) -> None:
         ])
 
     render_explanation_box(
-        "Rate decomposition",
-        "Splits nominal yield moves into a <b>real-rate</b> leg and an "
-        "<b>inflation (breakeven)</b> leg using the identity: "
-        "nominal ≡ real + breakeven. The residual is zero by construction.",
+        tr("Rate decomposition", "利率变动拆解", language),
+        tr(
+            "Splits nominal yield moves into a <b>real-rate</b> leg and an "
+            "<b>inflation (breakeven)</b> leg using the identity: "
+            "nominal ≡ real + breakeven. The residual is zero by construction.",
+            "使用恒等式“名义利率 ≡ 实际利率 + 盈亏平衡通胀”，将名义收益率变动拆为"
+            "<b>实际利率</b>和<b>通胀补偿（盈亏平衡）</b>两部分。按该定义，残差恒为零。",
+            language,
+        ),
     )
 
     # B. US Curve Complex — three curve charts
@@ -166,11 +173,19 @@ def render(ctx: PageContext) -> None:
             if pd.notna(r['nominal_1m_change_bp']) else "Insufficient data")
 
     # F. Methodology
-    render_model_note("Methodology",
-        "This page uses <b>breakeven inflation</b> as the inflation leg, so "
-        "<code>nominal = real + inflation</code> is an identity by construction. "
-        "The residual is exactly zero. If inflation swaps are used in a future "
-        "version, a residual must be shown.")
+    render_model_note(
+        tr("Methodology", "方法说明", language),
+        tr(
+            "This page uses <b>breakeven inflation</b> as the inflation leg, so "
+            "<code>nominal = real + inflation</code> is an identity by construction. "
+            "The residual is exactly zero. If inflation swaps are used in a future "
+            "version, a residual must be shown.",
+            "本页以<b>盈亏平衡通胀</b>作为通胀项，因此"
+            "<code>名义利率 = 实际利率 + 通胀补偿</code>在定义上恒成立。"
+            "残差精确为零。若未来改用通胀互换，则必须单独列示残差。",
+            language,
+        ),
+    )
 
     from charts.common import render_data_source_note
     render_data_source_note("DATA.xlsx / Sheet1", latest)

@@ -18,7 +18,10 @@ from config.pages import (
     PAGES, PAGES_BY_ID, TOP_NAV_GROUPS, SIDEBAR_NAV_GROUPS, SIDEBAR_LABELS,
     get_page, nav_label, sidebar_group_label, sidebar_label, STATUS_LABELS,
 )
-from config.i18n import PAGE_ZH, localized_page, localized_regime, tr
+from config.i18n import (
+    PAGE_ZH, localized_curve_regime, localized_curve_type,
+    localized_page, localized_regime, tr,
+)
 from config.theme import SECTION_COLORS, section_color, page_css
 from index.components import build_components, BUCKETS
 from index.composite import compute_index, regime_label
@@ -44,6 +47,12 @@ if _HAS_STREAMLIT_PAGES:
     assert translate_ui_text("Tightest") == "最紧张"
     assert "日期s" not in translate_ui_text("Latest dates are series-specific")
     assert "偏紧est" not in translate_ui_text("Tightest")
+    assert translate_ui_text("source-of-truth") == "唯一事实来源"
+    assert translate_ui_text("Real Estate") == "房地产"
+    _model_path = "models.earnings_valuation.build_earnings_current_reading()"
+    assert translate_ui_text(_model_path) == _model_path
+    assert localized_curve_regime("Bear Flattener", "zh") == "熊市平坦化"
+    assert localized_curve_type("Inflation", "zh") == "通胀"
     print("   Chinese display glossary preserves whole financial terms ✓")
 
     _sidebar_css = page_css()
@@ -2197,7 +2206,9 @@ print("    A. Refreshed weekday calendars and independent Policy_Futures sheet a
 
 # Production navigation must not restore the low-guidance PCA pages.
 assert not ({"rates_pca", "market_linkage_pca", "fx"} & set(PAGES_BY_ID))
-assert "Current state:" in open("charts/pages/regimes.py").read()
+_regimes_page_src = open("charts/pages/regimes.py").read()
+assert "tr('Current state', '当前状态', language)" in _regimes_page_src
+assert "localized_curve_regime(regime, language)" in _regimes_page_src
 print("    B. PCA pages remain removed; regime-ribbon hover exposes the current state ✓")
 
 _ml_src_feedback = open("models/market_linkage.py").read()
